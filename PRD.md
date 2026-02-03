@@ -101,7 +101,7 @@ Create the main landing page application at `/home/kai/pets/kaivalo/apps/hub/`.
 
 #### Layout & Styles
 
-- [ ] Create `src/app.css` with Tailwind directives, Inter font import, base styles
+- [x] Create `src/app.css` with Tailwind directives, Inter font import, base styles
 - [ ] Create `src/routes/+layout.svelte` importing app.css, with minimal shell (no nav needed for MVP)
 
 #### Hero Section (`src/routes/+page.svelte`)
