@@ -151,7 +151,7 @@ Create the main landing page application at `/home/kai/pets/kaivalo/apps/hub/`.
   - OG tags (title, description, image placeholder, url)
   - Twitter card meta
 - [x] Create `static/favicon.ico` placeholder (can be simple K logo)
-- [ ] Create `static/og-image.png` placeholder (1200x630, can be simple branded image)
+- [x] Create `static/og-image.png` placeholder (1200x630, can be simple branded image)
 
 ### 3.4 Build & Test
 
