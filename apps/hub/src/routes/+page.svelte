@@ -2,6 +2,9 @@
 	import { Button, Card, Badge } from '@kaivalo/ui';
 	import { Container } from '@kaivalo/ui';
 	import { Wrench, Sparkles, Github, Mail } from 'lucide-svelte';
+	import type { PageData } from './$types';
+
+	let { data }: { data: PageData } = $props();
 
 	function scrollToServices() {
 		const servicesSection = document.getElementById('services');
@@ -27,6 +30,27 @@
 		}
 	];
 </script>
+
+<svelte:head>
+	<title>{data.meta.title}</title>
+	<meta name="description" content={data.meta.description} />
+
+	<!-- Open Graph / Facebook -->
+	<meta property="og:type" content="website" />
+	<meta property="og:url" content={data.meta.url} />
+	<meta property="og:title" content={data.meta.title} />
+	<meta property="og:description" content={data.meta.description} />
+	<meta property="og:image" content={data.meta.image} />
+	<meta property="og:image:alt" content={data.meta.imageAlt} />
+
+	<!-- Twitter -->
+	<meta name="twitter:card" content={data.meta.twitterCard} />
+	<meta name="twitter:url" content={data.meta.url} />
+	<meta name="twitter:title" content={data.meta.title} />
+	<meta name="twitter:description" content={data.meta.description} />
+	<meta name="twitter:image" content={data.meta.image} />
+	<meta name="twitter:image:alt" content={data.meta.imageAlt} />
+</svelte:head>
 
 <!-- Hero Section -->
 <section class="relative min-h-[80vh] flex items-center justify-center bg-gradient-to-b from-blue-50 via-white to-white">

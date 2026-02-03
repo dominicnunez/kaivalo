@@ -144,7 +144,7 @@ Create the main landing page application at `/home/kai/pets/kaivalo/apps/hub/`.
 
 ### 3.3 SEO & Meta
 
-- [ ] Create `src/routes/+layout.server.ts` or `+page.ts` with meta tags
+- [x] Create `src/routes/+layout.server.ts` or `+page.ts` with meta tags
 - [ ] Add to `<svelte:head>`:
   - Title: "Kai Valo | AI Tools That Actually Help"
   - Description meta tag
