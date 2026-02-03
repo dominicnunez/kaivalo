@@ -97,8 +97,12 @@ test('catch-all redirects to kaivalo.com', () => {
   assert(wildcardMatch, 'wildcard block should redirect with 301');
 });
 
-test('catch-all uses default_server', () => {
-  assert(configContent.includes('default_server'), 'should use default_server for catch-all');
+test('catch-all notes about default_server', () => {
+  // Note: We don't use default_server since system default site already has it
+  // The catch-all still works because nginx matches server_name patterns
+  assert(configContent.includes('*.kaivalo.com'), 'should have wildcard for catch-all');
+  assert(configContent.includes('Not using default_server') || !configContent.match(/listen 80 default_server/),
+    'should either note about default_server or not use it');
 });
 
 // ============================================================================

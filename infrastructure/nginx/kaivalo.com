@@ -91,10 +91,12 @@ server {
 
 # ============================================================================
 # Catch-all: redirect *.kaivalo.com to kaivalo.com
+# Note: Not using default_server since system default site already has it
+# This catches any *.kaivalo.com subdomain not explicitly defined above
 # ============================================================================
 server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
+    listen 80;
+    listen [::]:80;
     server_name *.kaivalo.com;
 
     return 301 $scheme://kaivalo.com$request_uri;

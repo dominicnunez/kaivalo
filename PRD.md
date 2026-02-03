@@ -208,8 +208,8 @@ Create nginx config for kaivalo.com with subdomain routing.
   - Standard proxy headers (Host, X-Real-IP, X-Forwarded-For, X-Forwarded-Proto)
   - HTTP to HTTPS redirect block
 
-- [ ] Create symlink: `ln -s /etc/nginx/sites-available/kaivalo.com /etc/nginx/sites-enabled/`
-- [ ] Test config: `nginx -t`
+- [x] Create symlink: `ln -s /etc/nginx/sites-available/kaivalo.com /etc/nginx/sites-enabled/`
+- [x] Test config: `nginx -t`
 
 **Note:** SSL certs will be added after domain is registered and DNS is pointed.
 
