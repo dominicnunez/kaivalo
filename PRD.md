@@ -158,7 +158,7 @@ Create the main landing page application at `/home/kai/pets/kaivalo/apps/hub/`.
 - [x] Run `npm run build` and verify no errors
 - [x] Test with `npm run preview`
 - [x] Verify responsive design (mobile, tablet, desktop)
-- [ ] Create `apps/hub/ecosystem.config.cjs` for PM2:
+- [x] Create `apps/hub/ecosystem.config.cjs` for PM2:
   ```js
   module.exports = {
     apps: [{
