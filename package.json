@@ -9,7 +9,7 @@
     "packages/*"
   ],
   "scripts": {
-    "test": "node tests/package-json.test.js && node tests/pnpm-workspace.test.js && node tests/gitignore.test.js && node tests/apps-directory.test.js && node tests/packages-directory.test.js && node tests/mechai-symlink.test.js && node tests/git-init.test.js && node tests/ui-package-json.test.js"
+    "test": "node tests/package-json.test.js && node tests/pnpm-workspace.test.js && node tests/gitignore.test.js && node tests/apps-directory.test.js && node tests/packages-directory.test.js && node tests/mechai-symlink.test.js && node tests/git-init.test.js && node tests/ui-package-json.test.js && node tests/ui-index.test.js"
   },
   "engines": {
     "node": ">=18.0.0"
