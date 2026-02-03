@@ -72,7 +72,7 @@ Create `/home/kai/pets/kaivalo/packages/config/` with shared Tailwind preset.
 ### Tasks
 
 - [x] Create `packages/config/package.json` with name `@kaivalo/config`
-- [ ] Create `packages/config/tailwind.preset.js` with:
+- [x] Create `packages/config/tailwind.preset.js` with:
   - Brand colors: primary (blue-600), accent (emerald-500), neutral grays
   - Font family: Inter (with system fallbacks)
   - Custom spacing/sizing if needed
