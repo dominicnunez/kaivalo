@@ -145,12 +145,12 @@ Create the main landing page application at `/home/kai/pets/kaivalo/apps/hub/`.
 ### 3.3 SEO & Meta
 
 - [x] Create `src/routes/+layout.server.ts` or `+page.ts` with meta tags
-- [ ] Add to `<svelte:head>`:
+- [x] Add to `<svelte:head>`:
   - Title: "Kai Valo | AI Tools That Actually Help"
   - Description meta tag
   - OG tags (title, description, image placeholder, url)
   - Twitter card meta
-- [ ] Create `static/favicon.ico` placeholder (can be simple K logo)
+- [x] Create `static/favicon.ico` placeholder (can be simple K logo)
 - [ ] Create `static/og-image.png` placeholder (1200x630, can be simple branded image)
 
 ### 3.4 Build & Test
