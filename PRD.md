@@ -200,7 +200,7 @@ Create nginx config for kaivalo.com with subdomain routing.
 
 ### Tasks
 
-- [ ] Create nginx config file with:
+- [x] Create nginx config file with:
   - Main server block for kaivalo.com + www.kaivalo.com → proxy to 127.0.0.1:3100
   - Server block for mechai.kaivalo.com → proxy to 127.0.0.1:3101
   - Catch-all for *.kaivalo.com → redirect to kaivalo.com
