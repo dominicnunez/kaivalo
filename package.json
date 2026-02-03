@@ -8,7 +8,7 @@
     "packages/*"
   ],
   "scripts": {
-    "test": "node tests/package-json.test.js && node tests/pnpm-workspace.test.js && node tests/gitignore.test.js"
+    "test": "node tests/package-json.test.js && node tests/pnpm-workspace.test.js && node tests/gitignore.test.js && node tests/apps-directory.test.js"
   },
   "engines": {
     "node": ">=18.0.0"
