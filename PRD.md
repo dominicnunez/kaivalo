@@ -62,7 +62,7 @@ Create `/home/kai/pets/kaivalo/packages/ui/` with reusable Svelte components.
 - [x] Create `packages/ui/index.js` exporting all components
 - [x] Create `packages/ui/Button.svelte` — primary/secondary/ghost variants, size prop (sm/md/lg), disabled state
 - [x] Create `packages/ui/Card.svelte` — container with optional header, hover effect, link variant
-- [ ] Create `packages/ui/Badge.svelte` — status badges (Live/Beta/Coming Soon) with color variants
+- [x] Create `packages/ui/Badge.svelte` — status badges (Live/Beta/Coming Soon) with color variants
 - [ ] Create `packages/ui/Container.svelte` — max-width wrapper with responsive padding
 
 ### 2.2 Config Package
