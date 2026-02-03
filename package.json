@@ -1,6 +1,7 @@
 {
   "name": "kaivalo",
   "version": "1.0.0",
+  "type": "module",
   "private": true,
   "description": "Kaivalo.com services hub monorepo",
   "workspaces": [
@@ -8,7 +9,7 @@
     "packages/*"
   ],
   "scripts": {
-    "test": "node tests/package-json.test.js && node tests/pnpm-workspace.test.js && node tests/gitignore.test.js && node tests/apps-directory.test.js && node tests/packages-directory.test.js && node tests/mechai-symlink.test.js && node tests/git-init.test.js"
+    "test": "node tests/package-json.test.js && node tests/pnpm-workspace.test.js && node tests/gitignore.test.js && node tests/apps-directory.test.js && node tests/packages-directory.test.js && node tests/mechai-symlink.test.js && node tests/git-init.test.js && node tests/ui-package-json.test.js"
   },
   "engines": {
     "node": ">=18.0.0"
