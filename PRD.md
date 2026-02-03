@@ -41,7 +41,7 @@ Create the monorepo structure in `/home/kai/pets/kaivalo/`:
 ### Tasks
 
 - [x] Create `/home/kai/pets/kaivalo/package.json` with npm workspaces config pointing to `apps/*` and `packages/*`
-- [ ] Create `/home/kai/pets/kaivalo/pnpm-workspace.yaml` with packages: `apps/*`, `packages/*`
+- [x] Create `/home/kai/pets/kaivalo/pnpm-workspace.yaml` with packages: `apps/*`, `packages/*`
 - [ ] Create `/home/kai/pets/kaivalo/.gitignore` with node_modules, .env, build, .svelte-kit
 - [ ] Create `/home/kai/pets/kaivalo/apps/` directory
 - [ ] Create `/home/kai/pets/kaivalo/packages/` directory
