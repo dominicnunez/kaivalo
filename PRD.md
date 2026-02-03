@@ -106,10 +106,10 @@ Create the main landing page application at `/home/kai/pets/kaivalo/apps/hub/`.
 
 #### Hero Section (`src/routes/+page.svelte`)
 
-- [ ] Hero with gradient background (subtle blue to white)
-- [ ] Headline: "AI Tools That Actually Help"
-- [ ] Subheadline: "Practical tools built by Kai Valo. No hype, just utility."
-- [ ] Smooth scroll CTA button to services section
+- [x] Hero with gradient background (subtle blue to white)
+- [x] Headline: "AI Tools That Actually Help"
+- [x] Subheadline: "Practical tools built by Kai Valo. No hype, just utility."
+- [x] Smooth scroll CTA button to services section
 
 #### Services Grid
 

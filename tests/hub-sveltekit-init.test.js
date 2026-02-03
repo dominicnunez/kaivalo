@@ -203,7 +203,7 @@ test('src/routes/+page.svelte exists', () => {
 
 test('+page.svelte has content', () => {
   const content = readFileSync(join(hubRoot, 'src/routes/+page.svelte'), 'utf-8');
-  assert.ok(content.includes('<h1>'), 'should have heading element');
+  assert.ok(content.includes('<h1'), 'should have heading element');
 });
 
 // Summary
