@@ -94,7 +94,7 @@ Create the main landing page application at `/home/kai/pets/kaivalo/apps/hub/`.
 - [x] Install shared packages: `npm install @kaivalo/ui @kaivalo/config` (workspace link)
 - [x] Install icons: `npm install lucide-svelte`
 - [x] Configure `tailwind.config.js` to extend `@kaivalo/config/tailwind.preset.js`
-- [ ] Add adapter-node: `npm install -D @sveltejs/adapter-node` and update `svelte.config.js`
+- [x] Add adapter-node: `npm install -D @sveltejs/adapter-node` and update `svelte.config.js`
 - [ ] Create `apps/hub/.env.example` (empty for now, no secrets needed)
 
 ### 3.2 Build Landing Page
