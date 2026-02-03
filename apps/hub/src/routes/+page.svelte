@@ -86,3 +86,25 @@
 		</div>
 	</Container>
 </section>
+
+<!-- About Section -->
+<section id="about" class="py-20 bg-white">
+	<Container size="md" class="text-center">
+		<!-- Avatar placeholder -->
+		<div class="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-emerald-500 mx-auto mb-6 flex items-center justify-center">
+			<span class="text-3xl font-bold text-white">K</span>
+		</div>
+
+		<h2 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-4">
+			Built by Kai Valo
+		</h2>
+
+		<p class="text-lg text-gray-600 max-w-xl mx-auto mb-4">
+			I build tools that solve real problems—no fluff, no buzzwords. Just practical AI that helps you understand what's actually going on.
+		</p>
+
+		<p class="text-base text-gray-500 max-w-xl mx-auto">
+			Whether it's decoding mechanic speak or something else entirely, the goal is always the same: make complex things simple.
+		</p>
+	</Container>
+</section>

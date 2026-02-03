@@ -131,9 +131,9 @@ Create the main landing page application at `/home/kai/pets/kaivalo/apps/hub/`.
 
 #### About Section
 
-- [ ] Brief section below services
-- [ ] "Built by Kai Valo" with short personality-forward copy
-- [ ] Optional: small avatar/illustration placeholder
+- [x] Brief section below services
+- [x] "Built by Kai Valo" with short personality-forward copy
+- [x] Optional: small avatar/illustration placeholder
 
 #### Footer
 
