@@ -1,0 +1,18 @@
+{
+  "name": "kaivalo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kaivalo.com services hub monorepo",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "node tests/package-json.test.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "Kai Valo",
+  "license": "MIT"
+}
