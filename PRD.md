@@ -175,7 +175,7 @@ Create the main landing page application at `/home/kai/pets/kaivalo/apps/hub/`.
 
 ### Tasks
 
-- [ ] Update `/home/kai/pets/mechanic-ai/ecosystem.config.cjs` to use port 3101:
+- [x] Update `/home/kai/pets/mechanic-ai/ecosystem.config.cjs` to use port 3101:
   ```js
   module.exports = {
     apps: [{
