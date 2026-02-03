@@ -113,9 +113,9 @@ Create the main landing page application at `/home/kai/pets/kaivalo/apps/hub/`.
 
 #### Services Grid
 
-- [ ] Section with id="services" for scroll target
-- [ ] Grid layout: 1 col mobile, 2 col tablet, 3 col desktop
-- [ ] ServiceCard component or inline cards with:
+- [x] Section with id="services" for scroll target
+- [x] Grid layout: 1 col mobile, 2 col tablet, 3 col desktop
+- [x] ServiceCard component or inline cards with:
   - Icon (from lucide-svelte)
   - Title
   - Description (1-2 sentences)
