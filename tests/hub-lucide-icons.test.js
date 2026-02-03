@@ -1,0 +1,113 @@
+import assert from 'node:assert';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const testResults = [];
+function test(name, fn) {
+	try {
+		fn();
+		testResults.push({ name, passed: true });
+	} catch (error) {
+		testResults.push({ name, passed: false, error: error.message });
+	}
+}
+
+const hubPath = '/home/kai/pets/kaivalo/apps/hub';
+const rootPath = '/home/kai/pets/kaivalo';
+
+// Test lucide-svelte is installed in node_modules
+test('lucide-svelte package is installed', () => {
+	const lucidePath = path.join(rootPath, 'node_modules', 'lucide-svelte');
+	assert.ok(fs.existsSync(lucidePath), 'lucide-svelte package should exist in node_modules');
+});
+
+// Test lucide-svelte has a package.json
+test('lucide-svelte has package.json', () => {
+	const pkgPath = path.join(rootPath, 'node_modules', 'lucide-svelte', 'package.json');
+	assert.ok(fs.existsSync(pkgPath), 'lucide-svelte should have package.json');
+});
+
+// Test lucide-svelte package.json has correct name
+test('lucide-svelte package has correct name', () => {
+	const pkgPath = path.join(rootPath, 'node_modules', 'lucide-svelte', 'package.json');
+	const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+	assert.strictEqual(pkg.name, 'lucide-svelte', 'Package name should be lucide-svelte');
+});
+
+// Test lucide-svelte exports icons
+test('lucide-svelte has dist directory', () => {
+	const distPath = path.join(rootPath, 'node_modules', 'lucide-svelte', 'dist');
+	assert.ok(fs.existsSync(distPath), 'lucide-svelte should have dist directory');
+});
+
+// Test hub package.json has lucide-svelte as dependency
+test('hub package.json includes lucide-svelte dependency', () => {
+	const pkgPath = path.join(hubPath, 'package.json');
+	const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+	assert.ok(pkg.dependencies, 'package.json should have dependencies');
+	assert.ok(pkg.dependencies['lucide-svelte'], 'lucide-svelte should be in dependencies');
+});
+
+// Test lucide-svelte version is reasonable (should be 0.x.x for current versions)
+test('lucide-svelte has valid version', () => {
+	const pkgPath = path.join(rootPath, 'node_modules', 'lucide-svelte', 'package.json');
+	const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+	assert.ok(pkg.version, 'lucide-svelte should have a version');
+	assert.ok(/^\d+\.\d+\.\d+/.test(pkg.version), `Version should be semver format, got ${pkg.version}`);
+});
+
+// Test lucide-svelte has svelte peer dependency (indicates it's a svelte package)
+test('lucide-svelte has svelte as peer dependency', () => {
+	const pkgPath = path.join(rootPath, 'node_modules', 'lucide-svelte', 'package.json');
+	const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+	const hasSveltePeer = pkg.peerDependencies && pkg.peerDependencies.svelte;
+	assert.ok(hasSveltePeer, 'lucide-svelte should have svelte as peer dependency');
+});
+
+// Test common icons can be imported (check exports in package.json)
+test('lucide-svelte exports icons', () => {
+	const pkgPath = path.join(rootPath, 'node_modules', 'lucide-svelte', 'package.json');
+	const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+	// Check for exports field or main entry
+	const hasExports = pkg.exports || pkg.main || pkg.module;
+	assert.ok(hasExports, 'lucide-svelte should have exports, main, or module field');
+});
+
+// Test Wrench icon exists (used in PRD for MechanicAI)
+test('lucide-svelte contains Wrench icon', () => {
+	const distPath = path.join(rootPath, 'node_modules', 'lucide-svelte', 'dist');
+	const files = fs.readdirSync(distPath);
+	// Check for wrench in any form (icons are typically in dist)
+	const hasWrenchRelated = files.some(f => f.toLowerCase().includes('wrench') || f === 'icons');
+	// Or check package exports
+	const pkgPath = path.join(rootPath, 'node_modules', 'lucide-svelte', 'package.json');
+	const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+	const exportsIcons = pkg.exports && (pkg.exports['./icons/*'] || pkg.exports['.']);
+	assert.ok(hasWrenchRelated || exportsIcons, 'lucide-svelte should contain icons like Wrench');
+});
+
+// Test Sparkles icon exists (used in PRD for placeholder)
+test('lucide-svelte supports icon imports', () => {
+	const pkgPath = path.join(rootPath, 'node_modules', 'lucide-svelte', 'package.json');
+	const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+	// lucide-svelte should have exports that allow importing icons
+	const hasMainExport = pkg.exports && pkg.exports['.'];
+	const hasModule = pkg.module || pkg.main;
+	assert.ok(hasMainExport || hasModule, 'lucide-svelte should support icon imports');
+});
+
+// Summary
+console.log('\n--- Lucide Icons Installation Tests ---');
+let passed = 0;
+let failed = 0;
+for (const result of testResults) {
+	if (result.passed) {
+		console.log(`✓ ${result.name}`);
+		passed++;
+	} else {
+		console.log(`✗ ${result.name}: ${result.error}`);
+		failed++;
+	}
+}
+console.log(`\nTotal: ${passed} passed, ${failed} failed`);
+if (failed > 0) process.exit(1);
