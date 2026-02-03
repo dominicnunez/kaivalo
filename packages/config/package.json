@@ -1,0 +1,26 @@
+{
+  "name": "@kaivalo/config",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Shared configuration and Tailwind preset for Kaivalo projects",
+  "main": "tailwind.preset.js",
+  "exports": {
+    ".": "./tailwind.preset.js",
+    "./tailwind.preset": "./tailwind.preset.js",
+    "./tailwind.preset.js": "./tailwind.preset.js"
+  },
+  "files": [
+    "tailwind.preset.js"
+  ],
+  "keywords": [
+    "kaivalo",
+    "config",
+    "tailwind",
+    "preset"
+  ],
+  "author": "Kai Valo",
+  "license": "MIT",
+  "peerDependencies": {
+    "tailwindcss": "^3.4.0 || ^4.0.0"
+  }
+}
