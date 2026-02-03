@@ -137,7 +137,7 @@ Create the main landing page application at `/home/kai/pets/kaivalo/apps/hub/`.
 
 #### Footer
 
-- [ ] Simple footer with:
+- [x] Simple footer with:
   - "© 2026 Kai Valo"
   - GitHub link (if repo is public)
   - Contact link (mailto:kaievalo@proton.me or feedback form later)

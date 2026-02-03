@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Button, Card, Badge } from '@kaivalo/ui';
 	import { Container } from '@kaivalo/ui';
-	import { Wrench, Sparkles } from 'lucide-svelte';
+	import { Wrench, Sparkles, Github, Mail } from 'lucide-svelte';
 
 	function scrollToServices() {
 		const servicesSection = document.getElementById('services');
@@ -108,3 +108,33 @@
 		</p>
 	</Container>
 </section>
+
+<!-- Footer -->
+<footer class="py-8 bg-gray-900 text-gray-300">
+	<Container size="lg">
+		<div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+			<!-- Copyright -->
+			<p class="text-sm">© 2026 Kai Valo</p>
+
+			<!-- Links -->
+			<div class="flex items-center gap-6">
+				<a
+					href="https://github.com/kaivalo"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="flex items-center gap-2 text-sm hover:text-white transition-colors"
+				>
+					<Github class="w-4 h-4" />
+					<span>GitHub</span>
+				</a>
+				<a
+					href="mailto:kaievalo@proton.me"
+					class="flex items-center gap-2 text-sm hover:text-white transition-colors"
+				>
+					<Mail class="w-4 h-4" />
+					<span>Contact</span>
+				</a>
+			</div>
+		</div>
+	</Container>
+</footer>
