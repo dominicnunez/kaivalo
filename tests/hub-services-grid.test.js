@@ -152,13 +152,21 @@ test('Badge displays "Coming Soon" for coming-soon status', () => {
 	assert.ok(pageContent.includes("'Coming Soon'"));
 });
 
-// Icon rendering tests
-test('uses svelte:component for dynamic icon rendering', () => {
-	assert.ok(pageContent.includes('svelte:component'));
+// Icon rendering tests (Svelte 5 uses <service.icon /> shorthand instead of svelte:component)
+test('uses dynamic icon rendering via service.icon', () => {
+	// Svelte 5 allows <service.icon /> or <svelte:component this={service.icon} />
+	assert.ok(
+		pageContent.includes('<service.icon') || pageContent.includes('svelte:component'),
+		'Should use dynamic icon component rendering'
+	);
 });
 
-test('icon component uses service.icon', () => {
-	assert.ok(pageContent.includes('this={service.icon}'));
+test('icon component renders from service object', () => {
+	// Check for either Svelte 5 shorthand or legacy syntax
+	assert.ok(
+		pageContent.includes('<service.icon') || pageContent.includes('this={service.icon}'),
+		'Should render icon from service.icon'
+	);
 });
 
 test('icon has w-6 h-6 sizing', () => {
