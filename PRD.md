@@ -186,7 +186,7 @@ Create the main landing page application at `/home/kai/pets/kaivalo/apps/hub/`.
   };
   ```
 - [x] Verify MechanicAI builds: `cd /home/kai/pets/mechanic-ai && npm run build`
-- [ ] Test locally: `node build/index.js` (should serve on 3101)
+- [x] Test locally: `node build/index.js` (should serve on 3101)
 
 ---
 
