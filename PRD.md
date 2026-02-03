@@ -90,7 +90,7 @@ Create the main landing page application at `/home/kai/pets/kaivalo/apps/hub/`.
 
 - [x] Initialize SvelteKit project: `cd /home/kai/pets/kaivalo/apps && npm create svelte@latest hub` (skeleton, TypeScript, no extras)
 - [x] Install dependencies: `cd hub && npm install`
-- [ ] Install Tailwind: `npm install -D tailwindcss postcss autoprefixer && npx tailwindcss init -p`
+- [x] Install Tailwind: `npm install -D tailwindcss postcss autoprefixer && npx tailwindcss init -p`
 - [ ] Install shared packages: `npm install @kaivalo/ui @kaivalo/config` (workspace link)
 - [ ] Install icons: `npm install lucide-svelte`
 - [ ] Configure `tailwind.config.js` to extend `@kaivalo/config/tailwind.preset.js`

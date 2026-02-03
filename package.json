@@ -9,7 +9,7 @@
     "packages/*"
   ],
   "scripts": {
-    "test": "node tests/package-json.test.js && node tests/pnpm-workspace.test.js && node tests/gitignore.test.js && node tests/apps-directory.test.js && node tests/packages-directory.test.js && node tests/mechai-symlink.test.js && node tests/git-init.test.js && node tests/ui-package-json.test.js && node tests/ui-index.test.js && node tests/ui-button.test.js && node tests/ui-card.test.js && node tests/ui-badge.test.js && node tests/ui-container.test.js && node tests/config-package-json.test.js && node tests/config-tailwind-preset.test.js && node tests/hub-sveltekit-init.test.js && node tests/hub-dependencies.test.js"
+    "test": "node tests/package-json.test.js && node tests/pnpm-workspace.test.js && node tests/gitignore.test.js && node tests/apps-directory.test.js && node tests/packages-directory.test.js && node tests/mechai-symlink.test.js && node tests/git-init.test.js && node tests/ui-package-json.test.js && node tests/ui-index.test.js && node tests/ui-button.test.js && node tests/ui-card.test.js && node tests/ui-badge.test.js && node tests/ui-container.test.js && node tests/config-package-json.test.js && node tests/config-tailwind-preset.test.js && node tests/hub-sveltekit-init.test.js && node tests/hub-dependencies.test.js && node tests/hub-tailwind.test.js"
   },
   "engines": {
     "node": ">=18.0.0"
