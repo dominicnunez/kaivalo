@@ -46,7 +46,7 @@ Create the monorepo structure in `/home/kai/pets/kaivalo/`:
 - [x] Create `/home/kai/pets/kaivalo/apps/` directory
 - [x] Create `/home/kai/pets/kaivalo/packages/` directory
 - [x] Create symlink: `ln -s /home/kai/pets/mechanic-ai /home/kai/pets/kaivalo/apps/mechai`
-- [ ] Initialize git repo: `cd /home/kai/pets/kaivalo && git init`
+- [x] Initialize git repo: `cd /home/kai/pets/kaivalo && git init`
 
 ---
 
