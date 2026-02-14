@@ -4,7 +4,7 @@
   let { children } = $props();
 </script>
 
-<div class="min-h-screen bg-white text-gray-900">
+<div class="min-h-screen grain">
   <main>
     {@render children()}
   </main>

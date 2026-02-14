@@ -1,30 +1,24 @@
 <script lang="ts">
-	import { Button, Card, Badge } from '@kaivalo/ui';
 	import { Container } from '@kaivalo/ui';
-	import { Wrench, Sparkles, Github, Mail } from 'lucide-svelte';
+	import { Wrench, Sparkles, Github, Mail, ArrowRight, Terminal } from 'lucide-svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
-
-	function scrollToServices() {
-		const servicesSection = document.getElementById('services');
-		if (servicesSection) {
-			servicesSection.scrollIntoView({ behavior: 'smooth' });
-		}
-	}
 
 	const services = [
 		{
 			icon: Wrench,
 			title: 'MechanicAI',
-			description: 'Turn repair jargon into plain English. Know what you\'re paying for.',
+			tagline: 'Decode repair speak',
+			description: 'Turn mechanic jargon into plain English. Know what you\'re paying for before you pay for it.',
 			status: 'live' as const,
 			link: 'https://mechai.kaivalo.com'
 		},
 		{
 			icon: Sparkles,
-			title: 'Coming Soon',
-			description: 'More tools on the way.',
+			title: 'Next Project',
+			tagline: 'In the workshop',
+			description: 'Something new is taking shape. Practical, useful, no buzzwords.',
 			status: 'coming-soon' as const,
 			link: '#'
 		}
@@ -34,129 +28,208 @@
 <svelte:head>
 	<title>{data.meta.title}</title>
 	<meta name="description" content={data.meta.description} />
-
-	<!-- Open Graph / Facebook -->
 	<meta property="og:type" content="website" />
 	<meta property="og:url" content={data.meta.url} />
 	<meta property="og:title" content={data.meta.title} />
 	<meta property="og:description" content={data.meta.description} />
 	<meta property="og:image" content={data.meta.image} />
 	<meta property="og:image:alt" content={data.meta.imageAlt} />
-
-	<!-- Twitter -->
 	<meta name="twitter:card" content={data.meta.twitterCard} />
-	<meta name="twitter:url" content={data.meta.url} />
 	<meta name="twitter:title" content={data.meta.title} />
 	<meta name="twitter:description" content={data.meta.description} />
 	<meta name="twitter:image" content={data.meta.image} />
-	<meta name="twitter:image:alt" content={data.meta.imageAlt} />
 </svelte:head>
 
-<!-- Hero Section -->
-<section class="relative min-h-[80vh] flex items-center justify-center bg-gradient-to-b from-blue-50 via-white to-white">
-	<Container size="lg" class="text-center py-20">
-		<h1 class="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 mb-6">
-			AI Tools That Actually Help
-		</h1>
-		<p class="text-xl sm:text-2xl text-gray-600 mb-10 max-w-2xl mx-auto">
-			Practical tools built by Kai Valo. No hype, just utility.
-		</p>
-		<Button variant="primary" size="lg" onclick={scrollToServices}>
-			View Services
-		</Button>
+<!-- ════════ HERO ════════ -->
+<section class="relative flex items-center overflow-hidden pt-16 pb-12 sm:pt-24 sm:pb-20 md:min-h-[70vh] md:py-0">
+	<!-- Aurora background -->
+	<div class="aurora"></div>
+
+	<Container size="lg" class="relative z-10">
+		<div class="max-w-2xl">
+			<!-- Origin tag -->
+			<div class="animate-enter delay-1 mb-6 sm:mb-8">
+				<span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border font-mono text-xs tracking-wide"
+					style="border-color: var(--border); color: var(--text-muted); background: var(--bg-secondary);">
+					<Terminal class="w-3 h-3" style="color: var(--accent);" />
+					Helsinki, Finland · 60.1699°N
+				</span>
+			</div>
+
+			<!-- Headline -->
+			<h1 class="font-display text-4xl sm:text-5xl md:text-7xl font-bold leading-[0.95] tracking-tight mb-4 sm:mb-6 animate-enter delay-2">
+				Tools that<br/>
+				<span style="color: var(--accent);">solve things.</span>
+			</h1>
+
+			<!-- Subheadline -->
+			<p class="text-base sm:text-lg md:text-xl leading-relaxed max-w-xl mb-8 sm:mb-10 animate-enter delay-3"
+				style="color: var(--text-secondary);">
+				Simple tools for complicated problems. No accounts, no tracking — just open it and use it.
+			</p>
+
+			<!-- CTA row -->
+			<div class="flex flex-wrap items-center gap-3 sm:gap-4 animate-enter delay-4">
+				<a href="#services"
+					class="inline-flex items-center gap-2 px-5 sm:px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-200"
+					style="background: var(--accent); color: var(--bg-primary);"
+					onmouseenter={(e) => e.currentTarget.style.opacity = '0.9'}
+					onmouseleave={(e) => e.currentTarget.style.opacity = '1'}>
+					See what's live
+					<ArrowRight class="w-4 h-4" />
+				</a>
+				<a href="#about"
+					class="inline-flex items-center gap-2 px-5 sm:px-6 py-3 rounded-lg font-medium text-sm border transition-all duration-200"
+					style="border-color: var(--border); color: var(--text-secondary);"
+					onmouseenter={(e) => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+					onmouseleave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
+					Learn more
+				</a>
+			</div>
+		</div>
 	</Container>
 </section>
 
-<!-- Services Section -->
-<section id="services" class="py-20 bg-gray-50">
+<!-- ════════ SERVICES ════════ -->
+<section id="services" class="relative py-16 sm:py-24 dots-bg">
 	<Container size="lg">
-		<h2 class="text-3xl font-bold text-center text-gray-900 mb-12">Services</h2>
+		<!-- Section header — left aligned -->
+		<div class="mb-10 sm:mb-16 max-w-lg">
+			<span class="font-mono text-xs tracking-widest uppercase mb-3 block"
+				style="color: var(--accent);">Services</span>
+			<h2 class="font-display text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight">
+				What's running
+			</h2>
+		</div>
 
-		<!-- Services Grid: 1 col mobile, 2 col tablet, 3 col desktop -->
-		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-			{#each services as service}
-				<Card
-					variant={service.link !== '#' ? 'link' : 'default'}
-					href={service.link !== '#' ? service.link : undefined}
-					hover={true}
-					class="flex flex-col h-full"
-				>
-					<div class="p-6 flex flex-col h-full">
-						<!-- Icon -->
-						<div class="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center mb-4">
-							<svelte:component this={service.icon} class="w-6 h-6 text-blue-600" />
-						</div>
-
-						<!-- Title and Badge -->
-						<div class="flex items-center gap-3 mb-3">
-							<h3 class="text-xl font-semibold text-gray-900">{service.title}</h3>
-							<Badge status={service.status} size="sm">
-								{service.status === 'live' ? 'Live' : service.status === 'beta' ? 'Beta' : 'Coming Soon'}
-							</Badge>
-						</div>
-
-						<!-- Description -->
-						<p class="text-gray-600 flex-grow">{service.description}</p>
-
-						<!-- Link indicator for live services -->
-						{#if service.link !== '#'}
-							<div class="mt-4 text-blue-600 font-medium text-sm">
-								Visit →
+		<!-- Service cards -->
+		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+			{#each services as service, i}
+				{@const isLive = service.status === 'live'}
+				{#if isLive}
+					<a href={service.link}
+						class="group block rounded-xl border p-6 sm:p-8 card-glow"
+						style="border-color: var(--border); background: var(--bg-card);">
+						<div class="flex items-start justify-between mb-5 sm:mb-6">
+							<div class="w-10 sm:w-11 h-10 sm:h-11 rounded-lg flex items-center justify-center"
+								style="background: var(--accent-dim);">
+								<svelte:component this={service.icon} class="w-5 h-5" style="color: var(--accent);" />
 							</div>
-						{/if}
+							<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+								style="background: rgba(34, 197, 94, 0.1); color: var(--accent);">
+								<span class="w-1.5 h-1.5 rounded-full bg-current animate-pulse"></span>
+								Live
+							</span>
+						</div>
+
+						<h3 class="font-display text-lg sm:text-xl font-semibold mb-1">{service.title}</h3>
+						<p class="font-mono text-xs mb-3 sm:mb-4" style="color: var(--text-muted);">{service.tagline}</p>
+						<p style="color: var(--text-secondary);" class="text-sm leading-relaxed mb-5 sm:mb-6">
+							{service.description}
+						</p>
+
+						<span class="inline-flex items-center gap-2 text-sm font-medium transition-all duration-200"
+							style="color: var(--accent);">
+							Launch
+							<ArrowRight class="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" />
+						</span>
+					</a>
+				{:else}
+					<div class="rounded-xl border p-6 sm:p-8"
+						style="border-color: var(--border); background: var(--bg-card); opacity: 0.6;">
+						<div class="flex items-start justify-between mb-5 sm:mb-6">
+							<div class="w-10 sm:w-11 h-10 sm:h-11 rounded-lg flex items-center justify-center"
+								style="background: var(--bg-tertiary);">
+								<svelte:component this={service.icon} class="w-5 h-5" style="color: var(--text-muted);" />
+							</div>
+							<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
+								style="background: var(--bg-tertiary); color: var(--text-muted);">
+								Soon
+							</span>
+						</div>
+
+						<h3 class="font-display text-lg sm:text-xl font-semibold mb-1">{service.title}</h3>
+						<p class="font-mono text-xs mb-3 sm:mb-4" style="color: var(--text-muted);">{service.tagline}</p>
+						<p style="color: var(--text-muted);" class="text-sm leading-relaxed">
+							{service.description}
+						</p>
 					</div>
-				</Card>
+				{/if}
 			{/each}
 		</div>
 	</Container>
 </section>
 
-<!-- About Section -->
-<section id="about" class="py-20 bg-white">
-	<Container size="md" class="text-center">
-		<!-- Avatar placeholder -->
-		<div class="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-emerald-500 mx-auto mb-6 flex items-center justify-center">
-			<span class="text-3xl font-bold text-white">K</span>
+<!-- ════════ ABOUT ════════ -->
+<section id="about" class="relative py-16 sm:py-24">
+	<Container size="lg">
+		<div class="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-16 items-start">
+			<!-- Left column: identity -->
+			<div class="md:col-span-4">
+				<!-- Avatar -->
+				<div class="w-16 sm:w-20 h-16 sm:h-20 rounded-2xl flex items-center justify-center mb-5 sm:mb-6 relative"
+					style="background: linear-gradient(135deg, var(--accent-dim), var(--bg-tertiary));">
+					<span class="font-display text-xl sm:text-2xl font-bold" style="color: var(--accent);">K</span>
+					<div class="absolute -inset-px rounded-2xl border" style="border-color: var(--border);"></div>
+				</div>
+
+				<h2 class="font-display text-xl sm:text-2xl font-bold mb-2">Kai Valo</h2>
+				<p class="font-mono text-xs tracking-wide" style="color: var(--text-muted);">
+					Helsinki, Finland
+				</p>
+			</div>
+
+			<!-- Right column: about text -->
+			<div class="md:col-span-8">
+				<div class="max-w-lg">
+					<p class="text-sm sm:text-base leading-relaxed mb-4 sm:mb-5" style="color: var(--text-secondary);">
+						I build tools that cut through complexity. If something is confusing,
+						there should be a tool that makes it clear. Mechanic quotes shouldn't
+						require a dictionary. Medical bills shouldn't need a translator.
+					</p>
+					<p class="text-sm sm:text-base leading-relaxed mb-4 sm:mb-5" style="color: var(--text-secondary);">
+						Information asymmetry is a solvable problem — and solving it
+						is what I spend my time on.
+					</p>
+					<p class="text-xs sm:text-sm" style="color: var(--text-muted);">
+						Each tool runs independently. No accounts needed, no data collected
+						beyond what's necessary. Just open it and use it.
+					</p>
+				</div>
+			</div>
 		</div>
-
-		<h2 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-4">
-			Built by Kai Valo
-		</h2>
-
-		<p class="text-lg text-gray-600 max-w-xl mx-auto mb-4">
-			I build tools that solve real problems—no fluff, no buzzwords. Just practical AI that helps you understand what's actually going on.
-		</p>
-
-		<p class="text-base text-gray-500 max-w-xl mx-auto">
-			Whether it's decoding mechanic speak or something else entirely, the goal is always the same: make complex things simple.
-		</p>
 	</Container>
 </section>
 
-<!-- Footer -->
-<footer class="py-8 bg-gray-900 text-gray-300">
+<!-- ════════ FOOTER ════════ -->
+<footer class="py-8 sm:py-10 border-t" style="border-color: var(--border);">
 	<Container size="lg">
-		<div class="flex flex-col sm:flex-row items-center justify-between gap-4">
-			<!-- Copyright -->
-			<p class="text-sm">© 2026 Kai Valo</p>
+		<div class="flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6">
+			<!-- Left: mark -->
+			<div class="flex items-center gap-3">
+				<span class="font-display text-sm font-semibold tracking-tight">kaivalo</span>
+				<span class="font-mono text-xs" style="color: var(--text-muted);">© 2026</span>
+			</div>
 
-			<!-- Links -->
+			<!-- Right: links -->
 			<div class="flex items-center gap-6">
-				<a
-					href="https://github.com/kaivalo"
+				<a href="https://github.com/dominicnunez"
 					target="_blank"
 					rel="noopener noreferrer"
-					class="flex items-center gap-2 text-sm hover:text-white transition-colors"
-				>
-					<Github class="w-4 h-4" />
-					<span>GitHub</span>
+					class="flex items-center gap-2 text-xs transition-colors duration-200"
+					style="color: var(--text-muted);"
+					onmouseenter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
+					onmouseleave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}>
+					<Github class="w-3.5 h-3.5" />
+					GitHub
 				</a>
-				<a
-					href="mailto:kaievalo@proton.me"
-					class="flex items-center gap-2 text-sm hover:text-white transition-colors"
-				>
-					<Mail class="w-4 h-4" />
-					<span>Contact</span>
+				<a href="mailto:kaievalo@proton.me"
+					class="flex items-center gap-2 text-xs transition-colors duration-200"
+					style="color: var(--text-muted);"
+					onmouseenter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
+					onmouseleave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}>
+					<Mail class="w-3.5 h-3.5" />
+					Contact
 				</a>
 			</div>
 		</div>
