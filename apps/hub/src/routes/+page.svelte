@@ -8,17 +8,17 @@
 	const services = [
 		{
 			icon: Wrench,
-			title: 'MechanicAI',
+			title: 'Auto Repair Decoder',
 			tagline: 'Decode repair speak',
 			description: 'Turn mechanic jargon into plain English. Know what you\'re paying for before you pay for it.',
-			status: 'live' as const,
-			link: 'https://mechai.kaivalo.com'
+			status: 'coming-soon' as const,
+			link: '#'
 		},
 		{
 			icon: Sparkles,
-			title: 'Next Project',
+			title: 'More Coming',
 			tagline: 'In the workshop',
-			description: 'Something new is taking shape. Practical, useful, no buzzwords.',
+			description: 'Practical tools for everyday problems. Sign up once, use everything.',
 			status: 'coming-soon' as const,
 			link: '#'
 		}
@@ -41,7 +41,7 @@
 </svelte:head>
 
 <!-- ════════ HERO ════════ -->
-<section class="relative flex items-center overflow-hidden pt-16 pb-12 sm:pt-24 sm:pb-20 md:min-h-[70vh] md:py-0">
+<section class="relative flex items-center overflow-hidden pt-12 pb-8 sm:pt-16 sm:pb-12 md:min-h-[50vh] md:py-0">
 	<!-- Aurora background -->
 	<div class="aurora"></div>
 
@@ -65,7 +65,7 @@
 			<!-- Subheadline -->
 			<p class="text-base sm:text-lg md:text-xl leading-relaxed max-w-xl mb-8 sm:mb-10 animate-enter delay-3"
 				style="color: var(--text-secondary);">
-				Simple tools for complicated problems. No accounts, no tracking — just open it and use it.
+				Simple tools for complicated problems. One account, every tool — sign up once and go.
 			</p>
 
 			<!-- CTA row -->
@@ -91,14 +91,14 @@
 </section>
 
 <!-- ════════ SERVICES ════════ -->
-<section id="services" class="relative py-16 sm:py-24 dots-bg">
+<section id="services" class="relative py-10 sm:py-16 dots-bg">
 	<Container size="lg">
 		<!-- Section header — left aligned -->
 		<div class="mb-10 sm:mb-16 max-w-lg">
 			<span class="font-mono text-xs tracking-widest uppercase mb-3 block"
 				style="color: var(--accent);">Services</span>
 			<h2 class="font-display text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight">
-				What's running
+				What's coming
 			</h2>
 		</div>
 
@@ -161,7 +161,7 @@
 </section>
 
 <!-- ════════ ABOUT ════════ -->
-<section id="about" class="relative py-16 sm:py-24">
+<section id="about" class="relative py-10 sm:py-16">
 	<Container size="lg">
 		<div class="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-16 items-start">
 			<!-- Left column: identity -->
@@ -192,8 +192,8 @@
 						is what I spend my time on.
 					</p>
 					<p class="text-xs sm:text-sm" style="color: var(--text-muted);">
-						Each tool runs independently. No accounts needed, no data collected
-						beyond what's necessary. Just open it and use it.
+						One account, all tools. Sign up once and everything
+						just works — no juggling logins across services.
 					</p>
 				</div>
 			</div>
