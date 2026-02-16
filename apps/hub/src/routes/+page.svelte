@@ -91,10 +91,10 @@
 </section>
 
 <!-- ════════ SERVICES ════════ -->
-<section id="services" class="relative py-10 sm:py-16 dots-bg">
+<section id="services" class="relative py-8 sm:py-12 dots-bg">
 	<Container size="lg">
 		<!-- Section header — left aligned -->
-		<div class="mb-10 sm:mb-16 max-w-lg">
+		<div class="mb-8 sm:mb-10 max-w-lg">
 			<span class="font-mono text-xs tracking-widest uppercase mb-3 block"
 				style="color: var(--accent);">Services</span>
 			<h2 class="font-display text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight">

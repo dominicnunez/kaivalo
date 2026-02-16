@@ -13,9 +13,9 @@ Landing page at `src/routes/+page.svelte`. Issues: desktop dead space between he
 - [x] Reduce bottom padding: `pb-8 sm:pb-12` → `pb-6 sm:pb-8`
 - [x] Keep top padding as-is (needs breathing room from top of page)
 
-### 3. Tighten services section spacing  
-- [ ] Reduce top padding: `py-10 sm:py-16` → `py-8 sm:py-12`
-- [ ] Reduce section header margin: `mb-10 sm:mb-16` → `mb-8 sm:mb-10`
+### 3. Tighten services section spacing
+- [x] Reduce top padding: `py-10 sm:py-16` → `py-8 sm:py-12`
+- [x] Reduce section header margin: `mb-10 sm:mb-16` → `mb-8 sm:mb-10`
 
 ### 4. Tighten about section spacing
 - [ ] Reduce padding: `py-10 sm:py-16` → `py-8 sm:py-12`

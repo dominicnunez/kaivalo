@@ -44,3 +44,29 @@ describe('Hero section spacing', () => {
 		expect(pageContent).toContain('sm:pt-16');
 	});
 });
+
+describe('Services section spacing', () => {
+	const pageContent = readFileSync(join(__dirname, '+page.svelte'), 'utf-8');
+
+	it('should have tightened section padding (py-8 sm:py-12)', () => {
+		// Extract only the services section content
+		const servicesStart = pageContent.indexOf('<!-- ════════ SERVICES ════════ -->');
+		const servicesEnd = pageContent.indexOf('<!-- ════════ ABOUT ════════ -->');
+		const servicesContent = pageContent.substring(servicesStart, servicesEnd);
+
+		// Check for the tightened padding classes in services section
+		expect(servicesContent).toContain('py-8 sm:py-12');
+		expect(servicesContent).not.toContain('py-10 sm:py-16');
+	});
+
+	it('should have tightened section header margin (mb-8 sm:mb-10)', () => {
+		// Extract only the services section content
+		const servicesStart = pageContent.indexOf('<!-- ════════ SERVICES ════════ -->');
+		const servicesEnd = pageContent.indexOf('<!-- ════════ ABOUT ════════ -->');
+		const servicesContent = pageContent.substring(servicesStart, servicesEnd);
+
+		// Check for the tightened margin classes in services section
+		expect(servicesContent).toContain('mb-8 sm:mb-10');
+		expect(servicesContent).not.toContain('mb-10 sm:mb-16');
+	});
+});
