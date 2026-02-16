@@ -21,7 +21,7 @@ Landing page at `src/routes/+page.svelte`. Issues: desktop dead space between he
 - [x] Reduce padding: `py-10 sm:py-16` → `py-8 sm:py-12`
 
 ### 5. Verify build
-- [ ] Run `npm run build` from `apps/hub/` — must succeed with zero errors
+- [x] Run `npm run build` from `apps/hub/` — must succeed with zero errors
 
 ## Constraints
 - SvelteKit + Svelte 5 runes
