@@ -70,3 +70,18 @@ describe('Services section spacing', () => {
 		expect(servicesContent).not.toContain('mb-10 sm:mb-16');
 	});
 });
+
+describe('About section spacing', () => {
+	const pageContent = readFileSync(join(__dirname, '+page.svelte'), 'utf-8');
+
+	it('should have tightened section padding (py-8 sm:py-12)', () => {
+		// Extract only the about section content
+		const aboutStart = pageContent.indexOf('<!-- ════════ ABOUT ════════ -->');
+		const aboutEnd = pageContent.indexOf('<!-- ════════ FOOTER ════════ -->');
+		const aboutContent = pageContent.substring(aboutStart, aboutEnd);
+
+		// Check for the tightened padding classes in about section
+		expect(aboutContent).toContain('py-8 sm:py-12');
+		expect(aboutContent).not.toContain('py-10 sm:py-16');
+	});
+});

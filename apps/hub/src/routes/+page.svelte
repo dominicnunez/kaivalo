@@ -161,7 +161,7 @@
 </section>
 
 <!-- ════════ ABOUT ════════ -->
-<section id="about" class="relative py-10 sm:py-16">
+<section id="about" class="relative py-8 sm:py-12">
 	<Container size="lg">
 		<div class="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-16 items-start">
 			<!-- Left column: identity -->
