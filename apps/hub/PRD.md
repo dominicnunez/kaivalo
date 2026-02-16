@@ -9,9 +9,9 @@ Landing page at `src/routes/+page.svelte`. Issues: desktop dead space between he
 - [x] In `src/routes/+page.ts`, change description from "No accounts, no tracking — just open it and use it." to "Simple tools for complicated problems. One account, every tool — sign up once and go."
 
 ### 2. Tighten hero vertical spacing
-- [ ] Hero section: reduce `md:min-h-[50vh]` to `md:min-h-[40vh]` or remove min-height entirely — let content determine height
-- [ ] Reduce bottom padding: `pb-8 sm:pb-12` → `pb-6 sm:pb-8`
-- [ ] Keep top padding as-is (needs breathing room from top of page)
+- [x] Hero section: reduce `md:min-h-[50vh]` to `md:min-h-[40vh]` or remove min-height entirely — let content determine height
+- [x] Reduce bottom padding: `pb-8 sm:pb-12` → `pb-6 sm:pb-8`
+- [x] Keep top padding as-is (needs breathing room from top of page)
 
 ### 3. Tighten services section spacing  
 - [ ] Reduce top padding: `py-10 sm:py-16` → `py-8 sm:py-12`

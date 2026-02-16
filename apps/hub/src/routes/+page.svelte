@@ -41,7 +41,7 @@
 </svelte:head>
 
 <!-- ════════ HERO ════════ -->
-<section class="relative flex items-center overflow-hidden pt-12 pb-8 sm:pt-16 sm:pb-12 md:min-h-[50vh] md:py-0">
+<section class="relative flex items-center overflow-hidden pt-12 pb-6 sm:pt-16 sm:pb-8 md:min-h-[40vh] md:py-0">
 	<!-- Aurora background -->
 	<div class="aurora"></div>
 
