@@ -5,6 +5,14 @@
  */
 
 import { existsSync } from 'fs';
+import { homedir } from 'os';
+import { join } from 'path';
+
+// Ensure pm2 is on PATH (installed via npm global)
+const npmGlobalBin = join(homedir(), '.npm-global', 'bin');
+if (!process.env.PATH.includes(npmGlobalBin)) {
+  process.env.PATH = `${npmGlobalBin}:${process.env.PATH}`;
+}
 
 const mechaiDir = '/home/kai/pets/mechanic-ai';
 

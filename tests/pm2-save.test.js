@@ -10,6 +10,12 @@ import assert from 'assert';
 import { homedir } from 'os';
 import { join } from 'path';
 
+// Ensure pm2 is on PATH (installed via npm global)
+const npmGlobalBin = join(homedir(), '.npm-global', 'bin');
+if (!process.env.PATH.includes(npmGlobalBin)) {
+  process.env.PATH = `${npmGlobalBin}:${process.env.PATH}`;
+}
+
 const mechaiAvailable = existsSync('/home/kai/pets/mechanic-ai');
 
 function test(name, fn) {
