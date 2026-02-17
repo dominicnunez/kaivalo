@@ -22,8 +22,8 @@ Hub is SvelteKit + adapter-node, running on port 3100.
 - [x] Create `.env` from `.env.example` with WorkOS vars (placeholder values for now)
 
 ### 2. Configure hooks
-- [ ] Create `src/hooks.server.ts` with WorkOS handleAuth()
-- [ ] Follow official SvelteKit guide: https://workos.com/docs/user-management/sveltekit
+- [x] Create `src/hooks.server.ts` with WorkOS handleAuth()
+- [x] Follow official SvelteKit guide: https://workos.com/docs/user-management/sveltekit
 
 ### 3. Add auth callback route
 - [ ] Create `src/routes/auth/callback/+server.ts` for OAuth callback
