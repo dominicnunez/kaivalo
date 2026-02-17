@@ -26,7 +26,7 @@ Hub is SvelteKit + adapter-node, running on port 3100.
 - [x] Follow official SvelteKit guide: https://workos.com/docs/user-management/sveltekit
 
 ### 3. Add auth callback route
-- [ ] Create `src/routes/auth/callback/+server.ts` for OAuth callback
+- [x] Create `src/routes/auth/callback/+server.ts` for OAuth callback
 
 ### 4. Add sign-in/sign-out to layout
 - [ ] Update `src/routes/+layout.server.ts` to pass user session data
