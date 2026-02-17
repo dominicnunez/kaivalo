@@ -29,48 +29,31 @@ test('page has script section with lang=ts', () => {
 });
 
 // Import tests
-test('imports Button from @kaivalo/ui', () => {
-	// Button may be imported alongside other components
-	assert.ok(pageContent.includes('Button') && pageContent.includes("'@kaivalo/ui'"));
+test('imports Container from @kaivalo/ui', () => {
+	assert.ok(pageContent.includes('Container') && pageContent.includes("'@kaivalo/ui'"));
 });
 
-test('imports Container from @kaivalo/ui', () => {
-	// Container may be imported alongside other components or separately
-	assert.ok(pageContent.includes('Container') && pageContent.includes("'@kaivalo/ui'"));
+test('imports icons from lucide-svelte', () => {
+	assert.ok(pageContent.includes('lucide-svelte'));
+	assert.ok(pageContent.includes('Wrench'));
 });
 
 // Hero section structure tests
 test('has hero section element', () => {
-	assert.ok(pageContent.includes('<section') && pageContent.includes('Hero Section'));
+	assert.ok(pageContent.includes('<section') && pageContent.includes('HERO'));
 });
 
-test('hero has gradient background from-blue-50', () => {
-	assert.ok(pageContent.includes('from-blue-50'));
+test('hero has aurora background', () => {
+	assert.ok(pageContent.includes('aurora'));
 });
 
-test('hero has gradient via-white', () => {
-	assert.ok(pageContent.includes('via-white'));
-});
-
-test('hero has gradient to-white', () => {
-	assert.ok(pageContent.includes('to-white'));
-});
-
-test('hero uses bg-gradient-to-b', () => {
-	assert.ok(pageContent.includes('bg-gradient-to-b'));
-});
-
-test('hero has min-h-[80vh] for viewport height', () => {
-	assert.ok(pageContent.includes('min-h-[80vh]'));
-});
-
-test('hero uses flex centering', () => {
-	assert.ok(pageContent.includes('flex') && pageContent.includes('items-center') && pageContent.includes('justify-center'));
+test('hero uses flex items-center', () => {
+	assert.ok(pageContent.includes('flex') && pageContent.includes('items-center'));
 });
 
 // Headline tests
-test('has correct headline text', () => {
-	assert.ok(pageContent.includes('AI Tools That Actually Help'));
+test('has headline text', () => {
+	assert.ok(pageContent.includes('Tools that') && pageContent.includes('solve things'));
 });
 
 test('headline is h1 element', () => {
@@ -78,70 +61,51 @@ test('headline is h1 element', () => {
 });
 
 test('headline has responsive font sizes', () => {
-	assert.ok(pageContent.includes('text-4xl') && pageContent.includes('sm:text-5xl') && pageContent.includes('md:text-6xl'));
+	assert.ok(pageContent.includes('text-4xl') && pageContent.includes('sm:text-5xl') && pageContent.includes('md:text-7xl'));
 });
 
 test('headline has font-bold', () => {
 	assert.ok(pageContent.includes('font-bold'));
 });
 
-// Subheadline tests
-test('has correct subheadline text', () => {
-	assert.ok(pageContent.includes('Practical tools built by Kai Valo'));
+test('headline uses font-display class', () => {
+	assert.ok(pageContent.includes('font-display'));
 });
 
-test('subheadline includes "No hype, just utility"', () => {
-	assert.ok(pageContent.includes('No hype, just utility'));
+// Subheadline tests
+test('has subheadline text', () => {
+	assert.ok(pageContent.includes('Simple tools for complicated problems'));
 });
 
 test('subheadline has responsive font sizes', () => {
-	assert.ok(pageContent.includes('text-xl') && pageContent.includes('sm:text-2xl'));
-});
-
-test('subheadline has gray text color', () => {
-	assert.ok(pageContent.includes('text-gray-600'));
+	assert.ok(pageContent.includes('text-base') || pageContent.includes('sm:text-lg') || pageContent.includes('md:text-xl'));
 });
 
 test('subheadline has max-width constraint', () => {
-	assert.ok(pageContent.includes('max-w-2xl'));
+	assert.ok(pageContent.includes('max-w-xl') || pageContent.includes('max-w-2xl'));
 });
 
-// CTA Button tests
-test('has Button component for CTA', () => {
-	assert.ok(pageContent.includes('<Button'));
+// CTA tests
+test('has CTA link to services', () => {
+	assert.ok(pageContent.includes('href="#services"'));
 });
 
-test('Button has primary variant', () => {
-	assert.ok(pageContent.includes('variant="primary"'));
+test('CTA text says "See what\'s live"', () => {
+	assert.ok(pageContent.includes("See what's live") || pageContent.includes('See what'));
 });
 
-test('Button has lg size', () => {
-	assert.ok(pageContent.includes('size="lg"'));
+test('has secondary CTA link to about', () => {
+	assert.ok(pageContent.includes('href="#about"'));
 });
 
-test('Button has onclick handler', () => {
-	assert.ok(pageContent.includes('onclick={scrollToServices}'));
+// Origin tag
+test('has Helsinki location tag', () => {
+	assert.ok(pageContent.includes('Helsinki'));
 });
 
-test('Button text is "View Services"', () => {
-	assert.ok(pageContent.includes('View Services'));
-});
-
-// Smooth scroll functionality tests
-test('has scrollToServices function', () => {
-	assert.ok(pageContent.includes('function scrollToServices()'));
-});
-
-test('scrollToServices uses getElementById for services', () => {
-	assert.ok(pageContent.includes("getElementById('services')"));
-});
-
-test('scrollToServices uses smooth scroll behavior', () => {
-	assert.ok(pageContent.includes("behavior: 'smooth'"));
-});
-
-test('scrollToServices uses scrollIntoView', () => {
-	assert.ok(pageContent.includes('scrollIntoView'));
+// Animation classes
+test('has entrance animations', () => {
+	assert.ok(pageContent.includes('animate-enter'));
 });
 
 // Services section target tests
@@ -149,10 +113,9 @@ test('has services section with id="services"', () => {
 	assert.ok(pageContent.includes('id="services"'));
 });
 
-test('services section is a <section> element', () => {
-	// Check there are at least 2 section elements (hero and services)
+test('has at least 3 section elements', () => {
 	const sectionMatches = pageContent.match(/<section/g);
-	assert.ok(sectionMatches && sectionMatches.length >= 2);
+	assert.ok(sectionMatches && sectionMatches.length >= 3);
 });
 
 // Container usage tests

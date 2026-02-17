@@ -34,7 +34,7 @@ allPassed = test('.gitignore exists', () => {
 
 // Test 2: Ignores node_modules
 allPassed = test('ignores node_modules', () => {
-  assert(/^node_modules$/m.test(content), 'should ignore node_modules');
+  assert(/^node_modules\/?$/m.test(content), 'should ignore node_modules');
 }) && allPassed;
 
 // Test 3: Ignores .env
@@ -44,12 +44,12 @@ allPassed = test('ignores .env', () => {
 
 // Test 4: Ignores build directory
 allPassed = test('ignores build directory', () => {
-  assert(/^build$/m.test(content), 'should ignore build directory');
+  assert(/^build\/?$/m.test(content), 'should ignore build directory');
 }) && allPassed;
 
 // Test 5: Ignores .svelte-kit
 allPassed = test('ignores .svelte-kit', () => {
-  assert(/^\.svelte-kit$/m.test(content), 'should ignore .svelte-kit');
+  assert(/^\.svelte-kit\/?$/m.test(content), 'should ignore .svelte-kit');
 }) && allPassed;
 
 // Test 6: Has multiple entries

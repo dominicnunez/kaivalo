@@ -121,8 +121,7 @@ test('page includes responsive grid classes', () => {
 	const pagePath = join(HUB_DIR, 'src/routes/+page.svelte');
 	const content = readFileSync(pagePath, 'utf8');
 	assert.ok(content.includes('grid-cols-1'), 'Should have mobile grid class');
-	assert.ok(content.includes('md:grid-cols-2'), 'Should have tablet grid class');
-	assert.ok(content.includes('lg:grid-cols-3'), 'Should have desktop grid class');
+	assert.ok(content.includes('sm:grid-cols-2'), 'Should have tablet grid class');
 });
 
 test('page includes responsive text sizes', () => {
@@ -130,7 +129,7 @@ test('page includes responsive text sizes', () => {
 	const content = readFileSync(pagePath, 'utf8');
 	assert.ok(content.includes('text-4xl'), 'Should have base heading size');
 	assert.ok(content.includes('sm:text-5xl'), 'Should have sm breakpoint');
-	assert.ok(content.includes('md:text-6xl'), 'Should have md breakpoint');
+	assert.ok(content.includes('md:text-7xl'), 'Should have md breakpoint');
 });
 
 test('page includes responsive layout classes', () => {

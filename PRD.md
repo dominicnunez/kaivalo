@@ -218,7 +218,7 @@ Create nginx config for kaivalo.com with subdomain routing.
 - [x] Start hub: `cd /home/kai/pets/kaivalo/apps/hub && pm2 start ecosystem.config.cjs`
 - [x] Start mechai: `cd /home/kai/pets/mechanic-ai && pm2 start ecosystem.config.cjs`
 - [x] Save PM2 config: `pm2 save`
-- [ ] Verify both running: `pm2 status`
+- [x] Verify both running: `pm2 status`
 
 ### 5.3 SSL (After Domain Registration)
 

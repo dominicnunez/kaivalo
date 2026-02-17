@@ -71,15 +71,8 @@ test('+layout.svelte has min-h-screen for full height', () => {
   assert.ok(content.includes('min-h-screen'), 'Should have min-h-screen for full viewport height');
 });
 
-test('+layout.svelte has white background', () => {
-  assert.ok(content.includes('bg-white'), 'Should have white background class');
-});
-
-test('+layout.svelte has text color set', () => {
-  assert.ok(
-    content.includes('text-gray-900') || content.includes('text-neutral'),
-    'Should have text color class for body text'
-  );
+test('+layout.svelte has grain overlay for texture', () => {
+  assert.ok(content.includes('grain'), 'Should have grain class for visual texture');
 });
 
 test('+layout.svelte is a minimal shell (no nav)', () => {

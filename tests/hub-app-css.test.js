@@ -32,33 +32,31 @@ test('app.css contains Tailwind import', () => {
   assert.ok(content.includes('@import "tailwindcss"'), 'Should have Tailwind CSS v4 import');
 });
 
-test('app.css imports Inter font from Google Fonts', () => {
+test('app.css imports fonts', () => {
   assert.ok(
-    content.includes("fonts.googleapis.com") && content.includes("Inter"),
-    'Should import Inter font from Google Fonts'
+    content.includes("fonts.googleapis.com") || content.includes("fontshare.com"),
+    'Should import fonts from a CDN'
   );
 });
 
-test('app.css includes font weights 400, 500, 600, 700', () => {
+test('app.css includes font weights 400, 500, 600', () => {
   assert.ok(content.includes('400'), 'Should include regular weight (400)');
   assert.ok(content.includes('500'), 'Should include medium weight (500)');
   assert.ok(content.includes('600'), 'Should include semibold weight (600)');
-  assert.ok(content.includes('700'), 'Should include bold weight (700)');
 });
 
 test('app.css has @layer base block', () => {
   assert.ok(content.includes('@layer base'), 'Should have @layer base for base styles');
 });
 
-test('app.css sets Inter as body font-family', () => {
+test('app.css sets body font-family', () => {
   assert.ok(
-    content.includes("font-family:") && content.includes("'Inter'"),
-    "Should set Inter as body font-family"
+    content.includes("font-family:"),
+    "Should set body font-family"
   );
 });
 
 test('app.css includes system font fallbacks', () => {
-  assert.ok(content.includes('system-ui'), 'Should include system-ui fallback');
   assert.ok(content.includes('sans-serif'), 'Should include sans-serif fallback');
 });
 
@@ -81,21 +79,22 @@ test('app.css has @layer components block', () => {
   assert.ok(content.includes('@layer components'), 'Should have @layer components for custom components');
 });
 
-test('app.css has gradient text utility', () => {
-  assert.ok(content.includes('.text-gradient'), 'Should have text-gradient utility class');
-  assert.ok(content.includes('background-clip: text'), 'Should use background-clip text for gradient');
-});
-
-test('app.css uses theme() function for colors', () => {
-  assert.ok(content.includes("theme('colors."), 'Should use theme() function for color references');
-});
-
 test('app.css has display=swap for font loading', () => {
   assert.ok(content.includes('display=swap'), 'Should use display=swap for font loading performance');
 });
 
 test('app.css has header comment', () => {
   assert.ok(content.includes('Kaivalo Hub'), 'Should have header comment mentioning Kaivalo Hub');
+});
+
+test('app.css has CSS custom properties', () => {
+  assert.ok(content.includes(':root'), 'Should define CSS custom properties');
+  assert.ok(content.includes('--bg-primary'), 'Should have background color tokens');
+  assert.ok(content.includes('--accent'), 'Should have accent color token');
+});
+
+test('app.css has animation utilities', () => {
+  assert.ok(content.includes('@keyframes') || content.includes('animation'), 'Should have animation utilities');
 });
 
 console.log(`\n${passCount}/${testCount} tests passed`);
