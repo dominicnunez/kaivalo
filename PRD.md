@@ -35,8 +35,8 @@ Hub is SvelteKit + adapter-node, running on port 3100.
 - [x] Show user name/avatar when authenticated
 
 ### 5. Protect future routes
-- [ ] Create `src/lib/auth.ts` helper for route protection (withAuth wrapper)
-- [ ] Document pattern for protecting new routes
+- [x] Create `src/lib/auth.ts` helper for route protection (withAuth wrapper)
+- [x] Document pattern for protecting new routes
 
 ### 6. Verify
 - [ ] `npm run build` passes
