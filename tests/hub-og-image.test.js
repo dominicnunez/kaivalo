@@ -78,6 +78,35 @@ test('og-image.png is in apps/hub/static directory', () => {
   assert.ok(existsSync(join(staticPath, 'og-image.png')), 'og-image.png should be in static');
 });
 
+// Test: Image is a proper branded graphic (not a tiny placeholder)
+test('og-image.png is a substantial branded graphic (>20KB)', () => {
+  const stats = statSync(ogImagePath);
+  assert.ok(stats.size > 20000, `Branded OG image should be >20KB (not a placeholder), got ${stats.size} bytes`);
+});
+
+// Test: Image is not excessively large (social media friendly, <500KB)
+test('og-image.png is social media friendly (<500KB)', () => {
+  const stats = statSync(ogImagePath);
+  assert.ok(stats.size < 500000, `OG image should be <500KB for fast loading, got ${stats.size} bytes`);
+});
+
+// Test: Image uses RGB or RGBA color type (not grayscale) for branded graphics
+test('og-image.png uses color (RGB/RGBA, not grayscale)', () => {
+  const buffer = readFileSync(ogImagePath);
+  // Color type is at IHDR offset + 8 (width) + 4 (height) + 1 (bit depth) = byte 25
+  const colorTypeOffset = 8 + 8 + 4 + 4 + 1;
+  const colorType = buffer.readUInt8(colorTypeOffset);
+  // 2 = RGB, 6 = RGBA - both are color
+  assert.ok(colorType === 2 || colorType === 6, `Color type should be RGB(2) or RGBA(6), got ${colorType}`);
+});
+
+// Test: +page.ts references og-image.png for social sharing
+test('+page.ts references og-image.png in meta', () => {
+  const pageTs = join(process.cwd(), 'apps/hub/src/routes/+page.ts');
+  const content = readFileSync(pageTs, 'utf-8');
+  assert.ok(content.includes('og-image.png'), '+page.ts should reference og-image.png');
+});
+
 // Print results
 console.log('\n=== OG Image Tests ===\n');
 let passed = 0;

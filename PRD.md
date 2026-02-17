@@ -238,7 +238,7 @@ Once Aural registers kaivalo.com and points DNS:
 ### Tasks
 
 - [x] Add proper favicon (simple K or tool icon)
-- [ ] Create OG image (1200x630 branded graphic)
+- [x] Create OG image (1200x630 branded graphic)
 - [ ] Test all links work
 - [ ] Mobile responsiveness check
 - [ ] Lighthouse audit (aim for 90+ performance)
