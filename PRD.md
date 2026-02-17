@@ -29,10 +29,10 @@ Hub is SvelteKit + adapter-node, running on port 3100.
 - [x] Create `src/routes/auth/callback/+server.ts` for OAuth callback
 
 ### 4. Add sign-in/sign-out to layout
-- [ ] Update `src/routes/+layout.server.ts` to pass user session data
-- [ ] Add sign-in button to header/nav (currently no nav — add minimal one)
-- [ ] Add sign-out functionality
-- [ ] Show user name/avatar when authenticated
+- [x] Update `src/routes/+layout.server.ts` to pass user session data
+- [x] Add sign-in button to header/nav (currently no nav — add minimal one)
+- [x] Add sign-out functionality
+- [x] Show user name/avatar when authenticated
 
 ### 5. Protect future routes
 - [ ] Create `src/lib/auth.ts` helper for route protection (withAuth wrapper)

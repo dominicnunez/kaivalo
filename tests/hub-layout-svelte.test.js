@@ -29,7 +29,7 @@ test('+layout.svelte file exists', () => {
 const content = existsSync(layoutPath) ? readFileSync(layoutPath, 'utf8') : '';
 
 test('+layout.svelte has script section', () => {
-  assert.ok(content.includes('<script>'), 'Should have opening script tag');
+  assert.ok(content.includes('<script'), 'Should have opening script tag');
   assert.ok(content.includes('</script>'), 'Should have closing script tag');
 });
 
@@ -44,11 +44,12 @@ test('+layout.svelte uses Svelte 5 $props() rune', () => {
   assert.ok(content.includes('$props()'), 'Should use Svelte 5 $props() rune for children');
 });
 
-test('+layout.svelte destructures children from props', () => {
+test('+layout.svelte destructures data and children from props', () => {
   assert.ok(
-    content.includes('{ children }') || content.includes('{children}'),
+    content.includes('children') && content.includes('$props()'),
     'Should destructure children from props'
   );
+  assert.ok(content.includes('data'), 'Should destructure data from props for auth');
 });
 
 test('+layout.svelte has main element', () => {
@@ -75,10 +76,8 @@ test('+layout.svelte has grain overlay for texture', () => {
   assert.ok(content.includes('grain'), 'Should have grain class for visual texture');
 });
 
-test('+layout.svelte is a minimal shell (no nav)', () => {
-  assert.ok(!content.includes('<nav'), 'Should not have nav element for MVP');
-  assert.ok(!content.includes('<header'), 'Should not have header element for MVP');
-  assert.ok(!content.includes('<footer'), 'Footer should be in page, not layout for MVP');
+test('+layout.svelte has nav for auth UI', () => {
+  assert.ok(content.includes('<nav'), 'Should have nav element for auth UI');
 });
 
 console.log(`\n${passCount}/${testCount} tests passed`);
