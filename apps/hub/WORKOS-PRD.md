@@ -4,11 +4,11 @@
 Add shared authentication across all kaivalo tools using WorkOS AuthKit.
 Hub is SvelteKit + adapter-node, running on port 3100.
 
-**Blocked until:** Aural creates a WorkOS account and provides:
-- WORKOS_CLIENT_ID
-- WORKOS_API_KEY  
-- WORKOS_REDIRECT_URI (https://kaivalo.com/auth/callback)
-- WORKOS_COOKIE_PASSWORD (32+ char random string)
+**UNBLOCKED** — Credentials configured in `.env`:
+- WORKOS_CLIENT_ID ✅ (in .env)
+- WORKOS_API_KEY ✅ (in .env)
+- WORKOS_REDIRECT_URI = http://localhost:3100/auth/callback (dev), will change for prod
+- WORKOS_COOKIE_PASSWORD ✅ (generated, in .env)
 
 ## Research (done)
 - Official `@workos/authkit-sveltekit` package exists
@@ -18,8 +18,8 @@ Hub is SvelteKit + adapter-node, running on port 3100.
 ## Tasks
 
 ### 1. Install WorkOS AuthKit
-- [ ] `npm install @workos-inc/authkit-sveltekit`
-- [ ] Create `.env` from `.env.example` with WorkOS vars (placeholder values for now)
+- [x] `npm install @workos-inc/authkit-sveltekit`
+- [x] Create `.env` from `.env.example` with WorkOS vars (placeholder values for now)
 
 ### 2. Configure hooks
 - [ ] Create `src/hooks.server.ts` with WorkOS handleAuth()

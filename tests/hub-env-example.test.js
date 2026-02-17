@@ -45,10 +45,10 @@ test('.env.example mentions Kaivalo Hub', () => {
   assert.ok(content.includes('Kaivalo Hub'), 'should mention Kaivalo Hub');
 });
 
-// Test 5: .env.example mentions no secrets for MVP
-test('.env.example mentions no secrets for MVP', () => {
+// Test 5: .env.example has WorkOS configuration variables
+test('.env.example has WorkOS configuration variables', () => {
   const content = readFileSync(envExamplePath, 'utf-8');
-  assert.ok(content.includes('No secrets') || content.includes('MVP'), 'should mention no secrets or MVP');
+  assert.ok(content.includes('WORKOS_CLIENT_ID'), 'should have WORKOS_CLIENT_ID');
 });
 
 // Test 6: .env.example starts with a comment
