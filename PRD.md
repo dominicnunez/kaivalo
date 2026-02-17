@@ -39,8 +39,8 @@ Hub is SvelteKit + adapter-node, running on port 3100.
 - [x] Document pattern for protecting new routes
 
 ### 6. Verify
-- [ ] `npm run build` passes
-- [ ] Auth flow works end-to-end (sign in → callback → session → sign out)
+- [x] `npm run build` passes
+- [x] Auth flow works end-to-end (sign in → callback → session → sign out)
 
 ## Constraints
 - SvelteKit + Svelte 5 runes
