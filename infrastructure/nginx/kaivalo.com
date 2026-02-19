@@ -125,6 +125,7 @@ server {
     listen [::]:80;
     server_name *.kaivalo.com;
     server_tokens off;
+    limit_req zone=general burst=5 nodelay;
 
     return 301 $scheme://kaivalo.com$request_uri;
 }
