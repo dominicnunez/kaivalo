@@ -2,8 +2,10 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert';
 import { readFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+import { resolve, join } from 'node:path';
 
-const authPath = 'apps/hub/src/lib/auth.ts';
+const projectRoot = resolve(import.meta.dirname, '..');
+const authPath = join(projectRoot, 'apps/hub/src/lib/auth.ts');
 const authContent = readFileSync(authPath, 'utf-8');
 
 describe('src/lib/auth.ts — route protection helper', () => {
@@ -67,7 +69,7 @@ describe('src/lib/auth.ts — route protection helper', () => {
 describe('build verification — auth helper does not break build', () => {
 	test('npm run build succeeds', () => {
 		execSync('npm run build', {
-			cwd: 'apps/hub',
+			cwd: join(projectRoot, 'apps/hub'),
 			timeout: 60000,
 			env: {
 				...process.env,
@@ -77,6 +79,6 @@ describe('build verification — auth helper does not break build', () => {
 				WORKOS_COOKIE_PASSWORD: 'a'.repeat(32),
 			},
 		});
-		assert.ok(existsSync('apps/hub/build/index.js'), 'build should produce index.js');
+		assert.ok(existsSync(join(projectRoot, 'apps/hub/build/index.js')), 'build should produce index.js');
 	});
 });
