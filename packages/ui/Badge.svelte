@@ -31,8 +31,8 @@
     color: var(--accent);
   }
   .badge-beta {
-    background: rgba(245, 158, 11, 0.1);
-    color: #fbbf24;
+    background: var(--accent-warning-dim);
+    color: var(--accent-warning);
   }
   .badge-coming-soon {
     background: var(--bg-tertiary);
