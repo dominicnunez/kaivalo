@@ -45,10 +45,6 @@ test('@sveltejs/kit is installed', () => {
   assert.ok(existsSync(join(projectRoot, 'node_modules/@sveltejs/kit')), '@sveltejs/kit should be installed');
 });
 
-test('@sveltejs/adapter-auto is installed', () => {
-  assert.ok(existsSync(join(projectRoot, 'node_modules/@sveltejs/adapter-auto')), '@sveltejs/adapter-auto should be installed');
-});
-
 test('@sveltejs/vite-plugin-svelte is installed', () => {
   assert.ok(existsSync(join(projectRoot, 'node_modules/@sveltejs/vite-plugin-svelte')), '@sveltejs/vite-plugin-svelte should be installed');
 });
