@@ -33,19 +33,19 @@ describe('ui button', () => {
     assert.ok(content.includes("variant = 'primary'"), 'Should default to primary variant');
   });
 
-  it('Button.svelte supports primary variant', () => {
-    assert.ok(content.includes('primary:'), 'Should define primary variant classes');
-    assert.ok(content.includes('bg-blue-600'), 'Primary should use blue background');
+  it('Button.svelte has scoped primary variant styles', () => {
+    assert.ok(content.includes('.btn-primary'), 'Should define .btn-primary class');
+    assert.ok(content.includes('var(--accent)'), 'Primary should use --accent CSS variable');
   });
 
-  it('Button.svelte supports secondary variant', () => {
-    assert.ok(content.includes('secondary:'), 'Should define secondary variant classes');
-    assert.ok(content.includes('bg-gray-200'), 'Secondary should use gray background');
+  it('Button.svelte has scoped secondary variant styles', () => {
+    assert.ok(content.includes('.btn-secondary'), 'Should define .btn-secondary class');
+    assert.ok(content.includes('var(--bg-tertiary)'), 'Secondary should use --bg-tertiary');
   });
 
-  it('Button.svelte supports ghost variant', () => {
-    assert.ok(content.includes('ghost:'), 'Should define ghost variant classes');
-    assert.ok(content.includes('bg-transparent'), 'Ghost should be transparent');
+  it('Button.svelte has scoped ghost variant styles', () => {
+    assert.ok(content.includes('.btn-ghost'), 'Should define .btn-ghost class');
+    assert.ok(content.includes('transparent'), 'Ghost should be transparent');
   });
 
   it('Button.svelte has size prop with md default', () => {
@@ -53,19 +53,10 @@ describe('ui button', () => {
     assert.ok(content.includes("size = 'md'"), 'Should default to md size');
   });
 
-  it('Button.svelte supports sm size', () => {
-    assert.ok(content.includes('sm:'), 'Should define sm size classes');
-    assert.ok(content.includes('text-sm'), 'sm size should use text-sm');
-  });
-
-  it('Button.svelte supports md size', () => {
-    assert.ok(content.includes('md:'), 'Should define md size classes');
-    assert.ok(content.includes('text-base'), 'md size should use text-base');
-  });
-
-  it('Button.svelte supports lg size', () => {
-    assert.ok(content.includes('lg:'), 'Should define lg size classes');
-    assert.ok(content.includes('text-lg'), 'lg size should use text-lg');
+  it('Button.svelte has scoped size classes', () => {
+    assert.ok(content.includes('.btn-sm'), 'Should define .btn-sm class');
+    assert.ok(content.includes('.btn-md'), 'Should define .btn-md class');
+    assert.ok(content.includes('.btn-lg'), 'Should define .btn-lg class');
   });
 
   it('Button.svelte has disabled prop', () => {
@@ -78,12 +69,8 @@ describe('ui button', () => {
   });
 
   it('Button.svelte has disabled styling', () => {
-    assert.ok(content.includes('disabled:'), 'Should have disabled state classes');
-    assert.ok(content.includes('cursor-not-allowed'), 'Should show not-allowed cursor when disabled');
-  });
-
-  it('Button.svelte uses $derived for computed classes', () => {
-    assert.ok(content.includes('$derived'), 'Should use $derived rune for computed classes');
+    assert.ok(content.includes(':disabled'), 'Should have :disabled pseudo-class styles');
+    assert.ok(content.includes('cursor: not-allowed'), 'Should show not-allowed cursor when disabled');
   });
 
   it('Button.svelte has button element', () => {
@@ -97,11 +84,20 @@ describe('ui button', () => {
   });
 
   it('Button.svelte has transition styling', () => {
-    assert.ok(content.includes('transition'), 'Should have transition classes');
+    assert.ok(content.includes('transition'), 'Should have transition in scoped styles');
   });
 
-  it('Button.svelte has focus styling', () => {
-    assert.ok(content.includes('focus:'), 'Should have focus state classes');
-    assert.ok(content.includes('focus:ring'), 'Should have focus ring');
+  it('Button.svelte has focus-visible styling', () => {
+    assert.ok(content.includes('focus-visible'), 'Should have focus-visible styles');
+    assert.ok(content.includes('outline'), 'Should have outline for focus indicator');
+  });
+
+  it('Button.svelte uses scoped style block', () => {
+    assert.ok(content.includes('<style>'), 'Should have scoped style block');
+    assert.ok(content.includes('</style>'), 'Should close style block');
+  });
+
+  it('Button.svelte uses CSS custom properties for theming', () => {
+    assert.ok(content.includes('var(--'), 'Should use CSS custom properties');
   });
 });
