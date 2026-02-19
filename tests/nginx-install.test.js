@@ -7,6 +7,7 @@ import { execSync } from 'node:child_process';
 const projectRoot = resolve(import.meta.dirname, '..');
 const configPath = resolve(projectRoot, 'infrastructure/nginx/kaivalo.com');
 const installPath = resolve(projectRoot, 'infrastructure/nginx/install.sh');
+const installContent = readFileSync(installPath, 'utf8');
 // ============================================================================
 // Install script tests
 // ============================================================================
