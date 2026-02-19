@@ -61,7 +61,7 @@ server {
         limit_req zone=auth burst=5 nodelay;
         proxy_pass http://127.0.0.1:3100;
         proxy_http_version 1.1;
-        proxy_connect_timeout 10s;
+        proxy_connect_timeout 2s;
         proxy_read_timeout 60s;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -69,13 +69,13 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # Static pages and API — 10s connect is generous for localhost, 30s read
+    # Static pages and API — 2s connect is sufficient for localhost, 30s read
     # covers SSR rendering. Increase read timeout if adding slow API routes.
     location / {
         limit_req zone=general burst=20 nodelay;
         proxy_pass http://127.0.0.1:3100;
         proxy_http_version 1.1;
-        proxy_connect_timeout 10s;
+        proxy_connect_timeout 2s;
         proxy_read_timeout 30s;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
@@ -111,7 +111,7 @@ server {
         limit_req zone=general burst=20 nodelay;
         proxy_pass http://127.0.0.1:3101;
         proxy_http_version 1.1;
-        proxy_connect_timeout 10s;
+        proxy_connect_timeout 2s;
         proxy_read_timeout 30s;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
