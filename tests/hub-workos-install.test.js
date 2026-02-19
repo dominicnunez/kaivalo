@@ -107,7 +107,8 @@ describe('WorkOS AuthKit Installation', () => {
       const match = env.match(/WORKOS_COOKIE_PASSWORD=(.+)/);
       assert.ok(match, 'should have WORKOS_COOKIE_PASSWORD');
       assert.ok(!match[1].includes('your_'), 'should not be a placeholder value');
-      assert.ok(match[1].length >= 32, 'should be at least 32 characters');
+      assert.ok(match[1].length >= 64, 'should be at least 64 hex characters');
+      assert.match(match[1], /^[a-f0-9]+$/i, 'should be hex characters');
     });
   });
 });
