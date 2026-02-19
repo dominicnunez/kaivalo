@@ -48,6 +48,7 @@ server {
     listen [::]:80;
     server_name kaivalo.com www.kaivalo.com;
     server_tokens off;
+    client_max_body_size 10m;
 
     # Redirect www to non-www
     if ($host = www.kaivalo.com) {
@@ -103,6 +104,7 @@ server {
     listen [::]:80;
     server_name mechai.kaivalo.com;
     server_tokens off;
+    client_max_body_size 10m;
 
     # MechanicAI app — same standard timeouts as the main site general location.
     location / {
