@@ -20,6 +20,6 @@ Two endpoints bypass basic auth and need app-level verification.
 
 ## kaivalo.com SSL
 
-Once the domain is purchased and DNS A records point to 77.42.83.205:
+Once the domain is purchased and DNS A records point to the production server:
 
     sudo certbot --nginx -d kaivalo.com -d www.kaivalo.com -d mechai.kaivalo.com
