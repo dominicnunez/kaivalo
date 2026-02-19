@@ -33,7 +33,7 @@
     justify-content: center;
     font-weight: 500;
     border-radius: 0.5rem;
-    transition: all 0.2s;
+    transition: background 0.2s, color 0.2s, border-color 0.2s, opacity 0.2s;
     cursor: pointer;
     border: 1px solid transparent;
   }
