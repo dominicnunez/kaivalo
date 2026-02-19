@@ -33,28 +33,23 @@ describe('ui badge', () => {
     assert.ok(content.includes("status = 'default'"), 'Should default to default status');
   });
 
-  it('Badge.svelte supports live status', () => {
-    assert.ok(content.includes("'live':"), 'Should define live status classes');
-    assert.ok(content.includes('bg-emerald-100'), 'Live should use emerald background');
-    assert.ok(content.includes('text-emerald-800'), 'Live should use emerald text');
+  it('Badge.svelte has scoped live status styles', () => {
+    assert.ok(content.includes('.badge-live'), 'Should define .badge-live class');
+    assert.ok(content.includes('var(--accent)'), 'Live should use --accent color');
   });
 
-  it('Badge.svelte supports beta status', () => {
-    assert.ok(content.includes("'beta':"), 'Should define beta status classes');
-    assert.ok(content.includes('bg-amber-100'), 'Beta should use amber background');
-    assert.ok(content.includes('text-amber-800'), 'Beta should use amber text');
+  it('Badge.svelte has scoped beta status styles', () => {
+    assert.ok(content.includes('.badge-beta'), 'Should define .badge-beta class');
   });
 
-  it('Badge.svelte supports coming-soon status', () => {
-    assert.ok(content.includes("'coming-soon':"), 'Should define coming-soon status classes');
-    assert.ok(content.includes('bg-gray-100'), 'Coming soon should use gray background');
-    assert.ok(content.includes('text-gray-600'), 'Coming soon should use gray text');
+  it('Badge.svelte has scoped coming-soon status styles', () => {
+    assert.ok(content.includes('.badge-coming-soon'), 'Should define .badge-coming-soon class');
+    assert.ok(content.includes('var(--text-muted)'), 'Coming soon should use --text-muted');
   });
 
-  it('Badge.svelte supports default status', () => {
-    assert.ok(content.includes("'default':"), 'Should define default status classes');
-    assert.ok(content.includes('bg-blue-100'), 'Default should use blue background');
-    assert.ok(content.includes('text-blue-800'), 'Default should use blue text');
+  it('Badge.svelte has scoped default status styles', () => {
+    assert.ok(content.includes('.badge-default'), 'Should define .badge-default class');
+    assert.ok(content.includes('var(--text-secondary)'), 'Default should use --text-secondary');
   });
 
   it('Badge.svelte has size prop with md default', () => {
@@ -62,18 +57,9 @@ describe('ui badge', () => {
     assert.ok(content.includes("size = 'md'"), 'Should default to md size');
   });
 
-  it('Badge.svelte supports sm size', () => {
-    assert.ok(content.includes('sm:'), 'Should define sm size classes');
-    assert.ok(content.includes('text-xs'), 'sm size should use text-xs');
-  });
-
-  it('Badge.svelte supports md size', () => {
-    assert.ok(content.includes('md:'), 'Should define md size classes');
-    assert.ok(content.includes('text-sm'), 'md size should use text-sm');
-  });
-
-  it('Badge.svelte uses $derived for computed classes', () => {
-    assert.ok(content.includes('$derived'), 'Should use $derived rune for computed classes');
+  it('Badge.svelte has scoped size classes', () => {
+    assert.ok(content.includes('.badge-sm'), 'Should define .badge-sm class');
+    assert.ok(content.includes('.badge-md'), 'Should define .badge-md class');
   });
 
   it('Badge.svelte has span element for inline display', () => {
@@ -86,8 +72,8 @@ describe('ui badge', () => {
     assert.ok(content.includes('@render'), 'Should use @render for children');
   });
 
-  it('Badge.svelte has rounded-full styling', () => {
-    assert.ok(content.includes('rounded-full'), 'Should have pill-shaped border radius');
+  it('Badge.svelte has pill-shaped border radius', () => {
+    assert.ok(content.includes('border-radius: 9999px'), 'Should have pill-shaped border radius');
   });
 
   it('Badge.svelte has inline-flex display', () => {
@@ -96,6 +82,11 @@ describe('ui badge', () => {
 
   it('Badge.svelte supports custom class prop', () => {
     assert.ok(content.includes('class: className'), 'Should accept custom class prop');
-    assert.ok(content.includes('className'), 'Should use className in computed classes');
+    assert.ok(content.includes('className'), 'Should use className in template');
+  });
+
+  it('Badge.svelte uses scoped style block', () => {
+    assert.ok(content.includes('<style>'), 'Should have scoped style block');
+    assert.ok(content.includes('</style>'), 'Should close style block');
   });
 });
