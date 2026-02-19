@@ -5,6 +5,6 @@ import { defineConfig } from 'vite';
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
 	preview: {
-		allowedHosts: ['kai.dominicnunez.com']
+		allowedHosts: ['kaivalo.com']
 	}
 });
