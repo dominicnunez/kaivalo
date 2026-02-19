@@ -5,5 +5,14 @@ export const load: LayoutServerLoad = async (event) => {
 	const user = await authKit.getUser(event);
 	const signInUrl = user ? null : await authKit.getSignInUrl();
 
-	return { user, signInUrl };
+	return {
+		user: user
+			? {
+					firstName: user.firstName,
+					email: user.email,
+					profilePictureUrl: user.profilePictureUrl
+				}
+			: null,
+		signInUrl
+	};
 };
