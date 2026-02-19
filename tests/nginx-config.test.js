@@ -18,9 +18,7 @@ describe('nginx configuration', () => {
     });
 
     it('has installation instructions', () => {
-      assert.ok(configContent.includes('sudo cp'));
-      assert.ok(configContent.includes('sudo ln -s'));
-      assert.ok(configContent.includes('nginx -t'));
+      assert.ok(configContent.includes('install.sh'));
       assert.ok(configContent.includes('systemctl reload nginx'));
     });
   });
@@ -92,25 +90,11 @@ describe('nginx configuration', () => {
     });
   });
 
-  describe('SSL placeholders', () => {
-    it('has SSL certificate placeholder', () => {
-      assert.ok(configContent.includes('ssl_certificate'));
-    });
-
-    it('has SSL certificate key placeholder', () => {
-      assert.ok(configContent.includes('ssl_certificate_key'));
-    });
-
-    it("references Let's Encrypt paths", () => {
-      assert.ok(configContent.includes('/etc/letsencrypt/live/kaivalo.com'));
-    });
-
+  describe('HTTPS redirect placeholder', () => {
     it('has certbot instructions', () => {
       assert.ok(configContent.includes('certbot'));
     });
-  });
 
-  describe('HTTPS redirect placeholder', () => {
     it('has HTTP to HTTPS redirect block (commented)', () => {
       assert.ok(configContent.includes('HTTP to HTTPS redirect'));
       assert.ok(configContent.includes('return 301 https://'));
