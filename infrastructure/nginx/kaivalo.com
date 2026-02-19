@@ -1,9 +1,7 @@
 # Kaivalo.com nginx configuration
 #
 # Installation:
-#   sudo cp /home/kai/pets/kaivalo/infrastructure/nginx/kaivalo.com /etc/nginx/sites-available/
-#   sudo ln -s /etc/nginx/sites-available/kaivalo.com /etc/nginx/sites-enabled/
-#   sudo nginx -t
+#   sudo bash infrastructure/nginx/install.sh
 #   sudo systemctl reload nginx
 #
 # SSL (after domain registration and DNS propagation):
