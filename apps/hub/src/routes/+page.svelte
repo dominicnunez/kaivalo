@@ -100,7 +100,7 @@
 
 		<!-- Service cards -->
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-			{#each services as service, i}
+			{#each services as service}
 				{@const isLive = service.status === 'live'}
 				{@const Icon = service.icon}
 				{#if isLive}
@@ -113,7 +113,7 @@
 								<Icon class="w-5 h-5" style="color: var(--accent);" />
 							</div>
 							<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
-								style="background: rgba(34, 197, 94, 0.1); color: var(--accent);">
+								style="background: var(--accent-dim); color: var(--accent);">
 								<span class="w-1.5 h-1.5 rounded-full bg-current animate-pulse"></span>
 								Live
 							</span>
