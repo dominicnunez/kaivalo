@@ -189,3 +189,10 @@
 **Date:** 2026-02-19
 
 **Reason:** ralph.sh is gitignored and not tracked in the repository. The mktemp calls are in a local development tool; `/tmp` exhaustion on a developer machine is an edge case that would surface as an immediate visible error. Fixes cannot be committed since the file is outside version control scope.
+
+### Nginx proxy_pass without upstream health check
+
+**Location:** `infrastructure/nginx/kaivalo.com:77` — hub and mechai proxy_pass directives
+**Date:** 2026-02-19
+
+**Reason:** Each backend has a single process behind `proxy_pass http://127.0.0.1:<port>`. An `upstream` block with `max_fails`/`fail_timeout` only helps when there are multiple backends to fail over to — with one backend, nginx has nowhere to retry. PM2 handles process restarts (now with `max_restarts` and `restart_delay`). Adding an `upstream` block for a single server adds configuration complexity with no resilience benefit. Revisit if scaling to multiple backend instances behind a load balancer.
