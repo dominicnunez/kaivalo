@@ -14,7 +14,7 @@
     children
   } = $props();
 
-  let safeHref = $derived(href && /^(\/|#|https?:\/\/)/.test(href) ? href : '');
+  let safeHref = $derived(href && /^(\/(?!\/)|#|https?:\/\/)/.test(href) ? href : '');
   let isLink = $derived(variant === 'link' && safeHref);
 </script>
 
