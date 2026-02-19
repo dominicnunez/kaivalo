@@ -148,6 +148,13 @@
 
 **Reason:** The `.env` file is gitignored and not deployed — it's the local development config. `http://localhost:3100` is correct for local dev. The `.env.example` already warns to use `https://` in production. The actual production redirect URI is a deployment step that depends on SSL being active (see "Nginx serving HTTP only" above). Resolve alongside SSL activation.
 
+### CSP missing upgrade-insecure-requests directive
+
+**Location:** `apps/hub/src/hooks.server.ts:31-44`
+**Date:** 2026-02-19
+
+**Reason:** Adding `upgrade-insecure-requests` before SSL is active would have no effect — the directive tells browsers to upgrade HTTP sub-resource requests to HTTPS, but the site currently serves over HTTP only. Add this directive as part of SSL activation alongside the HTTPS redirect. See "Nginx serving HTTP only" above.
+
 ### Nginx catch-all redirect preserves `$scheme` instead of hardcoding `https`
 
 **Location:** `infrastructure/nginx/kaivalo.com:125`
