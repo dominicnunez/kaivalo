@@ -77,8 +77,8 @@ describe('npm run preview', () => {
       if (server) {
         try {
           process.kill(-server.pid, 'SIGTERM');
-        } catch {
-          // Server may have already exited
+        } catch (e) {
+          if (e.code !== 'ESRCH') throw e;
         }
       }
     });

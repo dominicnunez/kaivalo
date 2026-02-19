@@ -156,7 +156,9 @@ describe('lighthouse score validation', () => {
     if (serverProcess && serverProcess.pid) {
       try {
         process.kill(-serverProcess.pid);
-      } catch {}
+      } catch (e) {
+        if (e.code !== 'ESRCH') throw e;
+      }
     }
   });
 
