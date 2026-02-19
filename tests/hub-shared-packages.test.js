@@ -84,38 +84,6 @@ test('@kaivalo/ui has Container.svelte component', () => {
   assert.ok(existsSync(componentPath), 'Container.svelte should exist');
 });
 
-// Test @kaivalo/config symlink
-test('@kaivalo/config package is symlinked', () => {
-  const configPath = join(nodeModulesKaivalo, 'config');
-  assert.ok(existsSync(configPath), '@kaivalo/config should exist');
-});
-
-test('@kaivalo/config is a symbolic link', () => {
-  const configPath = join(nodeModulesKaivalo, 'config');
-  const stats = lstatSync(configPath);
-  assert.ok(stats.isSymbolicLink(), '@kaivalo/config should be a symlink');
-});
-
-test('@kaivalo/config symlink points to packages/config', () => {
-  const configPath = join(nodeModulesKaivalo, 'config');
-  const target = readlinkSync(configPath);
-  assert.ok(target.includes('packages/config'), `Expected symlink to point to packages/config, got ${target}`);
-});
-
-test('@kaivalo/config has package.json with correct name', () => {
-  const configPath = join(nodeModulesKaivalo, 'config');
-  const pkgPath = join(configPath, 'package.json');
-  assert.ok(existsSync(pkgPath), 'package.json should exist in @kaivalo/config');
-  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-  assert.strictEqual(pkg.name, '@kaivalo/config', 'package name should be @kaivalo/config');
-});
-
-test('@kaivalo/config has tailwind.preset.js', () => {
-  const configPath = join(nodeModulesKaivalo, 'config');
-  const presetPath = join(configPath, 'tailwind.preset.js');
-  assert.ok(existsSync(presetPath), 'tailwind.preset.js should exist in @kaivalo/config');
-});
-
 // Test hub package.json has dependencies declared
 test('apps/hub/package.json exists', () => {
   assert.ok(existsSync(hubPackageJson), 'hub package.json should exist');

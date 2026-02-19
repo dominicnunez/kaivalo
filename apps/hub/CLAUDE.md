@@ -25,7 +25,6 @@ apps/hub/
 
 ## Workspace
 This is a pnpm/npm workspace. Shared packages in `packages/`:
-- `@kaivalo/config` — shared config
 - `@kaivalo/ui` — shared UI components
 
 ## Rules
