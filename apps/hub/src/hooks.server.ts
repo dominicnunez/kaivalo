@@ -40,6 +40,7 @@ const securityHeaders: Handle = async ({ event, resolve }) => {
 			"base-uri 'self'",
 			"object-src 'none'",
 			"frame-ancestors 'none'",
+			"upgrade-insecure-requests",
 		].join('; '),
 	);
 	return response;
