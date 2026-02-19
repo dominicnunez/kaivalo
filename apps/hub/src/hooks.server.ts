@@ -29,6 +29,7 @@ const securityHeaders: Handle = async ({ event, resolve }) => {
 			"img-src 'self' data: https:",
 			"connect-src 'self'",
 			"form-action 'self'",
+			"base-uri 'self'",
 			"frame-ancestors 'none'",
 		].join('; '),
 	);
