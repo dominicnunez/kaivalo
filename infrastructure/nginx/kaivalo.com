@@ -50,6 +50,8 @@ server {
         limit_req zone=auth burst=5 nodelay;
         proxy_pass http://127.0.0.1:3100;
         proxy_http_version 1.1;
+        proxy_connect_timeout 10s;
+        proxy_read_timeout 30s;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -60,6 +62,8 @@ server {
         limit_req zone=general burst=20 nodelay;
         proxy_pass http://127.0.0.1:3100;
         proxy_http_version 1.1;
+        proxy_connect_timeout 10s;
+        proxy_read_timeout 300s;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
@@ -92,6 +96,8 @@ server {
         limit_req zone=general burst=20 nodelay;
         proxy_pass http://127.0.0.1:3101;
         proxy_http_version 1.1;
+        proxy_connect_timeout 10s;
+        proxy_read_timeout 300s;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
