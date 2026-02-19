@@ -130,10 +130,10 @@ console.log('Testing MechanicAI local server...\n');
     });
 
     try {
-      await waitForServer(`http://localhost:${PORT}${BASE_PATH}/`);
+      const startupResponse = await waitForServer(`http://localhost:${PORT}${BASE_PATH}/`);
 
       await asyncTest('server starts successfully', async () => {
-        assert.ok(true, 'Server process started');
+        assert.ok(startupResponse.statusCode, 'Server should respond with an HTTP status code');
       });
 
       await asyncTest('server responds on port 3101', async () => {
