@@ -1,5 +1,5 @@
 import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import assert from 'assert';
 
 // Test helper function
@@ -30,7 +30,8 @@ async function runTests() {
 }
 
 // File paths
-const ecosystemConfigPath = join(process.cwd(), 'apps/hub/ecosystem.config.cjs');
+const projectRoot = resolve(import.meta.dirname, '..');
+const ecosystemConfigPath = join(projectRoot, 'apps/hub/ecosystem.config.cjs');
 
 // Test: ecosystem.config.cjs exists
 test('ecosystem.config.cjs exists', () => {

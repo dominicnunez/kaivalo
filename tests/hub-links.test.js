@@ -38,7 +38,8 @@ async function asyncTest(name, fn) {
 console.log('--- Link Validation Tests ---\n');
 
 // Read the source file for static checks
-const pagePath = path.join(process.cwd(), 'apps/hub/src/routes/+page.svelte');
+const projectRoot = path.resolve(import.meta.dirname, '..');
+const pagePath = path.join(projectRoot, 'apps/hub/src/routes/+page.svelte');
 const pageContent = fs.readFileSync(pagePath, 'utf-8');
 
 // Fetch the rendered HTML from the running server
@@ -214,12 +215,12 @@ if (renderedHtml) {
 	});
 
 	test('favicon.svg exists in static directory', () => {
-		const faviconPath = path.join(process.cwd(), 'apps/hub/static/favicon.svg');
+		const faviconPath = path.join(projectRoot, 'apps/hub/static/favicon.svg');
 		assert.ok(fs.existsSync(faviconPath), 'favicon.svg should exist');
 	});
 
 	test('favicon.ico exists in static directory', () => {
-		const faviconPath = path.join(process.cwd(), 'apps/hub/static/favicon.ico');
+		const faviconPath = path.join(projectRoot, 'apps/hub/static/favicon.ico');
 		assert.ok(fs.existsSync(faviconPath), 'favicon.ico should exist');
 	});
 

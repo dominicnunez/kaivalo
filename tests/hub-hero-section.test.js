@@ -16,7 +16,8 @@ function test(name, fn) {
 	}
 }
 
-const pagePath = path.join(process.cwd(), 'apps/hub/src/routes/+page.svelte');
+const projectRoot = path.resolve(import.meta.dirname, '..');
+const pagePath = path.join(projectRoot, 'apps/hub/src/routes/+page.svelte');
 const pageContent = fs.readFileSync(pagePath, 'utf-8');
 
 // File structure tests

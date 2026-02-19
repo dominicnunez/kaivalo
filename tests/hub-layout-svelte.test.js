@@ -1,8 +1,8 @@
 import { strict as assert } from 'node:assert';
 import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
-const projectRoot = process.cwd();
+const projectRoot = resolve(import.meta.dirname, '..');
 const layoutPath = join(projectRoot, 'apps', 'hub', 'src', 'routes', '+layout.svelte');
 
 let testCount = 0;

@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 // Test helper
 const results = [];
@@ -13,7 +13,8 @@ function test(name, fn) {
   }
 }
 
-const ogImagePath = join(process.cwd(), 'apps/hub/static/og-image.png');
+const projectRoot = resolve(import.meta.dirname, '..');
+const ogImagePath = join(projectRoot, 'apps/hub/static/og-image.png');
 
 // Test: File exists
 test('og-image.png exists in static directory', () => {
@@ -73,7 +74,7 @@ test('og-image.png has correct dimensions (1200x630)', () => {
 
 // Test: File is in correct location relative to static
 test('og-image.png is in apps/hub/static directory', () => {
-  const staticPath = join(process.cwd(), 'apps/hub/static');
+  const staticPath = join(projectRoot, 'apps/hub/static');
   assert.ok(existsSync(staticPath), 'apps/hub/static directory should exist');
   assert.ok(existsSync(join(staticPath, 'og-image.png')), 'og-image.png should be in static');
 });
@@ -102,7 +103,7 @@ test('og-image.png uses color (RGB/RGBA, not grayscale)', () => {
 
 // Test: +page.ts references og-image.png for social sharing
 test('+page.ts references og-image.png in meta', () => {
-  const pageTs = join(process.cwd(), 'apps/hub/src/routes/+page.ts');
+  const pageTs = join(projectRoot, 'apps/hub/src/routes/+page.ts');
   const content = readFileSync(pageTs, 'utf-8');
   assert.ok(content.includes('og-image.png'), '+page.ts should reference og-image.png');
 });
