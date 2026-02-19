@@ -18,17 +18,15 @@ apps/hub/
 │   │   ├── +page.svelte  # Landing page
 │   │   └── +page.ts
 │   └── lib/
-├── PRD.md               # Current task list — follow this
 ├── package.json
 └── svelte.config.js
 ```
 
 ## Workspace
-This is a pnpm/npm workspace. Shared packages in `packages/`:
+This is an npm workspace. Shared packages in `packages/`:
 - `@kaivalo/ui` — shared UI components
 
 ## Rules
-- Follow PRD.md tasks in order
 - Svelte 5 runes (`$state`, `$derived`, `$effect`) — no legacy stores
 - Tailwind v4 (CSS-based config, not tailwind.config.js)
 - Match existing code patterns in the hub app
