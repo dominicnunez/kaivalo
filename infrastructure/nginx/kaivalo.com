@@ -10,6 +10,14 @@
 #   certbot --nginx -d kaivalo.com -d www.kaivalo.com -d mechai.kaivalo.com
 
 # ============================================================================
+# WebSocket upgrade mapping — only set Connection: upgrade when client requests it
+# ============================================================================
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+# ============================================================================
 # Rate limiting zones (applied in location blocks below)
 # ============================================================================
 limit_req_zone $binary_remote_addr zone=general:10m rate=10r/s;
@@ -69,7 +77,7 @@ server {
         proxy_connect_timeout 10s;
         proxy_read_timeout 30s;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
+        proxy_set_header Connection $connection_upgrade;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -104,7 +112,7 @@ server {
         proxy_connect_timeout 10s;
         proxy_read_timeout 30s;
         proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
+        proxy_set_header Connection $connection_upgrade;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

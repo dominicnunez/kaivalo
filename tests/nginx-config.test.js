@@ -88,7 +88,7 @@ describe('nginx configuration', () => {
 
     it('includes WebSocket upgrade headers', () => {
       assert.ok(configContent.includes('proxy_set_header Upgrade $http_upgrade'));
-      assert.ok(configContent.includes("proxy_set_header Connection 'upgrade'"));
+      assert.ok(configContent.includes('proxy_set_header Connection $connection_upgrade'));
     });
   });
 
