@@ -51,16 +51,11 @@ test('package.json exists with build script', () => {
 });
 
 test('npm run build succeeds', () => {
-  try {
-    execSync('npm run build', {
-      cwd: MECHANIC_AI_PATH,
-      stdio: 'pipe',
-      timeout: 120000
-    });
-    assert.ok(true, 'build should succeed');
-  } catch (error) {
-    assert.fail(`Build failed: ${error.message}`);
-  }
+  execSync('npm run build', {
+    cwd: MECHANIC_AI_PATH,
+    stdio: 'pipe',
+    timeout: 120000
+  });
 });
 
 test('build directory exists after build', () => {
