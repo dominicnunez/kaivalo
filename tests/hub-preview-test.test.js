@@ -1,7 +1,7 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import { execSync, spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
 
@@ -39,7 +39,7 @@ describe('npm run preview', () => {
     });
 
     it('package.json has preview script', () => {
-      const pkgJson = JSON.parse(execSync(`cat ${hubDir}/package.json`, { encoding: 'utf8' }));
+      const pkgJson = JSON.parse(readFileSync(path.join(hubDir, 'package.json'), 'utf8'));
       assert.ok(pkgJson.scripts?.preview, 'Should have preview script');
       assert.ok(pkgJson.scripts.preview.includes('vite preview'), 'Preview script should use vite preview');
     });
