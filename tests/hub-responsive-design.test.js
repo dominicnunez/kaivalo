@@ -12,8 +12,6 @@ const containerFile = path.join(__dirname, '..', 'packages', 'ui', 'Container.sv
 const pageContent = fs.readFileSync(pageFile, 'utf8');
 const layoutContent = fs.readFileSync(layoutFile, 'utf8');
 const containerContent = fs.readFileSync(containerFile, 'utf8');
-// Container Component
-console.log('--- Container Component ---');
 
 describe('hub responsive design', () => {
   it('Container has mobile padding (px-4)', () => {

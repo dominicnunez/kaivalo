@@ -5,7 +5,6 @@ import { join, resolve } from 'node:path';
 
 const projectRoot = resolve(import.meta.dirname, '..');
 const hubRoot = join(projectRoot, 'apps/hub');
-console.log('\napps/hub dependencies installation tests:');
 // npm workspaces hoists dependencies to root node_modules
 // Check that root node_modules exists and contains expected packages
 // node_modules existence tests

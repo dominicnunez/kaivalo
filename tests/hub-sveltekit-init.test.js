@@ -5,7 +5,6 @@ import { join, resolve } from 'node:path';
 
 const projectRoot = resolve(import.meta.dirname, '..');
 const hubRoot = join(projectRoot, 'apps/hub');
-console.log('\napps/hub SvelteKit initialization tests:');
 // Directory structure tests
 
 describe('hub sveltekit init', () => {
