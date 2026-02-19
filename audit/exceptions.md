@@ -5,7 +5,15 @@
 
 ## False Positives
 
-<!-- Items the auditor flagged but are not actual issues -->
+### Nginx mechai subdomain lacks auth rate limiting
+- **File**: infrastructure/nginx/kaivalo.com:91
+- **Date**: 2026-02-18
+- **Reason**: mechai.kaivalo.com has no auth routes. The finding flags a hypothetical future scenario and acknowledges "no action needed now" in its own suggested fix. There is no misconfiguration — rate limiting can be added if/when auth routes are introduced.
+
+### Build output committed to repository
+- **File**: apps/hub/build/
+- **Date**: 2026-02-18
+- **Reason**: Build output is NOT committed. `git ls-files` returns nothing for `apps/hub/build/` and `.gitignore` excludes `build/`. The audit acknowledged this but kept the finding anyway, pivoting to a secondary concern that `hub-auth-layout.test.js` asserts the build directory exists — which is normal build test behavior, not a code quality issue.
 
 ## Won't Fix
 
@@ -23,3 +31,13 @@
 - **File**: infrastructure/nginx/kaivalo.com
 - **Severity**: High
 - **Reason**: SSL requires domain purchase and DNS propagation before certbot can issue certificates. The config includes commented-out SSL blocks and an HTTP-to-HTTPS redirect ready to activate. This is a known pre-launch state, not a misconfiguration. Rate limiting and server_tokens have been hardened in the meantime. Resolve before any real users hit the site.
+
+### Auth callback redirect URI uses HTTP in .env
+- **File**: apps/hub/.env (gitignored)
+- **Severity**: High
+- **Reason**: The `.env` file is gitignored and not deployed — it's the local development config. `http://localhost:3100` is correct for local dev. The `.env.example` already warns to use `https://` in production. The actual production redirect URI is a deployment step that depends on SSL being active (see "Nginx serving HTTP only" above). Resolve alongside SSL activation.
+
+### ecosystem.config.cjs env parsing doesn't handle unterminated quotes
+- **File**: apps/hub/ecosystem.config.cjs:13-14
+- **Severity**: Low
+- **Reason**: The current `.env` file contains no quoted values, so this edge case doesn't apply. The parser correctly handles the split-on-first-`=` case and matched quote stripping. Replacing with `dotenv` for a hypothetical edge case that doesn't occur would add a dependency for no practical benefit.
