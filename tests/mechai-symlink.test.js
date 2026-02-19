@@ -45,14 +45,12 @@ allPassed = test('apps/mechai is a symlink', () => {
   assert(stats.isSymbolicLink(), 'apps/mechai should be a symlink');
 }) && allPassed;
 
-// Test 3: symlink target is a valid path
-allPassed = test('symlink target is a valid path', () => {
-  const target = readlinkSync(mechaiPath);
-  assert.ok(existsSync(target), `symlink target ${target} should exist`);
-}) && allPassed;
-
-// Test 4-6: These require the target directory to exist
+// Test 3-6: These require the symlink target directory to exist
 if (targetExists) {
+  allPassed = test('symlink target is a valid path', () => {
+    const target = readlinkSync(mechaiPath);
+    assert.ok(existsSync(target), `symlink target ${target} should exist`);
+  }) && allPassed;
   allPassed = test('symlink target is accessible', () => {
     assert(existsSync(mechaiPath), 'symlink target should be accessible');
   }) && allPassed;
@@ -67,6 +65,7 @@ if (targetExists) {
     assert(existsSync(svelteConfigPath), 'mechanic-ai should have svelte.config.js');
   }) && allPassed;
 } else {
+  skip('symlink target is a valid path', 'mechanic-ai directory not present');
   skip('symlink target is accessible', 'mechanic-ai directory not present');
   skip('symlink target contains package.json', 'mechanic-ai directory not present');
   skip('symlink target contains svelte.config.js', 'mechanic-ai directory not present');
