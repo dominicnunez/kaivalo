@@ -41,7 +41,6 @@ const securityHeaders: Handle = async ({ event, resolve }) => {
 			"object-src 'none'",
 			"frame-src 'none'",
 			"frame-ancestors 'none'",
-			"upgrade-insecure-requests",
 		].join('; '),
 	);
 	return response;
