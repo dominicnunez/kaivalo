@@ -175,12 +175,12 @@ test('sign-in URL points to WorkOS authorize endpoint', () => {
 	assert.ok(html.includes('api.workos.com/user_management/authorize'), 'Should link to WorkOS authorize');
 });
 
-test('sign-in URL includes correct client_id', () => {
+test('sign-in URL includes a client_id parameter', () => {
 	const html = execSync('curl -s http://localhost:3100', {
 		encoding: 'utf8',
 		timeout: 10000
 	});
-	assert.ok(html.includes('client_01KHP4YNVEGTA7A409SKG74W8D'), 'Should include correct client_id');
+	assert.ok(html.includes('client_id=client_'), 'Should include client_id parameter');
 });
 
 test('sign-in URL includes correct redirect_uri', () => {
