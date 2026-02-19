@@ -28,19 +28,19 @@
 
   .badge-live {
     background: rgba(34, 197, 94, 0.1);
-    color: var(--accent, #22c55e);
+    color: var(--accent);
   }
   .badge-beta {
     background: rgba(245, 158, 11, 0.1);
     color: #fbbf24;
   }
   .badge-coming-soon {
-    background: var(--bg-tertiary, #16161f);
-    color: var(--text-muted, #7e7e92);
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
   }
   .badge-default {
-    background: var(--bg-tertiary, #16161f);
-    color: var(--text-secondary, #8b8b9e);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
   }
 
   .badge-sm { padding: 0.125rem 0.5rem; font-size: 0.75rem; }

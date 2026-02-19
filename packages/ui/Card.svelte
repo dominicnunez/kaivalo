@@ -40,9 +40,9 @@
 
 <style>
   .card {
-    background: var(--bg-card, #0c0c12);
+    background: var(--bg-card);
     border-radius: 0.75rem;
-    border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--border);
     overflow: hidden;
     display: block;
     text-decoration: none;
@@ -53,15 +53,15 @@
     transition: border-color 0.3s ease, box-shadow 0.3s ease;
   }
   .card-hover:hover {
-    border-color: var(--border-hover, rgba(255, 255, 255, 0.12));
-    box-shadow: 0 0 40px var(--accent-glow, rgba(34, 197, 94, 0.08)), 0 8px 32px rgba(0, 0, 0, 0.4);
+    border-color: var(--border-hover);
+    box-shadow: 0 0 40px var(--accent-glow), 0 8px 32px rgba(0, 0, 0, 0.4);
   }
 
   .card-header {
     padding: 1rem 1.5rem;
-    border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+    border-bottom: 1px solid var(--border);
     font-weight: 600;
-    color: var(--text-primary, #f0f0f2);
+    color: var(--text-primary);
   }
 
   .card-body {
