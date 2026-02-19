@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { execSync } from 'child_process';
+import path from 'path';
+
+const hubDir = path.resolve(import.meta.dirname, '..');
 
 describe('Production build', () => {
 	it('should build successfully with zero errors', { timeout: 60000 }, () => {
@@ -9,7 +12,7 @@ describe('Production build', () => {
 
 		try {
 			const output = execSync('npm run build', {
-				cwd: '/home/kai/pets/kaivalo/apps/hub',
+				cwd: hubDir,
 				encoding: 'utf-8',
 				stdio: 'pipe'
 			});
