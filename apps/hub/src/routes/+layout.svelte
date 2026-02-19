@@ -1,14 +1,35 @@
 <script lang="ts">
   import '../app.css';
+  import { page } from '$app/state';
+  import { goto } from '$app/navigation';
   import { Container } from '@kaivalo/ui';
   import { LogIn, LogOut } from 'lucide-svelte';
   import type { Snippet } from 'svelte';
   import type { LayoutData } from './$types';
 
   let { data, children }: { data: LayoutData; children: Snippet } = $props();
+
+  let authError = $derived(page.url.searchParams.get('error') === 'auth');
+
+  function dismissError() {
+    const url = new URL(page.url);
+    url.searchParams.delete('error');
+    goto(url.pathname + url.search, { replaceState: true });
+  }
 </script>
 
 <div class="min-h-screen grain">
+  {#if authError}
+    <div class="relative z-30 px-4 py-3 text-center text-sm"
+      style="background: var(--bg-tertiary); color: var(--text-secondary); border-bottom: 1px solid var(--border);">
+      Sign-in failed — please try again.
+      <button onclick={dismissError}
+        class="ml-3 text-xs font-medium cursor-pointer"
+        style="color: var(--text-muted);"
+        aria-label="Dismiss">✕</button>
+    </div>
+  {/if}
+
   <!-- Nav -->
   <nav class="relative z-20 py-4">
     <Container size="lg">

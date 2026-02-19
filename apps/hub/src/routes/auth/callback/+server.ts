@@ -6,7 +6,8 @@ export const GET: RequestHandler = async (event) => {
 	try {
 		const handler = authKit.handleCallback();
 		return await handler(event);
-	} catch {
-		redirect(302, '/');
+	} catch (err) {
+		console.error('Auth callback failed:', err);
+		redirect(302, '/?error=auth');
 	}
 };
