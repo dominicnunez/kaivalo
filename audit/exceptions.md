@@ -35,6 +35,11 @@
 - **Date**: 2026-02-19
 - **Reason**: The audit acknowledges "the current config is correct" in its own details. The finding flags a hypothetical scenario where font providers change their CDN domains in the future. The CSP `font-src` correctly allows `https://cdn.fontshare.com` and `https://fonts.gstatic.com`, and `style-src` correctly allows `https://api.fontshare.com` and `https://fonts.googleapis.com`. All four domains match what `app.html` loads. This is speculative maintenance commentary, not an actual misconfiguration.
 
+### vite.config.ts allowedHosts only includes production domain
+- **File**: apps/hub/vite.config.ts:8
+- **Date**: 2026-02-19
+- **Reason**: The audit claims localhost and LAN IPs would be rejected by `preview.allowedHosts: ['kaivalo.com']`. This is factually wrong. Vite's docs state "localhost and domains under .localhost and all IP addresses are allowed by default" regardless of the allowedHosts array. The array only adds additional non-IP, non-localhost hostnames. localhost and 127.0.0.1 are never blocked.
+
 ## Intentional Design Decisions
 
 ### Page metadata uses hardcoded production URL for OpenGraph
