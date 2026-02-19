@@ -43,7 +43,7 @@ test('favicon.ico is not empty', () => {
 test('favicon.ico has valid size for icon file', () => {
 	const stats = statSync(faviconIco);
 	assert.ok(stats.size >= 100, 'favicon.ico should be at least 100 bytes');
-	assert.ok(stats.size < 100000, 'favicon.ico should be less than 100KB');
+	assert.ok(stats.size < 102_400, 'favicon.ico should be less than 100KB');
 });
 
 test('favicon.ico has valid ICO header', () => {
