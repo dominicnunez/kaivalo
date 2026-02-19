@@ -35,12 +35,12 @@ describe('ui card', () => {
 
   it('Card.svelte supports link variant', () => {
     assert.ok(content.includes("'link'"), 'Should support link variant');
-    assert.ok(content.includes('linkClasses'), 'Should have link-specific classes');
+    assert.ok(content.includes('isLink'), 'Should derive isLink from variant');
   });
 
   it('Card.svelte has href prop for link variant', () => {
     assert.ok(content.includes('href'), 'Should have href prop');
-    assert.ok(content.includes('{href}'), 'Should bind href to anchor element');
+    assert.ok(content.includes('{safeHref}'), 'Should bind sanitized href to anchor element');
   });
 
   it('Card.svelte has optional header prop', () => {
@@ -50,7 +50,7 @@ describe('ui card', () => {
 
   it('Card.svelte renders header when provided', () => {
     assert.ok(content.includes('{#if header}'), 'Should conditionally render header');
-    assert.ok(content.includes('border-b'), 'Header should have bottom border');
+    assert.ok(content.includes('card-header'), 'Should have card-header class');
     assert.ok(content.includes('{header}'), 'Should render header content');
   });
 
@@ -59,19 +59,20 @@ describe('ui card', () => {
     assert.ok(content.includes('hover = true'), 'Should default hover to true');
   });
 
-  it('Card.svelte has hover effect classes', () => {
-    assert.ok(content.includes('hover:shadow'), 'Should have hover shadow effect');
+  it('Card.svelte has scoped hover effect styles', () => {
+    assert.ok(content.includes('.card-hover'), 'Should have .card-hover class');
+    assert.ok(content.includes('box-shadow'), 'Should have box-shadow on hover');
     assert.ok(content.includes('transition'), 'Should have transition for smooth hover');
   });
 
-  it('Card.svelte uses $derived for computed classes', () => {
-    assert.ok(content.includes('$derived'), 'Should use $derived rune for computed classes');
+  it('Card.svelte uses $derived for computed values', () => {
+    assert.ok(content.includes('$derived'), 'Should use $derived rune');
   });
 
-  it('Card.svelte has container styling', () => {
-    assert.ok(content.includes('bg-white'), 'Should have white background');
-    assert.ok(content.includes('rounded'), 'Should have rounded corners');
-    assert.ok(content.includes('border'), 'Should have border');
+  it('Card.svelte has scoped card styles with CSS custom properties', () => {
+    assert.ok(content.includes('var(--bg-card)'), 'Should use --bg-card for background');
+    assert.ok(content.includes('border-radius'), 'Should have rounded corners');
+    assert.ok(content.includes('var(--border)'), 'Should use --border for border color');
   });
 
   it('Card.svelte renders as anchor for link variant', () => {
@@ -90,11 +91,13 @@ describe('ui card', () => {
     assert.ok(content.includes('@render'), 'Should use @render for children');
   });
 
-  it('Card.svelte has content padding', () => {
-    assert.ok(content.includes('p-6'), 'Should have padding for content area');
+  it('Card.svelte has card-body with padding', () => {
+    assert.ok(content.includes('.card-body'), 'Should have .card-body class');
+    assert.ok(content.includes('padding'), 'Should have padding for content area');
   });
 
-  it('Card.svelte has cursor-pointer for link variant', () => {
-    assert.ok(content.includes('cursor-pointer'), 'Should have pointer cursor for link variant');
+  it('Card.svelte sanitizes href with safeHref', () => {
+    assert.ok(content.includes('safeHref'), 'Should use safeHref for URL sanitization');
+    assert.ok(content.includes('.test(href'), 'Should validate href with regex');
   });
 });
