@@ -17,9 +17,11 @@ const PORT_BASE = 14198;
 const PORT_RANGE = 1000;
 const REQUEST_TIMEOUT_MS = 5000;
 
-function httpGet(url) {
+function httpRequest(url, method = 'GET') {
 	return new Promise((resolve, reject) => {
-		const req = http.get(url, (res) => {
+		const parsed = new URL(url);
+		const options = { hostname: parsed.hostname, port: parsed.port, path: parsed.pathname, method };
+		const req = http.request(options, (res) => {
 			let data = '';
 			res.on('data', (chunk) => data += chunk);
 			res.on('end', () => resolve({ statusCode: res.statusCode, data, headers: res.headers }));
@@ -29,7 +31,12 @@ function httpGet(url) {
 			req.destroy();
 			reject(new Error('Request timeout'));
 		});
+		req.end();
 	});
+}
+
+function httpGet(url) {
+	return httpRequest(url, 'GET');
 }
 
 describe('WorkOS auth verification', () => {
@@ -240,9 +247,9 @@ describe('WorkOS auth verification', () => {
 			assert.notStrictEqual(res.statusCode, 404, 'Callback route should not be 404');
 		});
 
-		it('auth sign-out route returns a non-error status', async (t) => {
+		it('auth sign-out route accepts POST requests', async (t) => {
 			if (skipReason) { t.skip(skipReason); return; }
-			const res = await httpGet(`${baseUrl}/auth/sign-out`);
+			const res = await httpRequest(`${baseUrl}/auth/sign-out`, 'POST');
 			assert.ok(res.statusCode < 500, `Sign-out route should not return 5xx (got ${res.statusCode})`);
 			assert.notStrictEqual(res.statusCode, 404, 'Sign-out route should not be 404');
 		});
