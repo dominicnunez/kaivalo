@@ -1,6 +1,6 @@
 /* Kaivalo Hub - Global Styles */
 
-/* Typography loaded via app.html link tags for non-blocking */
+/* Fonts loaded in app.html with media="print" onload pattern for non-blocking render */
 
 /* Tailwind CSS v4 */
 @import "tailwindcss";
