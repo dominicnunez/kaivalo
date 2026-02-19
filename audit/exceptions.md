@@ -47,6 +47,13 @@
 - **Date**: 2026-02-19
 - **Reason**: OG `url` and `image` must always reference the canonical production URL (`https://kaivalo.com`) regardless of which environment rendered the page. Using `event.url.origin` would produce `http://localhost:5173` in dev, which is wrong for OG previews and SEO canonical URLs. The production domain is the correct value to hardcode here.
 
+### HSTS header set before SSL is active
+
+**Location:** `apps/hub/src/hooks.server.ts:25` — Strict-Transport-Security header
+**Date:** 2026-02-19
+
+**Reason:** Per RFC 6797, browsers ignore HSTS over HTTP. The header is intentionally pre-configured so that security headers are complete when SSL activates — no code change needed at that point. Removing it would create a gap between SSL activation and remembering to add HSTS. Already tracked under the "Nginx serving HTTP only" won't-fix item.
+
 ## Won't Fix
 
 ### CSP img-src allows `https:` broadly
