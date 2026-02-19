@@ -11,6 +11,11 @@ for (const name of REQUIRED_ENV_VARS) {
 	}
 }
 
+const HEX_64_PATTERN = /^[a-f0-9]{64}$/i;
+if (!HEX_64_PATTERN.test(env.WORKOS_COOKIE_PASSWORD!)) {
+	throw new Error('WORKOS_COOKIE_PASSWORD must be 64 hex characters (openssl rand -hex 32)');
+}
+
 configureAuthKit({
 	clientId: env.WORKOS_CLIENT_ID!,
 	apiKey: env.WORKOS_API_KEY!,
