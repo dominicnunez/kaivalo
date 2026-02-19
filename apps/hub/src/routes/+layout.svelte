@@ -30,7 +30,7 @@
               {:else}
                 <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium"
                   style="background: var(--accent-dim); color: var(--accent); border: 1px solid var(--border);">
-                  {(data.user.firstName?.[0] ?? data.user.email[0]).toUpperCase()}
+                  {(data.user.firstName?.[0] ?? data.user.email?.[0] ?? '?').toUpperCase()}
                 </div>
               {/if}
               <span class="text-xs hidden sm:inline" style="color: var(--text-secondary);">
