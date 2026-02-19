@@ -7,7 +7,7 @@ export const load: PageLoad = () => {
 			description: 'Simple tools for complicated problems. One account, every tool — sign up once and go.',
 			url: 'https://kaivalo.com',
 			image: 'https://kaivalo.com/og-image.png',
-			imageAlt: 'Kai Valo - AI Tools That Actually Help',
+			imageAlt: 'Kaivalo banner: Tools that solve things — simple tools for complicated problems',
 			twitterCard: 'summary_large_image'
 		}
 	};
