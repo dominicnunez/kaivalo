@@ -2,9 +2,10 @@
   import '../app.css';
   import { Container } from '@kaivalo/ui';
   import { LogIn, LogOut } from 'lucide-svelte';
+  import type { Snippet } from 'svelte';
   import type { LayoutData } from './$types';
 
-  let { data, children }: { data: LayoutData; children: any } = $props();
+  let { data, children }: { data: LayoutData; children: Snippet } = $props();
 </script>
 
 <div class="min-h-screen grain">
