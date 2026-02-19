@@ -69,8 +69,8 @@ describe('WorkOS AuthKit Installation', () => {
 
     it('WORKOS_REDIRECT_URI points to /auth/callback', () => {
       assert.ok(
-        envExample.includes('WORKOS_REDIRECT_URI=http://localhost:5173/auth/callback'),
-        'should point to localhost:5173/auth/callback (dev server default)'
+        envExample.includes('WORKOS_REDIRECT_URI=http://localhost:3100/auth/callback'),
+        'should point to localhost:3100/auth/callback (PM2 production port)'
       );
     });
 
