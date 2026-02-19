@@ -151,6 +151,14 @@
   color: var(--text-primary);
 }
 
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .animate-enter { animation: none; }
+  .animate-pulse { animation: none; }
+  .card-glow { transition: none; }
+}
+
 /* Dot grid pattern */
 .dots-bg {
   background-image: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
