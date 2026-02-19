@@ -81,7 +81,7 @@ describe('WorkOS AuthKit Hooks Configuration', () => {
       const content = readFileSync(hooksPath, 'utf8');
       assert.ok(!content.includes('client_01'), 'should not hardcode client ID');
       assert.ok(!content.includes('sk_test_'), 'should not hardcode API key');
-      assert.ok(!content.includes('5a9f8f4a'), 'should not hardcode cookie password');
+      assert.ok(!(/[a-f0-9]{32,}/.test(content)), 'should not hardcode long hex secrets (cookie password, keys)');
     });
 
     it('uses env. prefix for all WorkOS vars (dynamic access)', () => {
