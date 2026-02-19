@@ -24,6 +24,7 @@
                 <img
                   src={data.user.profilePictureUrl}
                   alt={data.user.firstName ?? 'User'}
+                  referrerpolicy="no-referrer"
                   class="w-7 h-7 rounded-full object-cover"
                   style="border: 1px solid var(--border);"
                 />
