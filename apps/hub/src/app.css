@@ -1,9 +1,6 @@
 /* Kaivalo Hub - Global Styles */
 
-/* Typography: Clash Display + Plus Jakarta Sans */
-@import url('https://api.fontshare.com/v2/css?f[]=clash-display@400,500,600,700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+/* Typography loaded via app.html link tags for non-blocking */
 
 /* Tailwind CSS v4 */
 @import "tailwindcss";
@@ -17,7 +14,7 @@
     --bg-card: #0c0c12;
     --text-primary: #f0f0f2;
     --text-secondary: #8b8b9e;
-    --text-muted: #55556a;
+    --text-muted: #7e7e92;
     --accent: #22c55e;
     --accent-dim: rgba(34, 197, 94, 0.15);
     --accent-glow: rgba(34, 197, 94, 0.08);
@@ -63,7 +60,7 @@
   background: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E") repeat;
   opacity: 0.025;
   pointer-events: none;
-  z-index: 1000;
+  z-index: 50;
 }
 
 /* Aurora gradient mesh */
