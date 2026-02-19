@@ -95,6 +95,27 @@
 
 **Reason:** The `<noscript>` block loads font stylesheets synchronously because `onload` tricks are unavailable without JavaScript. This is the standard and correct approach — the only alternative for noscript users would be to omit web fonts entirely. The main `<link>` tags use the async `media="print" onload` pattern for JS-enabled users.
 
+### createRequire import in hub-auth-verify.test.js is not unused
+
+**Location:** `tests/hub-auth-verify.test.js:6,9` — createRequire and require binding
+**Date:** 2026-02-19
+
+**Reason:** The audit claims `require` is "never called anywhere in the file." This is factually wrong. `require` is called on line 139: `const config = require(join(HUB_DIR, 'ecosystem.config.cjs'))`. The `createRequire` import and `require` binding are necessary because the file uses ESM (`import.meta.dirname`) but needs to load a CommonJS module (`ecosystem.config.cjs`).
+
+### Badge component class name interpolation from props
+
+**Location:** `packages/ui/Badge.svelte:17` — status/size interpolation into class string
+**Date:** 2026-02-19
+
+**Reason:** Same pattern as Button.svelte (already accepted in this document). TypeScript constrains `status` to `'live' | 'beta' | 'coming-soon' | 'default'` and `size` to `'sm' | 'md'` — all values produce valid CSS class names. Svelte sets class via `element.className`, not HTML string concatenation, so there is no injection risk. The hypothetical `'in progress'` value cited by the audit cannot be passed without bypassing TypeScript. The existing `'coming-soon'` value correctly produces `badge-coming-soon`, which has a matching CSS rule in the component's scoped styles.
+
+### Node adapter defaults to 0.0.0.0 when run outside PM2
+
+**Location:** `apps/hub/build/index.js:236` — SvelteKit Node adapter HOST default
+**Date:** 2026-02-19
+
+**Reason:** The `.env.example` already ships `HOST=127.0.0.1` as an uncommented default, and the PM2 config also defaults to `127.0.0.1`. The audit report itself acknowledges "it's already there, so this is already handled." The mitigation is already in place.
+
 ## Intentional Design Decisions
 
 ### Page metadata uses hardcoded production URL for OpenGraph
