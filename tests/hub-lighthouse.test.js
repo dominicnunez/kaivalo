@@ -121,30 +121,29 @@ describe('lighthouse score validation', () => {
     serverProcess.unref();
 
     // Wait for server to be ready
+    let serverReady = false;
     for (let i = 0; i < 20; i++) {
       try {
         execSync(`curl -s -o /dev/null -w "%{http_code}" http://localhost:${port}`, {
           timeout: 2000,
           encoding: 'utf8',
         });
+        serverReady = true;
         break;
       } catch {
         await new Promise(r => setTimeout(r, 500));
       }
     }
+    if (!serverReady) throw new Error(`Server failed to start on port ${port}`);
 
-    try {
-      const result = execSync(
-        `CHROME_PATH=/usr/local/bin/chromium npx lighthouse http://localhost:${port} --chrome-flags="--headless --no-sandbox --disable-gpu" --output=json --only-categories=performance,accessibility,best-practices,seo 2>/dev/null`,
-        { encoding: 'utf8', timeout: LIGHTHOUSE_TIMEOUT_MS, maxBuffer: MAX_BUFFER_BYTES },
-      );
-      const report = JSON.parse(result);
-      lighthouseScores = {};
-      for (const [key, cat] of Object.entries(report.categories)) {
-        lighthouseScores[key] = Math.round(cat.score * 100);
-      }
-    } catch (e) {
-      console.warn('Lighthouse skipped:', e.message);
+    const result = execSync(
+      `CHROME_PATH=/usr/local/bin/chromium npx lighthouse http://localhost:${port} --chrome-flags="--headless --no-sandbox --disable-gpu" --output=json --only-categories=performance,accessibility,best-practices,seo 2>/dev/null`,
+      { encoding: 'utf8', timeout: LIGHTHOUSE_TIMEOUT_MS, maxBuffer: MAX_BUFFER_BYTES },
+    );
+    const report = JSON.parse(result);
+    lighthouseScores = {};
+    for (const [key, cat] of Object.entries(report.categories)) {
+      lighthouseScores[key] = Math.round(cat.score * 100);
     }
   });
 
