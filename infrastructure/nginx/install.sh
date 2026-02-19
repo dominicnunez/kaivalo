@@ -30,6 +30,12 @@ if [ ! -f "$CONFIG_SOURCE" ]; then
     exit 1
 fi
 
+# Back up existing config before overwriting
+if [ -f "$CONFIG_DEST" ]; then
+    cp "$CONFIG_DEST" "$CONFIG_DEST.bak"
+    echo "Backed up existing config to $CONFIG_DEST.bak"
+fi
+
 # Copy config to sites-available
 echo "Copying config to $CONFIG_DEST..."
 cp "$CONFIG_SOURCE" "$CONFIG_DEST"
@@ -48,15 +54,21 @@ echo "Testing nginx configuration..."
 if nginx -t; then
     echo ""
     echo "✓ nginx configuration is valid"
+    rm -f "$CONFIG_DEST.bak"
     echo ""
     echo "To apply changes, run:"
     echo "  sudo systemctl reload nginx"
 else
     echo ""
     echo "✗ nginx configuration test failed"
-    echo "Removing config files..."
-    rm -f "$LINK_DEST"
-    rm -f "$CONFIG_DEST"
+    if [ -f "$CONFIG_DEST.bak" ]; then
+        echo "Restoring previous config from backup..."
+        mv "$CONFIG_DEST.bak" "$CONFIG_DEST"
+    else
+        echo "No previous config to restore. Removing config files..."
+        rm -f "$LINK_DEST"
+        rm -f "$CONFIG_DEST"
+    fi
     exit 1
 fi
 
