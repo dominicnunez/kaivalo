@@ -80,7 +80,8 @@ describe('WorkOS AuthKit Hooks Configuration', () => {
     it('does not hardcode any credentials', () => {
       const content = readFileSync(hooksPath, 'utf8');
       assert.ok(!content.includes('client_01'), 'should not hardcode client ID');
-      assert.ok(!content.includes('sk_test_'), 'should not hardcode API key');
+      assert.ok(!content.includes('sk_test_'), 'should not hardcode test API key');
+      assert.ok(!content.includes('sk_live_'), 'should not hardcode production API key');
       assert.ok(!(/\b[a-f0-9]{32,}\b/.test(content)), 'should not hardcode long hex secrets (cookie password, keys)');
     });
 
