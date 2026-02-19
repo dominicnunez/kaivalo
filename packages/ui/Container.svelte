@@ -22,7 +22,7 @@
   };
 
   let computedClasses = $derived(
-    `${baseClasses} ${sizeClasses[size]} ${className}`.trim()
+    `${baseClasses} ${sizeClasses[size] ?? sizeClasses.lg} ${className}`.trim()
   );
 </script>
 
