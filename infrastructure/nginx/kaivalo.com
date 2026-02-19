@@ -46,18 +46,22 @@ server {
         return 301 $scheme://kaivalo.com$request_uri;
     }
 
+    # Auth routes involve external OAuth round-trips to WorkOS, so the read
+    # timeout is higher than the general location to allow for upstream latency.
     location /auth/ {
         limit_req zone=auth burst=5 nodelay;
         proxy_pass http://127.0.0.1:3100;
         proxy_http_version 1.1;
         proxy_connect_timeout 10s;
-        proxy_read_timeout 30s;
+        proxy_read_timeout 60s;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # Static pages and API — 10s connect is generous for localhost, 30s read
+    # covers SSR rendering. Increase read timeout if adding slow API routes.
     location / {
         limit_req zone=general burst=20 nodelay;
         proxy_pass http://127.0.0.1:3100;
@@ -92,6 +96,7 @@ server {
     server_name mechai.kaivalo.com;
     server_tokens off;
 
+    # MechanicAI app — same standard timeouts as the main site general location.
     location / {
         limit_req zone=general burst=20 nodelay;
         proxy_pass http://127.0.0.1:3101;
