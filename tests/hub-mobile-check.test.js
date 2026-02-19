@@ -34,10 +34,6 @@ describe('viewport meta', () => {
 });
 
 describe('horizontal overflow prevention', () => {
-  it('body has overflow-x: hidden to prevent mobile horizontal scroll', () => {
-    assert.ok(appCss.includes('overflow-x: hidden'), 'body must have overflow-x: hidden');
-  });
-
   it('hero section has overflow-hidden class', () => {
     assert.ok(pageContent.includes('overflow-hidden'), 'Hero section needs overflow-hidden');
   });

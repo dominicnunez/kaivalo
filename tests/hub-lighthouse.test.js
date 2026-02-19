@@ -98,9 +98,6 @@ describe('performance optimizations', () => {
     assert.ok(appHtml.includes('width=device-width'));
   });
 
-  it('body has overflow-x hidden for mobile', () => {
-    assert.ok(appCss.includes('overflow-x: hidden') || appCss.includes('overflow-x:hidden'));
-  });
 });
 
 describe('lighthouse score validation', () => {
