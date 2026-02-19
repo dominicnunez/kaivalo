@@ -10,7 +10,11 @@ if (fs.existsSync(envPath)) {
     if (!trimmed || trimmed.startsWith('#')) continue;
     const eqIdx = trimmed.indexOf('=');
     if (eqIdx > 0) {
-      envVars[trimmed.slice(0, eqIdx)] = trimmed.slice(eqIdx + 1);
+      let val = trimmed.slice(eqIdx + 1);
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      envVars[trimmed.slice(0, eqIdx)] = val;
     }
   }
 }
