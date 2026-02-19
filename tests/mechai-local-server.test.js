@@ -27,18 +27,6 @@ const BASE_PATH = '/mechai';
 let passed = 0;
 let failed = 0;
 
-function test(name, fn) {
-  try {
-    fn();
-    passed++;
-    console.log(`✓ ${name}`);
-  } catch (error) {
-    failed++;
-    console.log(`✗ ${name}`);
-    console.log(`  ${error.message}`);
-  }
-}
-
 async function asyncTest(name, fn) {
   try {
     await fn();
@@ -100,27 +88,42 @@ function isPortFree(port) {
   });
 }
 
+async function runServerTests() {
+  await asyncTest('server responds on port 3101', async () => {
+    const response = await httpGet(`http://localhost:${PORT}${BASE_PATH}/`);
+    assert.ok(response.statusCode >= 200 && response.statusCode < 500, 'Server should respond');
+  });
+
+  await asyncTest('server returns HTTP 200 OK for homepage', async () => {
+    const response = await httpGet(`http://localhost:${PORT}${BASE_PATH}/`);
+    assert.strictEqual(response.statusCode, 200);
+  });
+
+  await asyncTest('server returns HTML content', async () => {
+    const response = await httpGet(`http://localhost:${PORT}${BASE_PATH}/`);
+    assert.ok(
+      response.headers['content-type']?.includes('text/html') ||
+      response.data.includes('<!DOCTYPE') ||
+      response.data.includes('<html'),
+      'Should return HTML content'
+    );
+  });
+
+  await asyncTest('server includes MechanicAI branding', async () => {
+    const response = await httpGet(`http://localhost:${PORT}${BASE_PATH}/`);
+    const hasBranding = response.data.toLowerCase().includes('mechanic') ||
+                      response.data.includes('MechanicAI');
+    assert.ok(hasBranding, 'Should include MechanicAI branding');
+  });
+}
+
 console.log('Testing MechanicAI local server...\n');
 
 (async () => {
   const portFree = await isPortFree(PORT);
   if (!portFree) {
     console.log(`Port ${PORT} is already in use. Testing existing server...\n`);
-
-    await asyncTest('existing server responds on port 3101', async () => {
-      const response = await httpGet(`http://localhost:${PORT}${BASE_PATH}/`);
-      assert.ok(response.statusCode >= 200 && response.statusCode < 500, 'Server should respond');
-    });
-
-    await asyncTest('existing server returns HTML content', async () => {
-      const response = await httpGet(`http://localhost:${PORT}${BASE_PATH}/`);
-      assert.ok(
-        response.headers['content-type']?.includes('text/html') ||
-        response.data.includes('<!DOCTYPE') ||
-        response.data.includes('<html'),
-        'Should return HTML content'
-      );
-    });
+    await runServerTests();
   } else {
     console.log('Starting MechanicAI server on port 3101...\n');
 
@@ -137,32 +140,7 @@ console.log('Testing MechanicAI local server...\n');
         assert.ok(startupResponse.statusCode, 'Server should respond with an HTTP status code');
       });
 
-      await asyncTest('server responds on port 3101', async () => {
-        const response = await httpGet(`http://localhost:${PORT}${BASE_PATH}/`);
-        assert.ok(response.statusCode >= 200 && response.statusCode < 500);
-      });
-
-      await asyncTest('server returns HTTP 200 OK for homepage', async () => {
-        const response = await httpGet(`http://localhost:${PORT}${BASE_PATH}/`);
-        assert.strictEqual(response.statusCode, 200);
-      });
-
-      await asyncTest('server returns HTML content', async () => {
-        const response = await httpGet(`http://localhost:${PORT}${BASE_PATH}/`);
-        assert.ok(
-          response.headers['content-type']?.includes('text/html') ||
-          response.data.includes('<!DOCTYPE'),
-          'Should return HTML content'
-        );
-      });
-
-      await asyncTest('server includes MechanicAI branding', async () => {
-        const response = await httpGet(`http://localhost:${PORT}${BASE_PATH}/`);
-        const hasBranding = response.data.toLowerCase().includes('mechanic') ||
-                          response.data.includes('MechanicAI');
-        assert.ok(hasBranding, 'Should include MechanicAI branding');
-      });
-
+      await runServerTests();
     } finally {
       serverProcess.kill('SIGTERM');
       await new Promise(resolve => setTimeout(resolve, 500));
