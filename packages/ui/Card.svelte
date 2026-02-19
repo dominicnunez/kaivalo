@@ -14,11 +14,12 @@
     children
   } = $props();
 
-  let isLink = $derived(variant === 'link' && href);
+  let safeHref = $derived(href && /^(\/|#|https?:\/\/)/.test(href) ? href : '');
+  let isLink = $derived(variant === 'link' && safeHref);
 </script>
 
 {#if isLink}
-  <a {href} class="card {hover ? 'card-hover' : ''} {className}">
+  <a href={safeHref} class="card {hover ? 'card-hover' : ''} {className}">
     {#if header}
       <div class="card-header">{header}</div>
     {/if}
