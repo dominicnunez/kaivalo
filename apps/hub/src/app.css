@@ -1,6 +1,6 @@
 /* Kaivalo Hub - Global Styles */
 
-/* Fonts loaded in app.html with media="print" onload pattern for non-blocking render */
+/* Fonts loaded via stylesheet links in app.html — display=swap prevents FOIT */
 
 /* Tailwind CSS v4 */
 @import "tailwindcss";

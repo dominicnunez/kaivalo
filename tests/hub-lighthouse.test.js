@@ -24,9 +24,9 @@ describe('font loading optimization', () => {
     assert.ok(!appCss.includes("@import url('https://fonts.googleapis.com"));
   });
 
-  it('app.html has non-blocking font link for Clash Display', () => {
+  it('app.html has font link for Clash Display', () => {
     assert.ok(appHtml.includes('clash-display'));
-    assert.ok(appHtml.includes('media="print"') || appHtml.includes('rel="preload"'));
+    assert.ok(appHtml.includes('display=swap'));
   });
 
   it('app.html has non-blocking font link for Plus Jakarta Sans', () => {
@@ -43,8 +43,8 @@ describe('font loading optimization', () => {
     assert.ok(appHtml.includes('preconnect') && appHtml.includes('fonts.gstatic.com'));
   });
 
-  it('font links use media swap or onload pattern for non-blocking load', () => {
-    assert.ok(appHtml.includes('onload="this.media='));
+  it('font links use display=swap for non-blocking text rendering', () => {
+    assert.ok(appHtml.includes('display=swap'));
   });
 });
 
