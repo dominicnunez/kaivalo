@@ -71,18 +71,14 @@
 			<!-- CTA row -->
 			<div class="flex flex-wrap items-center gap-3 sm:gap-4 animate-enter delay-4">
 				<a href="#services"
-					class="inline-flex items-center gap-2 px-5 sm:px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-200"
-					style="background: var(--accent); color: var(--bg-primary);"
-					onmouseenter={(e) => e.currentTarget.style.opacity = '0.9'}
-					onmouseleave={(e) => e.currentTarget.style.opacity = '1'}>
+					class="hover-fade inline-flex items-center gap-2 px-5 sm:px-6 py-3 rounded-lg font-semibold text-sm"
+					style="background: var(--accent); color: var(--bg-primary);">
 					See what's live
 					<ArrowRight class="w-4 h-4" />
 				</a>
 				<a href="#about"
-					class="inline-flex items-center gap-2 px-5 sm:px-6 py-3 rounded-lg font-medium text-sm border transition-all duration-200"
-					style="border-color: var(--border); color: var(--text-secondary);"
-					onmouseenter={(e) => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-					onmouseleave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
+					class="hover-border inline-flex items-center gap-2 px-5 sm:px-6 py-3 rounded-lg font-medium text-sm border"
+					style="border-color: var(--border); color: var(--text-secondary);">
 					Learn more
 				</a>
 			</div>
@@ -136,7 +132,7 @@
 					</a>
 				{:else}
 					<div class="rounded-xl border p-6 sm:p-8"
-						style="border-color: var(--border); background: var(--bg-card); opacity: 0.6;">
+						style="border-color: var(--border); background: var(--bg-card);">
 						<div class="flex items-start justify-between mb-5 sm:mb-6">
 							<div class="w-10 sm:w-11 h-10 sm:h-11 rounded-lg flex items-center justify-center"
 								style="background: var(--bg-tertiary);">
@@ -216,18 +212,14 @@
 				<a href="https://github.com/dominicnunez"
 					target="_blank"
 					rel="noopener noreferrer"
-					class="flex items-center gap-2 text-xs transition-colors duration-200"
-					style="color: var(--text-muted);"
-					onmouseenter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
-					onmouseleave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}>
+					class="hover-text flex items-center gap-2 text-xs"
+					style="color: var(--text-muted);">
 					<Github class="w-3.5 h-3.5" />
 					GitHub
 				</a>
 				<a href="mailto:kaievalo@proton.me"
-					class="flex items-center gap-2 text-xs transition-colors duration-200"
-					style="color: var(--text-muted);"
-					onmouseenter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
-					onmouseleave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}>
+					class="hover-text flex items-center gap-2 text-xs"
+					style="color: var(--text-muted);">
 					<Mail class="w-3.5 h-3.5" />
 					Contact
 				</a>

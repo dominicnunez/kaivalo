@@ -143,6 +143,32 @@
   opacity: 0.6;
 }
 
+/* Interactive hover states */
+.hover-border {
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.hover-border:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+
+.hover-fade {
+  transition: opacity 0.2s ease;
+}
+
+.hover-fade:hover {
+  opacity: 0.9;
+}
+
+.hover-text {
+  transition: color 0.2s ease;
+}
+
+.hover-text:hover {
+  color: var(--text-primary);
+}
+
 /* Dot grid pattern */
 .dots-bg {
   background-image: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);

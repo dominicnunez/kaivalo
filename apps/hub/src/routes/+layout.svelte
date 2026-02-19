@@ -39,20 +39,16 @@
             </div>
             <form method="POST" action="/auth/sign-out">
               <button type="submit"
-                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-200 cursor-pointer"
-                style="color: var(--text-muted); border: 1px solid var(--border); background: none;"
-                onmouseenter={(e) => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-                onmouseleave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                class="hover-border inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer"
+                style="color: var(--text-muted); border: 1px solid var(--border); background: none;">
                 <LogOut class="w-3.5 h-3.5" />
                 Sign out
               </button>
             </form>
           {:else}
             <a href={data.signInUrl}
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-200"
-              style="background: var(--accent); color: var(--bg-primary);"
-              onmouseenter={(e) => e.currentTarget.style.opacity = '0.9'}
-              onmouseleave={(e) => e.currentTarget.style.opacity = '1'}>
+              class="hover-fade inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium"
+              style="background: var(--accent); color: var(--bg-primary);">
               <LogIn class="w-3.5 h-3.5" />
               Sign in
             </a>
