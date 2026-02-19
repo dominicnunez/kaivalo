@@ -210,7 +210,7 @@
 
 			<!-- Right: links -->
 			<div class="flex items-center gap-6">
-				<a href="https://github.com/dominicnunez"
+				<a href="https://github.com/kaivalo-dev"
 					target="_blank"
 					rel="noopener noreferrer"
 					class="hover-text flex items-center gap-2 text-xs"
