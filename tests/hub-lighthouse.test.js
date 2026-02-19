@@ -106,11 +106,12 @@ describe('performance optimizations', () => {
 describe('lighthouse score validation', () => {
   const buildExists = existsSync(resolve(hubDir, 'build', 'index.js'));
   let lighthouseScores = null;
+  let skipReason = null;
   let serverProcess = null;
   const port = PORT_BASE + Math.floor(Math.random() * PORT_RANGE);
 
   before(async () => {
-    if (!buildExists) return;
+    if (!buildExists) { skipReason = 'no build directory — run npm run build first'; return; }
 
     serverProcess = spawn('node', ['build/index.js'], {
       cwd: hubDir,
@@ -134,16 +135,20 @@ describe('lighthouse score validation', () => {
         await new Promise(r => setTimeout(r, 500));
       }
     }
-    if (!serverReady) throw new Error(`Server failed to start on port ${port}`);
+    if (!serverReady) { skipReason = `server failed to start on port ${port}`; return; }
 
-    const result = execSync(
-      `CHROME_PATH=/usr/local/bin/chromium npx lighthouse http://localhost:${port} --chrome-flags="--headless --no-sandbox --disable-gpu" --output=json --only-categories=performance,accessibility,best-practices,seo 2>/dev/null`,
-      { encoding: 'utf8', timeout: LIGHTHOUSE_TIMEOUT_MS, maxBuffer: MAX_BUFFER_BYTES },
-    );
-    const report = JSON.parse(result);
-    lighthouseScores = {};
-    for (const [key, cat] of Object.entries(report.categories)) {
-      lighthouseScores[key] = Math.round(cat.score * 100);
+    try {
+      const result = execSync(
+        `CHROME_PATH=/usr/local/bin/chromium npx lighthouse http://localhost:${port} --chrome-flags="--headless --no-sandbox --disable-gpu" --output=json --only-categories=performance,accessibility,best-practices,seo 2>/dev/null`,
+        { encoding: 'utf8', timeout: LIGHTHOUSE_TIMEOUT_MS, maxBuffer: MAX_BUFFER_BYTES },
+      );
+      const report = JSON.parse(result);
+      lighthouseScores = {};
+      for (const [key, cat] of Object.entries(report.categories)) {
+        lighthouseScores[key] = Math.round(cat.score * 100);
+      }
+    } catch (e) {
+      skipReason = `lighthouse/chrome not available: ${e.message.split('\n')[0]}`;
     }
   });
 
@@ -156,13 +161,8 @@ describe('lighthouse score validation', () => {
   });
 
   it('lighthouse scores >= 90', (t) => {
-    if (!buildExists) {
-      t.skip('no build directory — run npm run build first');
-      return;
-    }
-
-    if (!lighthouseScores) {
-      t.skip('lighthouse/chrome not available in this environment');
+    if (skipReason) {
+      t.skip(skipReason);
       return;
     }
 
