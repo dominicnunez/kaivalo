@@ -5,7 +5,7 @@
    * @typedef {'sm' | 'md' | 'lg'} Size
    */
 
-  /** @type {{ variant?: Variant, size?: Size, disabled?: boolean, onclick?: (e: MouseEvent) => void, class?: string, children?: import('svelte').Snippet }} */
+  /** @type {{ type?: 'button' | 'submit' | 'reset', variant?: Variant, size?: Size, disabled?: boolean, onclick?: (e: MouseEvent) => void, class?: string, children?: import('svelte').Snippet }} */
   let {
     type = 'button',
     variant = 'primary',
