@@ -167,7 +167,7 @@ describe('rendered page tests', () => {
 		if (!renderedHtml) { t.skip('server not running on port 3100'); return; }
 		try {
 			const result = execSync(
-				'curl -s -o /dev/null -w "%{http_code}" -L --max-time 10 https://github.com/dominicnunez',
+				'curl -s -o /dev/null -w "%{http_code}" -L --max-time 10 https://github.com/kaivalo-dev',
 				{ encoding: 'utf-8', timeout: 15000 }
 			);
 			const statusCode = parseInt(result.trim(), 10);
