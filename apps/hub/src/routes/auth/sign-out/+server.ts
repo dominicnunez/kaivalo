@@ -1,6 +1,6 @@
 import { authKit } from '@workos/authkit-sveltekit';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = async (event) => {
+export const POST: RequestHandler = async (event) => {
 	return authKit.signOut(event);
 };

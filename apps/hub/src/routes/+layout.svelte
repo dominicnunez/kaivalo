@@ -37,14 +37,16 @@
                 {data.user.firstName ?? data.user.email}
               </span>
             </div>
-            <a href="/auth/sign-out"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-200"
-              style="color: var(--text-muted); border: 1px solid var(--border);"
-              onmouseenter={(e) => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-              onmouseleave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
-              <LogOut class="w-3.5 h-3.5" />
-              Sign out
-            </a>
+            <form method="POST" action="/auth/sign-out">
+              <button type="submit"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-200 cursor-pointer"
+                style="color: var(--text-muted); border: 1px solid var(--border); background: none;"
+                onmouseenter={(e) => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                onmouseleave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                <LogOut class="w-3.5 h-3.5" />
+                Sign out
+              </button>
+            </form>
           {:else}
             <a href={data.signInUrl}
               class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-200"
