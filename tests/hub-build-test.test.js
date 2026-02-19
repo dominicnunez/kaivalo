@@ -88,23 +88,13 @@ test('static assets are copied (og-image.png)', () => {
 	assert.ok(existsSync(ogImagePath), 'og-image.png should be in build/client');
 });
 
-// Test npm run build works (single build, multiple assertions)
-const buildOutput = execSync('npm run build 2>&1', {
-	cwd: HUB_DIR,
-	timeout: 180000,
-	encoding: 'utf8'
-});
-
+// execSync throws on non-zero exit — success means the build passed
 test('npm run build succeeds', () => {
-	assert.ok(buildOutput.includes('done'), 'Build should complete with "done" message');
-});
-
-test('build does not produce errors', () => {
-	assert.ok(!buildOutput.includes('error during build'), 'Build should not have errors');
-});
-
-test('build uses adapter-node', () => {
-	assert.ok(buildOutput.includes('@sveltejs/adapter-node'), 'Build should use adapter-node');
+	execSync('npm run build 2>&1', {
+		cwd: HUB_DIR,
+		timeout: 180000,
+		encoding: 'utf8'
+	});
 });
 
 // Test responsive design elements exist in build

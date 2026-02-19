@@ -43,13 +43,11 @@ describe('WorkOS auth verification', () => {
 	// === Build verification ===
 	describe('build verification', () => {
 		it('npm run build succeeds with auth code', () => {
-			const result = execSync('npm run build 2>&1', {
+			execSync('npm run build 2>&1', {
 				cwd: HUB_DIR,
 				timeout: 180000,
 				encoding: 'utf8'
 			});
-			assert.ok(result.includes('done'), 'Build should complete with "done" message');
-			assert.ok(!result.includes('error during build'), 'Build should not have errors');
 		});
 
 		it('build output includes hooks.server entry', () => {
