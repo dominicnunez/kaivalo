@@ -223,10 +223,10 @@ describe('Auth Layout — Sign-out route', () => {
     );
   });
 
-  it('exports a GET handler', () => {
+  it('exports a POST handler', () => {
     assert.ok(
-      content.includes('export const GET'),
-      'should export GET handler (sign-out is triggered via link/redirect)'
+      content.includes('export const POST'),
+      'should export POST handler (sign-out is triggered via form submission)'
     );
   });
 

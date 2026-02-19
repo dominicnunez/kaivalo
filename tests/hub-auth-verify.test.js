@@ -89,7 +89,7 @@ test('callback route handles OAuth redirect', () => {
 test('sign-out route handles session termination', () => {
 	const signOut = readFileSync(join(SRC_DIR, 'routes/auth/sign-out/+server.ts'), 'utf8');
 	assert.ok(signOut.includes('signOut'), 'Should use signOut');
-	assert.ok(signOut.includes('GET'), 'Should export GET handler');
+	assert.ok(signOut.includes('POST'), 'Should export POST handler');
 });
 
 test('layout.server.ts provides user and signInUrl', () => {
