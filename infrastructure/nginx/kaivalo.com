@@ -143,5 +143,5 @@ server {
     server_name *.kaivalo.com;
     server_tokens off;
 
-    return 301 $scheme://kaivalo.com/;
+    return 301 $scheme://kaivalo.com$request_uri;
 }
