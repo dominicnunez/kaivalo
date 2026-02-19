@@ -13,16 +13,6 @@ describe('hub tailwind', () => {
     assert.ok(fs.existsSync(tailwindPath), 'tailwindcss package should exist in node_modules');
   });
 
-  it('postcss package is installed', () => {
-    const postcssPath = path.join(rootPath, 'node_modules', 'postcss');
-    assert.ok(fs.existsSync(postcssPath), 'postcss package should exist in node_modules');
-  });
-
-  it('autoprefixer package is installed', () => {
-    const autoprefixerPath = path.join(rootPath, 'node_modules', 'autoprefixer');
-    assert.ok(fs.existsSync(autoprefixerPath), 'autoprefixer package should exist in node_modules');
-  });
-
   it('@tailwindcss/vite package is installed', () => {
     const vitePath = path.join(rootPath, 'node_modules', '@tailwindcss', 'vite');
     assert.ok(fs.existsSync(vitePath), '@tailwindcss/vite package should exist for Tailwind v4');
