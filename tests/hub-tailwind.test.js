@@ -29,54 +29,6 @@ describe('hub tailwind', () => {
     assert.ok(fs.existsSync(vitePath), '@tailwindcss/vite package should exist for Tailwind v4');
   });
 
-  it('tailwind.config.js exists', () => {
-    const configPath = path.join(hubPath, 'tailwind.config.js');
-    assert.ok(fs.existsSync(configPath), 'tailwind.config.js should exist');
-  });
-
-  it('tailwind.config.js has content array', () => {
-    const configPath = path.join(hubPath, 'tailwind.config.js');
-    const content = fs.readFileSync(configPath, 'utf8');
-    assert.ok(content.includes('content:'), 'tailwind.config.js should have content array');
-    assert.ok(content.includes('./src/**/*.{html,js,svelte,ts}'), 'content should include src files');
-  });
-
-  it('tailwind.config.js has theme.extend', () => {
-    const configPath = path.join(hubPath, 'tailwind.config.js');
-    const content = fs.readFileSync(configPath, 'utf8');
-    assert.ok(content.includes('theme:'), 'tailwind.config.js should have theme object');
-    assert.ok(content.includes('extend:'), 'tailwind.config.js should have extend object');
-  });
-
-  it('tailwind.config.js has plugins array', () => {
-    const configPath = path.join(hubPath, 'tailwind.config.js');
-    const content = fs.readFileSync(configPath, 'utf8');
-    assert.ok(content.includes('plugins:'), 'tailwind.config.js should have plugins array');
-  });
-
-  it('tailwind.config.js uses ES module export', () => {
-    const configPath = path.join(hubPath, 'tailwind.config.js');
-    const content = fs.readFileSync(configPath, 'utf8');
-    assert.ok(content.includes('export default'), 'tailwind.config.js should use ES module export');
-  });
-
-  it('postcss.config.js exists', () => {
-    const configPath = path.join(hubPath, 'postcss.config.js');
-    assert.ok(fs.existsSync(configPath), 'postcss.config.js should exist');
-  });
-
-  it('postcss.config.js uses ES module export', () => {
-    const configPath = path.join(hubPath, 'postcss.config.js');
-    const content = fs.readFileSync(configPath, 'utf8');
-    assert.ok(content.includes('export default'), 'postcss.config.js should use ES module export');
-  });
-
-  it('postcss.config.js has plugins object', () => {
-    const configPath = path.join(hubPath, 'postcss.config.js');
-    const content = fs.readFileSync(configPath, 'utf8');
-    assert.ok(content.includes('plugins'), 'postcss.config.js should have plugins');
-  });
-
   it('app.css exists', () => {
     const cssPath = path.join(hubPath, 'src', 'app.css');
     assert.ok(fs.existsSync(cssPath), 'app.css should exist');
