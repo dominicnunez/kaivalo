@@ -31,10 +31,17 @@ if (fs.existsSync(envPath)) {
   }
 }
 
+const MAX_RESTARTS = 10;
+const RESTART_DELAY_MS = 3000;
+const MAX_MEMORY_MB = '512M';
+
 module.exports = {
   apps: [{
     name: 'kaivalo-hub',
     script: 'build/index.js',
+    max_restarts: MAX_RESTARTS,
+    restart_delay: RESTART_DELAY_MS,
+    max_memory_restart: MAX_MEMORY_MB,
     env: envVars
   }]
 };
