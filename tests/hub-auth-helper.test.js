@@ -66,7 +66,7 @@ describe('src/lib/auth.ts — route protection helper', () => {
 
 describe('build verification — auth helper does not break build', () => {
 	test('npm run build succeeds', () => {
-		const result = execSync('npm run build', {
+		execSync('npm run build', {
 			cwd: 'apps/hub',
 			timeout: 60000,
 			env: {
@@ -77,6 +77,6 @@ describe('build verification — auth helper does not break build', () => {
 				WORKOS_COOKIE_PASSWORD: 'a'.repeat(32),
 			},
 		});
-		assert.ok(true);
+		assert.ok(existsSync('apps/hub/build/index.js'), 'build should produce index.js');
 	});
 });
