@@ -12,8 +12,8 @@ function test(name, fn) {
 	}
 }
 
-const hubPath = '/home/kai/pets/kaivalo/apps/hub';
-const rootPath = '/home/kai/pets/kaivalo';
+const rootPath = path.resolve(import.meta.dirname, '..');
+const hubPath = path.join(rootPath, 'apps/hub');
 
 // Test tailwindcss is installed
 test('tailwindcss package is installed', () => {

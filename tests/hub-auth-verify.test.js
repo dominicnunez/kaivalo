@@ -1,12 +1,12 @@
 import assert from 'node:assert';
 import { existsSync, readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 
-const ROOT = '/home/kai/pets/kaivalo';
+const ROOT = resolve(import.meta.dirname, '..');
 const HUB_DIR = join(ROOT, 'apps/hub');
 const BUILD_DIR = join(HUB_DIR, 'build');
 const SRC_DIR = join(HUB_DIR, 'src');

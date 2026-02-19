@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
 
-const hubDir = '/home/kai/pets/kaivalo/apps/hub';
+const hubDir = path.join(path.resolve(import.meta.dirname, '..'), 'apps/hub');
 const buildDir = path.join(hubDir, 'build');
 
 const REQUEST_TIMEOUT_MS = 5000;

@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const PROJECT_ROOT = '/home/kai/pets/kaivalo';
+const PROJECT_ROOT = path.resolve(import.meta.dirname, '..');
 const HUB_DIR = path.join(PROJECT_ROOT, 'apps', 'hub');
 
 let passed = 0;

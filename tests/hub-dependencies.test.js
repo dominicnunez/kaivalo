@@ -1,8 +1,8 @@
 import { strict as assert } from 'assert';
 import { existsSync, statSync, readdirSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 
-const projectRoot = '/home/kai/pets/kaivalo';
+const projectRoot = resolve(import.meta.dirname, '..');
 const hubRoot = join(projectRoot, 'apps/hub');
 
 let passed = 0;
