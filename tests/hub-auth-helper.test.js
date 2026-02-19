@@ -76,7 +76,7 @@ describe('build verification — auth helper does not break build', () => {
 				WORKOS_CLIENT_ID: 'client_test',
 				WORKOS_API_KEY: 'sk_test_key',
 				WORKOS_REDIRECT_URI: 'http://localhost:3100/auth/callback',
-				WORKOS_COOKIE_PASSWORD: 'a'.repeat(32),
+				WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
 			},
 		});
 		assert.ok(existsSync(join(projectRoot, 'apps/hub/build/index.js')), 'build should produce index.js');
