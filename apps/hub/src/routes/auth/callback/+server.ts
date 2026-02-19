@@ -8,7 +8,7 @@ export const GET: RequestHandler = async (event) => {
 		return await handler(event);
 	} catch (err) {
 		if (isRedirect(err) || isHttpError(err)) throw err;
-		console.error('Auth callback failed:', err);
+		console.error('Auth callback failed:', err instanceof Error ? err.message : 'unknown error');
 		redirect(302, '/?error=auth');
 	}
 };
