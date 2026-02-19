@@ -1,43 +1,14 @@
-/**
- * Test: MechanicAI local server
- * Validates that mechanic-ai can be started and serves on port 3101.
- * Skips all tests if mechanic-ai directory is not present.
- */
-
-import { existsSync } from 'fs';
-import { resolve, join } from 'path';
-
-const mechaiDir = join(resolve(import.meta.dirname, '..'), 'apps', 'mechai');
-
-if (!existsSync(mechaiDir)) {
-  console.log('Testing MechanicAI local server...\n');
-  console.log('- All tests skipped (mechanic-ai directory not present)');
-  console.log('\n0 passing, 0 failing (11 skipped)');
-  process.exit(0);
-}
-
-// Only run tests if directory exists
+import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
+import { existsSync } from 'node:fs';
+import { resolve, join } from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 
+const mechaiDir = join(resolve(import.meta.dirname, '..'), 'apps', 'mechai');
+const skip = !existsSync(mechaiDir);
 const PORT = 3101;
 const BASE_PATH = '/mechai';
-
-let passed = 0;
-let failed = 0;
-
-async function asyncTest(name, fn) {
-  try {
-    await fn();
-    passed++;
-    console.log(`✓ ${name}`);
-  } catch (error) {
-    failed++;
-    console.log(`✗ ${name}`);
-    console.log(`  ${error.message}`);
-  }
-}
 
 function httpGet(url) {
   return new Promise((resolve, reject) => {
@@ -88,18 +59,47 @@ function isPortFree(port) {
   });
 }
 
-async function runServerTests() {
-  await asyncTest('server responds on port 3101', async () => {
+describe('MechanicAI local server', { skip: skip && 'mechanic-ai directory not present' }, () => {
+  let serverProcess;
+  let skipReason;
+
+  before(async () => {
+    const portFree = await isPortFree(PORT);
+    if (!portFree) return;
+
+    serverProcess = spawn('node', ['build/index.js'], {
+      cwd: mechaiDir,
+      env: { ...process.env, PORT: String(PORT), NODE_ENV: 'production' },
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    try {
+      await waitForServer(`http://localhost:${PORT}${BASE_PATH}/`);
+    } catch {
+      skipReason = `server failed to start on port ${PORT}`;
+    }
+  });
+
+  after(() => {
+    if (serverProcess) {
+      serverProcess.kill('SIGTERM');
+    }
+  });
+
+  it('server responds on port 3101', async (t) => {
+    if (skipReason) { t.skip(skipReason); return; }
     const response = await httpGet(`http://localhost:${PORT}${BASE_PATH}/`);
     assert.ok(response.statusCode >= 200 && response.statusCode < 500, 'Server should respond');
   });
 
-  await asyncTest('server returns HTTP 200 OK for homepage', async () => {
+  it('server returns HTTP 200 OK for homepage', async (t) => {
+    if (skipReason) { t.skip(skipReason); return; }
     const response = await httpGet(`http://localhost:${PORT}${BASE_PATH}/`);
     assert.strictEqual(response.statusCode, 200);
   });
 
-  await asyncTest('server returns HTML content', async () => {
+  it('server returns HTML content', async (t) => {
+    if (skipReason) { t.skip(skipReason); return; }
     const response = await httpGet(`http://localhost:${PORT}${BASE_PATH}/`);
     assert.ok(
       response.headers['content-type']?.includes('text/html') ||
@@ -109,44 +109,11 @@ async function runServerTests() {
     );
   });
 
-  await asyncTest('server includes MechanicAI branding', async () => {
+  it('server includes MechanicAI branding', async (t) => {
+    if (skipReason) { t.skip(skipReason); return; }
     const response = await httpGet(`http://localhost:${PORT}${BASE_PATH}/`);
     const hasBranding = response.data.toLowerCase().includes('mechanic') ||
                       response.data.includes('MechanicAI');
     assert.ok(hasBranding, 'Should include MechanicAI branding');
   });
-}
-
-console.log('Testing MechanicAI local server...\n');
-
-(async () => {
-  const portFree = await isPortFree(PORT);
-  if (!portFree) {
-    console.log(`Port ${PORT} is already in use. Testing existing server...\n`);
-    await runServerTests();
-  } else {
-    console.log('Starting MechanicAI server on port 3101...\n');
-
-    const serverProcess = spawn('node', ['build/index.js'], {
-      cwd: mechaiDir,
-      env: { ...process.env, PORT: String(PORT), NODE_ENV: 'production' },
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
-
-    try {
-      const startupResponse = await waitForServer(`http://localhost:${PORT}${BASE_PATH}/`);
-
-      await asyncTest('server starts successfully', async () => {
-        assert.ok(startupResponse.statusCode, 'Server should respond with an HTTP status code');
-      });
-
-      await runServerTests();
-    } finally {
-      serverProcess.kill('SIGTERM');
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-  }
-
-  console.log(`\n${passed} passing, ${failed} failing`);
-  process.exit(failed > 0 ? 1 : 0);
-})();
+});

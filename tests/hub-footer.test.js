@@ -1,98 +1,71 @@
-/**
- * Tests for apps/hub Footer section
- * Validates the footer has copyright, GitHub link, and contact link
- */
-
+import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 
-let passed = 0;
-let failed = 0;
-
-function test(name, fn) {
-	try {
-		fn();
-		passed++;
-		console.log(`✓ ${name}`);
-	} catch (error) {
-		failed++;
-		console.log(`✗ ${name}`);
-		console.log(`  ${error.message}`);
-	}
-}
-
 const projectRoot = path.resolve(import.meta.dirname, '..');
 const pagePath = path.join(projectRoot, 'apps/hub/src/routes/+page.svelte');
 const pageContent = fs.readFileSync(pagePath, 'utf-8');
-
-console.log('Testing Footer...\n');
-
 // Footer structure
-test('has <footer> element', () => {
-	assert.ok(pageContent.includes('<footer'));
-});
 
-test('has closing </footer> tag', () => {
-	assert.ok(pageContent.includes('</footer>'));
-});
+describe('apps/hub Footer section', () => {
+  it('has <footer> element', () => {
+    assert.ok(pageContent.includes('<footer'));
+  });
 
-test('footer has border-t', () => {
-	assert.ok(pageContent.includes('border-t'));
-});
+  it('has closing </footer> tag', () => {
+    assert.ok(pageContent.includes('</footer>'));
+  });
 
-// Copyright
-test('has copyright 2026', () => {
-	assert.ok(pageContent.includes('2026'));
-});
+  it('footer has border-t', () => {
+    assert.ok(pageContent.includes('border-t'));
+  });
 
-test('has kaivalo brand name', () => {
-	assert.ok(pageContent.includes('kaivalo'));
-});
+  it('has copyright 2026', () => {
+    assert.ok(pageContent.includes('2026'));
+  });
 
-// GitHub link
-test('has GitHub link', () => {
-	assert.ok(pageContent.includes('github.com'));
-});
+  it('has kaivalo brand name', () => {
+    assert.ok(pageContent.includes('kaivalo'));
+  });
 
-test('GitHub link opens in new tab', () => {
-	assert.ok(pageContent.includes('target="_blank"'));
-});
+  it('has GitHub link', () => {
+    assert.ok(pageContent.includes('github.com'));
+  });
 
-test('GitHub link has security attributes', () => {
-	assert.ok(pageContent.includes('rel="noopener noreferrer"'));
-});
+  it('GitHub link opens in new tab', () => {
+    assert.ok(pageContent.includes('target="_blank"'));
+  });
 
-test('has GitHub icon', () => {
-	assert.ok(pageContent.includes('Github'));
-});
+  it('GitHub link has security attributes', () => {
+    assert.ok(pageContent.includes('rel="noopener noreferrer"'));
+  });
 
-// Contact link
-test('has contact email link', () => {
-	assert.ok(pageContent.includes('mailto:kaievalo@proton.me'));
-});
+  it('has GitHub icon', () => {
+    assert.ok(pageContent.includes('Github'));
+  });
 
-test('has Mail icon', () => {
-	assert.ok(pageContent.includes('Mail'));
-});
+  it('has contact email link', () => {
+    assert.ok(pageContent.includes('mailto:kaievalo@proton.me'));
+  });
 
-// Layout
-test('footer uses flex layout', () => {
-	assert.ok(pageContent.includes('flex'));
-});
+  it('has Mail icon', () => {
+    assert.ok(pageContent.includes('Mail'));
+  });
 
-test('responsive flex direction', () => {
-	assert.ok(pageContent.includes('flex-col') && pageContent.includes('sm:flex-row'));
-});
+  it('footer uses flex layout', () => {
+    assert.ok(pageContent.includes('flex'));
+  });
 
-test('uses Container component', () => {
-	assert.ok(pageContent.includes('<Container'));
-});
+  it('responsive flex direction', () => {
+    assert.ok(pageContent.includes('flex-col') && pageContent.includes('sm:flex-row'));
+  });
 
-test('has hover transition', () => {
-	assert.ok(pageContent.includes('transition'));
-});
+  it('uses Container component', () => {
+    assert.ok(pageContent.includes('<Container'));
+  });
 
-// Summary
-console.log(`\n${passed} passed, ${failed} failed`);
-if (failed > 0) process.exit(1);
+  it('has hover transition', () => {
+    assert.ok(pageContent.includes('transition'));
+  });
+});
