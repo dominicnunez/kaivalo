@@ -9,6 +9,11 @@ const appCssFile = resolve(hubDir, 'src', 'app.css');
 const appHtmlFile = resolve(hubDir, 'src', 'app.html');
 const pageFile = resolve(hubDir, 'src', 'routes', '+page.svelte');
 
+const PORT_BASE = 14198;
+const PORT_RANGE = 1000;
+const LIGHTHOUSE_TIMEOUT_MS = 120_000;
+const MAX_BUFFER_BYTES = 10 * 1024 * 1024;
+
 const appCss = readFileSync(appCssFile, 'utf8');
 const appHtml = readFileSync(appHtmlFile, 'utf8');
 const pageContent = readFileSync(pageFile, 'utf8');
@@ -113,7 +118,7 @@ describe('lighthouse score validation', () => {
   const buildExists = existsSync(resolve(hubDir, 'build', 'index.js'));
   let lighthouseScores = null;
   let serverProcess = null;
-  const port = 14198 + Math.floor(Math.random() * 1000);
+  const port = PORT_BASE + Math.floor(Math.random() * PORT_RANGE);
 
   before(async () => {
     if (!buildExists) return;
@@ -142,14 +147,16 @@ describe('lighthouse score validation', () => {
     try {
       const result = execSync(
         `CHROME_PATH=/usr/local/bin/chromium npx lighthouse http://localhost:${port} --chrome-flags="--headless --no-sandbox --disable-gpu" --output=json --only-categories=performance,accessibility,best-practices,seo 2>/dev/null`,
-        { encoding: 'utf8', timeout: 120000, maxBuffer: 10 * 1024 * 1024 },
+        { encoding: 'utf8', timeout: LIGHTHOUSE_TIMEOUT_MS, maxBuffer: MAX_BUFFER_BYTES },
       );
       const report = JSON.parse(result);
       lighthouseScores = {};
       for (const [key, cat] of Object.entries(report.categories)) {
         lighthouseScores[key] = Math.round(cat.score * 100);
       }
-    } catch {}
+    } catch (e) {
+      console.warn('Lighthouse skipped:', e.message);
+    }
   });
 
   after(() => {
@@ -160,16 +167,14 @@ describe('lighthouse score validation', () => {
     }
   });
 
-  it('lighthouse scores >= 90 (or structural checks pass)', () => {
+  it('lighthouse scores >= 90', (t) => {
     if (!buildExists) {
-      // No build — structural checks above already cover optimizations
-      assert.ok(true);
+      t.skip('no build directory — run npm run build first');
       return;
     }
 
     if (!lighthouseScores) {
-      // Lighthouse not available — structural checks are sufficient
-      assert.ok(true);
+      t.skip('lighthouse/chrome not available in this environment');
       return;
     }
 
