@@ -30,6 +30,11 @@
 - **Date**: 2026-02-19
 - **Reason**: Same root issue as above. The audit claims authKitHandle could overwrite security headers set by securityHeaders. In `sequence(securityHeaders, authKitHandle())`, securityHeaders runs *after* authKitHandle in the response path (it wraps resolve). securityHeaders always has the final say on headers. Additionally, authKitHandle only conditionally sets cookie headers for session refresh — it does not set CSP or any security headers.
 
+### CSP does not include font-src for external font noscript fallback
+- **File**: apps/hub/src/hooks.server.ts:28
+- **Date**: 2026-02-19
+- **Reason**: The audit acknowledges "the current config is correct" in its own details. The finding flags a hypothetical scenario where font providers change their CDN domains in the future. The CSP `font-src` correctly allows `https://cdn.fontshare.com` and `https://fonts.gstatic.com`, and `style-src` correctly allows `https://api.fontshare.com` and `https://fonts.googleapis.com`. All four domains match what `app.html` loads. This is speculative maintenance commentary, not an actual misconfiguration.
+
 ## Intentional Design Decisions
 
 ### Page metadata uses hardcoded production URL for OpenGraph
@@ -74,3 +79,9 @@
 - **Date**: 2026-02-18
 - **Severity**: Low
 - **Reason**: The current `.env` file contains no quoted values, so this edge case doesn't apply. The parser correctly handles the split-on-first-`=` case and matched quote stripping. Replacing with `dotenv` for a hypothetical edge case that doesn't occur would add a dependency for no practical benefit.
+
+### ecosystem.config.cjs silently ignores malformed .env lines
+- **File**: apps/hub/ecosystem.config.cjs:7-19
+- **Date**: 2026-02-19
+- **Severity**: Low
+- **Reason**: The parser skips blank lines, comments, and lines without `=` — this is standard `.env` parsing behavior, not silent data loss. The startup env var validation in `hooks.server.ts` now catches missing required vars immediately. Adding console.warn for skipped lines in a PM2 config file would produce noise in PM2 logs for every restart with no actionable benefit.
