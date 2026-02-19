@@ -58,6 +58,7 @@ server {
     # ssl_certificate_key /etc/letsencrypt/live/kaivalo.com/privkey.pem;
     # include /etc/letsencrypt/options-ssl-nginx.conf;
     # ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+    # add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 }
 
 # ============================================================================
@@ -87,6 +88,7 @@ server {
     # ssl_certificate_key /etc/letsencrypt/live/kaivalo.com/privkey.pem;
     # include /etc/letsencrypt/options-ssl-nginx.conf;
     # ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+    # add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 }
 
 # ============================================================================
