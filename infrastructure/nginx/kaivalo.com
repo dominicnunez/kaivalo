@@ -84,15 +84,6 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
     }
-
-    # SSL configuration placeholder (certbot will add this)
-    # listen 443 ssl;
-    # listen [::]:443 ssl;
-    # ssl_certificate /etc/letsencrypt/live/kaivalo.com/fullchain.pem;
-    # ssl_certificate_key /etc/letsencrypt/live/kaivalo.com/privkey.pem;
-    # include /etc/letsencrypt/options-ssl-nginx.conf;
-    # ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
-    # add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
 }
 
 # ============================================================================
@@ -120,15 +111,6 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
     }
-
-    # SSL configuration placeholder (certbot will add this)
-    # listen 443 ssl;
-    # listen [::]:443 ssl;
-    # ssl_certificate /etc/letsencrypt/live/kaivalo.com/fullchain.pem;
-    # ssl_certificate_key /etc/letsencrypt/live/kaivalo.com/privkey.pem;
-    # include /etc/letsencrypt/options-ssl-nginx.conf;
-    # ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
-    # add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
 }
 
 # ============================================================================
