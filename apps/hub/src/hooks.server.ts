@@ -14,7 +14,7 @@ const HSTS_MAX_AGE_SECONDS = 63_072_000; // 2 years
 
 const securityHeaders: Handle = async ({ event, resolve }) => {
 	const response = await resolve(event);
-	response.headers.set('Strict-Transport-Security', `max-age=${HSTS_MAX_AGE_SECONDS}; includeSubDomains; preload`);
+	response.headers.set('Strict-Transport-Security', `max-age=${HSTS_MAX_AGE_SECONDS}; includeSubDomains`);
 	response.headers.set('X-Frame-Options', 'DENY');
 	response.headers.set('X-Content-Type-Options', 'nosniff');
 	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -28,6 +28,7 @@ const securityHeaders: Handle = async ({ event, resolve }) => {
 			"font-src 'self' https://cdn.fontshare.com https://fonts.gstatic.com",
 			"img-src 'self' data: https:",
 			"connect-src 'self'",
+			"form-action 'self'",
 			"frame-ancestors 'none'",
 		].join('; '),
 	);
