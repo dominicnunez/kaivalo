@@ -53,8 +53,10 @@ server {
         return 301 $scheme://kaivalo.com$request_uri;
     }
 
-    # Auth routes involve external OAuth round-trips to WorkOS, so the read
-    # timeout is higher than the general location to allow for upstream latency.
+    # Auth routes are HTTP-only request/response (OAuth callbacks) — no
+    # WebSocket support needed. Upgrade/Connection upgrade headers are
+    # intentionally omitted; Connection is set to "" to drop hop-by-hop headers.
+    # Read timeout is higher than the general location for upstream OAuth latency.
     location /auth/ {
         limit_req zone=auth burst=5 nodelay;
         proxy_pass http://127.0.0.1:3100;
