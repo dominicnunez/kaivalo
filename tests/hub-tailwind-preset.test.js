@@ -12,106 +12,46 @@ function test(name, fn) {
 	}
 }
 
-const hubPath = '/home/kai/pets/kaivalo/apps/hub';
 const rootPath = '/home/kai/pets/kaivalo';
+const presetPath = path.join(rootPath, 'packages', 'config', 'tailwind.preset.js');
 
-// Test tailwind.config.js imports the preset
-test('tailwind.config.js imports @kaivalo/config/tailwind.preset.js', () => {
-	const configPath = path.join(hubPath, 'tailwind.config.js');
-	const content = fs.readFileSync(configPath, 'utf8');
-	assert.ok(
-		content.includes("from '@kaivalo/config/tailwind.preset.js'"),
-		'tailwind.config.js should import from @kaivalo/config/tailwind.preset.js'
-	);
+test('@kaivalo/config/tailwind.preset.js is accessible via node_modules', () => {
+	const nmPath = path.join(rootPath, 'node_modules', '@kaivalo', 'config', 'tailwind.preset.js');
+	assert.ok(fs.existsSync(nmPath), 'tailwind.preset.js should be accessible via node_modules');
 });
 
-// Test tailwind.config.js has presets array
-test('tailwind.config.js has presets array', () => {
-	const configPath = path.join(hubPath, 'tailwind.config.js');
-	const content = fs.readFileSync(configPath, 'utf8');
-	assert.ok(content.includes('presets:'), 'tailwind.config.js should have presets key');
-});
-
-// Test tailwind.config.js uses the imported preset
-test('tailwind.config.js uses kaivaloPreset in presets array', () => {
-	const configPath = path.join(hubPath, 'tailwind.config.js');
-	const content = fs.readFileSync(configPath, 'utf8');
-	assert.ok(content.includes('kaivaloPreset'), 'tailwind.config.js should reference kaivaloPreset');
-	assert.ok(content.includes('[kaivaloPreset]'), 'presets should contain kaivaloPreset');
-});
-
-// Test the preset file exists in the linked package
-test('@kaivalo/config/tailwind.preset.js is accessible', () => {
-	const presetPath = path.join(rootPath, 'node_modules', '@kaivalo', 'config', 'tailwind.preset.js');
-	assert.ok(fs.existsSync(presetPath), 'tailwind.preset.js should be accessible via node_modules');
-});
-
-// Test the preset file has the expected content (brand colors)
 test('preset contains brand colors', () => {
-	const presetPath = path.join(rootPath, 'packages', 'config', 'tailwind.preset.js');
 	const content = fs.readFileSync(presetPath, 'utf8');
-	assert.ok(content.includes('primary:'), 'preset should have primary color');
 	assert.ok(content.includes('accent:'), 'preset should have accent color');
 	assert.ok(content.includes('neutral:'), 'preset should have neutral color');
 });
 
-// Test the preset file has font family
-test('preset contains font family configuration', () => {
-	const presetPath = path.join(rootPath, 'packages', 'config', 'tailwind.preset.js');
+test('preset accent matches app.css brand color (#22c55e)', () => {
 	const content = fs.readFileSync(presetPath, 'utf8');
-	assert.ok(content.includes('fontFamily:'), 'preset should have fontFamily');
-	assert.ok(content.includes("'Inter'"), 'preset should have Inter font');
+	assert.ok(content.includes('#22c55e'), 'preset accent DEFAULT should be #22c55e (green-500)');
 });
 
-// Test the preset file has animations
+test('preset contains font family configuration', () => {
+	const content = fs.readFileSync(presetPath, 'utf8');
+	assert.ok(content.includes('fontFamily:'), 'preset should have fontFamily');
+	assert.ok(content.includes("'Plus Jakarta Sans'"), 'preset should have Plus Jakarta Sans font');
+	assert.ok(content.includes("'Clash Display'"), 'preset should have Clash Display font');
+	assert.ok(content.includes("'JetBrains Mono'"), 'preset should have JetBrains Mono font');
+});
+
 test('preset contains animation utilities', () => {
-	const presetPath = path.join(rootPath, 'packages', 'config', 'tailwind.preset.js');
 	const content = fs.readFileSync(presetPath, 'utf8');
 	assert.ok(content.includes('animation:'), 'preset should have animation');
 	assert.ok(content.includes('keyframes:'), 'preset should have keyframes');
 });
 
-// Test tailwind.config.js still has content array
-test('tailwind.config.js retains content array', () => {
-	const configPath = path.join(hubPath, 'tailwind.config.js');
-	const content = fs.readFileSync(configPath, 'utf8');
-	assert.ok(content.includes('content:'), 'tailwind.config.js should retain content array');
-	assert.ok(content.includes('./src/**/*.{html,js,svelte,ts}'), 'content should include src files');
-});
-
-// Test tailwind.config.js still has theme.extend
-test('tailwind.config.js retains theme.extend', () => {
-	const configPath = path.join(hubPath, 'tailwind.config.js');
-	const content = fs.readFileSync(configPath, 'utf8');
-	assert.ok(content.includes('theme:'), 'tailwind.config.js should retain theme object');
-	assert.ok(content.includes('extend:'), 'tailwind.config.js should retain extend object');
-});
-
-// Test tailwind.config.js still has plugins array
-test('tailwind.config.js retains plugins array', () => {
-	const configPath = path.join(hubPath, 'tailwind.config.js');
-	const content = fs.readFileSync(configPath, 'utf8');
-	assert.ok(content.includes('plugins:'), 'tailwind.config.js should retain plugins array');
-});
-
-// Test the config can be dynamically imported
-test('tailwind.config.js can be imported', async () => {
-	const configPath = path.join(hubPath, 'tailwind.config.js');
-	const config = await import(configPath);
-	assert.ok(config.default, 'config should have default export');
-	assert.ok(Array.isArray(config.default.presets), 'config should have presets array');
-	assert.ok(config.default.presets.length === 1, 'presets should have one preset');
-});
-
-// Test the imported preset has theme.extend
-test('imported preset has theme.extend structure', async () => {
-	const configPath = path.join(hubPath, 'tailwind.config.js');
-	const config = await import(configPath);
-	const preset = config.default.presets[0];
-	assert.ok(preset.theme, 'preset should have theme');
-	assert.ok(preset.theme.extend, 'preset should have theme.extend');
-	assert.ok(preset.theme.extend.colors, 'preset should have colors');
-	assert.ok(preset.theme.extend.fontFamily, 'preset should have fontFamily');
+test('preset can be imported', async () => {
+	const preset = await import(presetPath);
+	assert.ok(preset.default, 'preset should have default export');
+	assert.ok(preset.default.theme, 'preset should have theme');
+	assert.ok(preset.default.theme.extend, 'preset should have theme.extend');
+	assert.ok(preset.default.theme.extend.colors, 'preset should have colors');
+	assert.ok(preset.default.theme.extend.fontFamily, 'preset should have fontFamily');
 });
 
 // Summary

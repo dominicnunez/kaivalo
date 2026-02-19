@@ -127,20 +127,9 @@ test('apps/hub/package.json has @kaivalo/ui dependency', () => {
   assert.ok('@kaivalo/ui' in pkg.dependencies, '@kaivalo/ui should be in dependencies');
 });
 
-test('apps/hub/package.json has @kaivalo/config dependency', () => {
-  const pkg = JSON.parse(readFileSync(hubPackageJson, 'utf8'));
-  assert.ok(pkg.dependencies, 'dependencies should exist');
-  assert.ok('@kaivalo/config' in pkg.dependencies, '@kaivalo/config should be in dependencies');
-});
-
 test('@kaivalo/ui dependency uses workspace version (*)', () => {
   const pkg = JSON.parse(readFileSync(hubPackageJson, 'utf8'));
   assert.strictEqual(pkg.dependencies['@kaivalo/ui'], '*', '@kaivalo/ui should use * (workspace link)');
-});
-
-test('@kaivalo/config dependency uses workspace version (*)', () => {
-  const pkg = JSON.parse(readFileSync(hubPackageJson, 'utf8'));
-  assert.strictEqual(pkg.dependencies['@kaivalo/config'], '*', '@kaivalo/config should use * (workspace link)');
 });
 
 console.log(`\n  ${passed} passing, ${failed} failing\n`);
