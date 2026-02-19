@@ -20,9 +20,9 @@ export async function requireAuth(event: RequestEvent) {
 	const user = await authKit.getUser(event);
 
 	if (!user) {
-		const signInUrl = await authKit.getSignInUrl({
-			returnTo: event.url.pathname,
-		});
+		const pathname = event.url.pathname;
+		const returnTo = pathname.startsWith('/') && !pathname.startsWith('//') ? pathname : '/';
+		const signInUrl = await authKit.getSignInUrl({ returnTo });
 		redirect(302, signInUrl);
 	}
 
