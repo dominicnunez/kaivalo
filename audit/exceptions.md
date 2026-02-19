@@ -85,3 +85,21 @@
 - **Date**: 2026-02-19
 - **Severity**: Low
 - **Reason**: The parser skips blank lines, comments, and lines without `=` — this is standard `.env` parsing behavior, not silent data loss. The startup env var validation in `hooks.server.ts` now catches missing required vars immediately. Adding console.warn for skipped lines in a PM2 config file would produce noise in PM2 logs for every restart with no actionable benefit.
+
+### ralph.sh uses eval to execute test command
+- **File**: ralph.sh:490
+- **Date**: 2026-02-19
+- **Severity**: High
+- **Reason**: ralph.sh is gitignored — it's a local development automation script not tracked in the repository. Fixes cannot be committed or enforced. The `eval` runs `TEST_CMD` which is either auto-detected from project config or set explicitly by the developer in their own config file. The threat model (developer injecting commands into their own local tool) has no practical attack surface. The finding is valid in principle but the file is outside version control scope.
+
+### ralph.sh sources config files without validation
+- **File**: ralph.sh:151-156
+- **Date**: 2026-02-19
+- **Severity**: Medium
+- **Reason**: ralph.sh is gitignored and not tracked in the repository. The global config (`~/.config/ralph/ralph.env`) is self-healed by the script, and per-project configs (`.ralph/ralph.env`) are in `.gitignore`. A malicious `.ralph/ralph.env` in a cloned repo is a valid concern, but `.ralph/` is gitignored so it cannot arrive via git clone. Fixing would require replacing `source` with a key-value parser, but since the file is outside version control, the fix cannot be committed or enforced.
+
+### ralph.sh mktemp failures not checked before use
+- **File**: ralph.sh:259, 760, 886
+- **Date**: 2026-02-19
+- **Severity**: Medium
+- **Reason**: ralph.sh is gitignored and not tracked in the repository. The mktemp calls are in a local development tool; `/tmp` exhaustion on a developer machine is an edge case that would surface as an immediate visible error. Fixes cannot be committed since the file is outside version control scope.
