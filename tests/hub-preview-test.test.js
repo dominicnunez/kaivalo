@@ -9,9 +9,10 @@ const hubDir = path.join(path.resolve(import.meta.dirname, '..'), 'apps/hub');
 const buildDir = path.join(hubDir, 'build');
 
 const REQUEST_TIMEOUT_MS = 5000;
-const SERVER_STARTUP_MS = 3000;
-const PREVIEW_PORT = 4173;
-const PREVIEW_URL = `http://localhost:${PREVIEW_PORT}`;
+const PORT_BASE = 14198;
+const PORT_RANGE = 1000;
+const previewPort = PORT_BASE + Math.floor(Math.random() * PORT_RANGE);
+const PREVIEW_URL = `http://localhost:${previewPort}`;
 
 function httpGet(url) {
   return new Promise((resolve, reject) => {
@@ -52,13 +53,20 @@ describe('npm run preview', () => {
     let ogImageRes;
 
     before(async () => {
-      server = spawn('npm', ['run', 'preview'], {
+      server = spawn('npx', ['vite', 'preview', '--port', String(previewPort)], {
         cwd: hubDir,
         stdio: ['pipe', 'pipe', 'pipe'],
         detached: true,
       });
 
-      await new Promise(resolve => setTimeout(resolve, SERVER_STARTUP_MS));
+      for (let i = 0; i < 20; i++) {
+        try {
+          await httpGet(PREVIEW_URL);
+          break;
+        } catch {
+          await new Promise(r => setTimeout(r, 500));
+        }
+      }
 
       homepage = await httpGet(PREVIEW_URL);
       faviconRes = await httpGet(`${PREVIEW_URL}/favicon.ico`);
