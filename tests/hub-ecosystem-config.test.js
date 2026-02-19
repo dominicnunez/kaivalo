@@ -80,8 +80,8 @@ test('has env configuration', () => {
 // Test: PORT is 3100
 test('PORT is set to 3100', () => {
   const content = readFileSync(ecosystemConfigPath, 'utf-8');
-  assert.ok(content.includes('PORT: 3100') || content.includes('PORT:3100'),
-    'PORT should be 3100');
+  assert.ok(content.includes("PORT: '3100'") || content.includes('PORT: "3100"'),
+    'PORT should be 3100 (string, since PM2 passes env vars as strings)');
 });
 
 // Test: NODE_ENV is production
@@ -112,7 +112,7 @@ test('app has all required fields', async () => {
   assert.strictEqual(app.name, 'kaivalo-hub', 'name should be kaivalo-hub');
   assert.strictEqual(app.script, 'build/index.js', 'script should be build/index.js');
   assert.ok(app.env, 'should have env object');
-  assert.strictEqual(app.env.PORT, 3100, 'PORT should be 3100');
+  assert.strictEqual(app.env.PORT, '3100', 'PORT should be 3100 (string)');
   assert.strictEqual(app.env.NODE_ENV, 'production', 'NODE_ENV should be production');
 });
 
