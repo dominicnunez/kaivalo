@@ -30,6 +30,7 @@ const securityHeaders: Handle = async ({ event, resolve }) => {
 			"connect-src 'self'",
 			"form-action 'self'",
 			"base-uri 'self'",
+			"object-src 'none'",
 			"frame-ancestors 'none'",
 		].join('; '),
 	);
