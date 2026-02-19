@@ -32,9 +32,6 @@ describe('Production build', () => {
 			errorMessage = error.message || 'Build command failed';
 		}
 
-		expect(buildSucceeded).toBe(true);
-		if (!buildSucceeded) {
-			throw new Error(`Build failed: ${errorMessage}`);
-		}
+		expect(buildSucceeded, errorMessage).toBe(true);
 	});
 });
