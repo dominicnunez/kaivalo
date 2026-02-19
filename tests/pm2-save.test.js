@@ -8,7 +8,7 @@ import { existsSync, readFileSync, statSync } from 'fs';
 import { execSync } from 'child_process';
 import assert from 'assert';
 import { homedir } from 'os';
-import { join } from 'path';
+import { join, resolve } from 'path';
 
 // Ensure pm2 is on PATH (installed via npm global)
 const npmGlobalBin = join(homedir(), '.npm-global', 'bin');
@@ -16,7 +16,8 @@ if (!process.env.PATH.includes(npmGlobalBin)) {
   process.env.PATH = `${npmGlobalBin}:${process.env.PATH}`;
 }
 
-const mechaiAvailable = existsSync('/home/kai/pets/mechanic-ai');
+const mechaiDir = join(resolve(import.meta.dirname, '..'), 'apps', 'mechai');
+const mechaiAvailable = existsSync(mechaiDir);
 
 function test(name, fn) {
   try {

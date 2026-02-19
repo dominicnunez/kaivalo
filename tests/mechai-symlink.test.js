@@ -1,7 +1,7 @@
 /**
  * Tests for mechai symlink (apps/mechai -> mechanic-ai)
  * Note: Tests that require the symlink target to be present are skipped
- * if /home/kai/pets/mechanic-ai doesn't exist (may be on another machine).
+ * if the apps/mechai symlink target doesn't exist (may be on another machine).
  */
 
 import { existsSync, lstatSync, readlinkSync } from 'fs';
@@ -12,7 +12,7 @@ import assert from 'assert';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
 const mechaiPath = join(rootDir, 'apps', 'mechai');
-const targetExists = existsSync('/home/kai/pets/mechanic-ai');
+const targetExists = existsSync(join(rootDir, 'apps', 'mechai'));
 
 function test(name, fn) {
   try {
@@ -45,10 +45,10 @@ allPassed = test('apps/mechai is a symlink', () => {
   assert(stats.isSymbolicLink(), 'apps/mechai should be a symlink');
 }) && allPassed;
 
-// Test 3: symlink points to correct target
-allPassed = test('symlink points to /home/kai/pets/mechanic-ai', () => {
+// Test 3: symlink target is a valid path
+allPassed = test('symlink target is a valid path', () => {
   const target = readlinkSync(mechaiPath);
-  assert.strictEqual(target, '/home/kai/pets/mechanic-ai', 'symlink should point to /home/kai/pets/mechanic-ai');
+  assert.ok(existsSync(target), `symlink target ${target} should exist`);
 }) && allPassed;
 
 // Test 4-6: These require the target directory to exist

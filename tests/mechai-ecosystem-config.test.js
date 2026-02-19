@@ -5,8 +5,9 @@
  */
 
 import { existsSync } from 'fs';
+import { resolve, join } from 'path';
 
-const mechaiDir = '/home/kai/pets/mechanic-ai';
+const mechaiDir = join(resolve(import.meta.dirname, '..'), 'apps', 'mechai');
 const ecosystemConfigPath = `${mechaiDir}/ecosystem.config.cjs`;
 
 if (!existsSync(mechaiDir)) {

@@ -5,8 +5,9 @@
  */
 
 import { existsSync } from 'fs';
+import { resolve, join } from 'path';
 
-const MECHANIC_AI_PATH = '/home/kai/pets/mechanic-ai';
+const MECHANIC_AI_PATH = join(resolve(import.meta.dirname, '..'), 'apps', 'mechai');
 
 if (!existsSync(MECHANIC_AI_PATH)) {
   console.log('\nMechanicAI Build Tests\n');
