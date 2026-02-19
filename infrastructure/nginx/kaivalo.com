@@ -127,5 +127,5 @@ server {
     server_tokens off;
     limit_req zone=general burst=5 nodelay;
 
-    return 301 $scheme://kaivalo.com$request_uri;
+    return 301 $scheme://kaivalo.com;
 }
