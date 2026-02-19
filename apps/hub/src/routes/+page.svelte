@@ -102,6 +102,7 @@
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
 			{#each services as service, i}
 				{@const isLive = service.status === 'live'}
+				{@const Icon = service.icon}
 				{#if isLive}
 					<a href={service.link}
 						class="group block rounded-xl border p-6 sm:p-8 card-glow"
@@ -109,7 +110,7 @@
 						<div class="flex items-start justify-between mb-5 sm:mb-6">
 							<div class="w-10 sm:w-11 h-10 sm:h-11 rounded-lg flex items-center justify-center"
 								style="background: var(--accent-dim);">
-								<svelte:component this={service.icon} class="w-5 h-5" style="color: var(--accent);" />
+								<Icon class="w-5 h-5" style="color: var(--accent);" />
 							</div>
 							<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
 								style="background: rgba(34, 197, 94, 0.1); color: var(--accent);">
@@ -136,7 +137,7 @@
 						<div class="flex items-start justify-between mb-5 sm:mb-6">
 							<div class="w-10 sm:w-11 h-10 sm:h-11 rounded-lg flex items-center justify-center"
 								style="background: var(--bg-tertiary);">
-								<svelte:component this={service.icon} class="w-5 h-5" style="color: var(--text-muted);" />
+								<Icon class="w-5 h-5" style="color: var(--text-muted);" />
 							</div>
 							<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
 								style="background: var(--bg-tertiary); color: var(--text-muted);">
