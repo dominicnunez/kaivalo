@@ -49,17 +49,6 @@ describe('font loading optimization', () => {
 });
 
 describe('color contrast (accessibility)', () => {
-  it('--text-muted has sufficient contrast for WCAG AA', () => {
-    const match = appCss.match(/--text-muted:\s*(#[0-9a-fA-F]{6})/);
-    assert.ok(match, 'should define --text-muted CSS variable');
-    const hex = match[1].replace('#', '');
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
-    const avg = (r + g + b) / 3;
-    assert.ok(avg > 100, `text-muted color avg ${avg} should be >100`);
-  });
-
   it('--text-muted meets 4.5:1 ratio against --bg-primary', () => {
     const match = appCss.match(/--text-muted:\s*(#[0-9a-fA-F]{6})/);
     const bgMatch = appCss.match(/--bg-primary:\s*(#[0-9a-fA-F]{6})/);
