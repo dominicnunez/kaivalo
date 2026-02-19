@@ -1,6 +1,4 @@
-// Test: npm run preview functionality
-// Validates that the preview server works correctly
-
+import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import { execSync, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -10,22 +8,11 @@ import http from 'node:http';
 const hubDir = '/home/kai/pets/kaivalo/apps/hub';
 const buildDir = path.join(hubDir, 'build');
 
-let passed = 0;
-let failed = 0;
+const REQUEST_TIMEOUT_MS = 5000;
+const SERVER_STARTUP_MS = 3000;
+const PREVIEW_PORT = 4173;
+const PREVIEW_URL = `http://localhost:${PREVIEW_PORT}`;
 
-function test(name, fn) {
-  try {
-    fn();
-    console.log(`✓ ${name}`);
-    passed++;
-  } catch (e) {
-    console.log(`✗ ${name}`);
-    console.log(`  ${e.message}`);
-    failed++;
-  }
-}
-
-// Helper function to make HTTP request
 function httpGet(url) {
   return new Promise((resolve, reject) => {
     const req = http.get(url, (res) => {
@@ -34,340 +21,136 @@ function httpGet(url) {
       res.on('end', () => resolve({ statusCode: res.statusCode, data, headers: res.headers }));
     });
     req.on('error', reject);
-    req.setTimeout(5000, () => {
+    req.setTimeout(REQUEST_TIMEOUT_MS, () => {
       req.destroy();
       reject(new Error('Request timeout'));
     });
   });
 }
 
-console.log('\n=== Testing npm run preview ===\n');
-
-// Pre-requisite tests
-test('build directory exists', () => {
-  assert.ok(existsSync(buildDir), 'Build directory should exist');
-});
-
-test('build/index.js exists', () => {
-  assert.ok(existsSync(path.join(buildDir, 'index.js')), 'Build entry point should exist');
-});
-
-test('package.json has preview script', () => {
-  const pkgJson = JSON.parse(execSync(`cat ${hubDir}/package.json`, { encoding: 'utf8' }));
-  assert.ok(pkgJson.scripts && pkgJson.scripts.preview, 'Should have preview script');
-  assert.ok(pkgJson.scripts.preview.includes('vite preview'), 'Preview script should use vite preview');
-});
-
-// Server response tests (async)
-async function runServerTests() {
-  console.log('\n--- Server Response Tests ---\n');
-
-  // Start the preview server
-  const server = spawn('npm', ['run', 'preview'], {
-    cwd: hubDir,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    detached: true
-  });
-
-  let serverOutput = '';
-  server.stdout.on('data', (data) => {
-    serverOutput += data.toString();
-  });
-  server.stderr.on('data', (data) => {
-    serverOutput += data.toString();
-  });
-
-  // Wait for server to start
-  await new Promise(resolve => setTimeout(resolve, 3000));
-
-  try {
-    // Test homepage
-    test('server responds with 200 on homepage', async () => {
-      const res = await httpGet('http://localhost:4173');
-      assert.strictEqual(res.statusCode, 200, 'Should return 200 OK');
+describe('npm run preview', () => {
+  describe('prerequisites', () => {
+    it('build directory exists', () => {
+      assert.ok(existsSync(buildDir), 'Build directory should exist');
     });
-    await (async () => {
-      try {
-        const res = await httpGet('http://localhost:4173');
-        if (res.statusCode === 200) {
-          console.log('✓ server responds with 200 on homepage');
-          passed++;
-        } else {
-          console.log('✗ server responds with 200 on homepage');
-          console.log(`  Expected 200, got ${res.statusCode}`);
-          failed++;
+
+    it('build/index.js exists', () => {
+      assert.ok(existsSync(path.join(buildDir, 'index.js')), 'Build entry point should exist');
+    });
+
+    it('package.json has preview script', () => {
+      const pkgJson = JSON.parse(execSync(`cat ${hubDir}/package.json`, { encoding: 'utf8' }));
+      assert.ok(pkgJson.scripts?.preview, 'Should have preview script');
+      assert.ok(pkgJson.scripts.preview.includes('vite preview'), 'Preview script should use vite preview');
+    });
+  });
+
+  describe('server response', () => {
+    let server;
+    let homepage;
+    let faviconRes;
+    let ogImageRes;
+
+    before(async () => {
+      server = spawn('npm', ['run', 'preview'], {
+        cwd: hubDir,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        detached: true,
+      });
+
+      await new Promise(resolve => setTimeout(resolve, SERVER_STARTUP_MS));
+
+      homepage = await httpGet(PREVIEW_URL);
+      faviconRes = await httpGet(`${PREVIEW_URL}/favicon.ico`);
+      ogImageRes = await httpGet(`${PREVIEW_URL}/og-image.png`);
+    });
+
+    after(() => {
+      if (server) {
+        try {
+          process.kill(-server.pid, 'SIGTERM');
+        } catch {
+          // Server may have already exited
         }
-      } catch (e) {
-        console.log('✗ server responds with 200 on homepage');
-        console.log(`  ${e.message}`);
-        failed++;
       }
-    })();
+    });
 
-    // Test HTML content
-    await (async () => {
-      try {
-        const res = await httpGet('http://localhost:4173');
-        if (res.data.includes('<!doctype html>') || res.data.includes('<!DOCTYPE html>')) {
-          console.log('✓ response is valid HTML');
-          passed++;
-        } else {
-          console.log('✗ response is valid HTML');
-          console.log('  Response does not contain doctype');
-          failed++;
-        }
-      } catch (e) {
-        console.log('✗ response is valid HTML');
-        console.log(`  ${e.message}`);
-        failed++;
-      }
-    })();
+    it('responds with 200 on homepage', () => {
+      assert.strictEqual(homepage.statusCode, 200, 'Should return 200 OK');
+    });
 
-    // Test page title
-    await (async () => {
-      try {
-        const res = await httpGet('http://localhost:4173');
-        if (res.data.includes('<title>Kai Valo |') || res.data.includes('Kai Valo')) {
-          console.log('✓ page has correct title');
-          passed++;
-        } else {
-          console.log('✗ page has correct title');
-          console.log('  Title not found in response');
-          failed++;
-        }
-      } catch (e) {
-        console.log('✗ page has correct title');
-        console.log(`  ${e.message}`);
-        failed++;
-      }
-    })();
+    it('response is valid HTML', () => {
+      assert.ok(
+        homepage.data.includes('<!doctype html>') || homepage.data.includes('<!DOCTYPE html>'),
+        'Response should contain doctype',
+      );
+    });
 
-    // Test hero content
-    await (async () => {
-      try {
-        const res = await httpGet('http://localhost:4173');
-        if (res.data.includes('solve things') || res.data.includes('Tools that')) {
-          console.log('✓ hero headline is present');
-          passed++;
-        } else {
-          console.log('✗ hero headline is present');
-          console.log('  Hero headline not found');
-          failed++;
-        }
-      } catch (e) {
-        console.log('✗ hero headline is present');
-        console.log(`  ${e.message}`);
-        failed++;
-      }
-    })();
+    it('page has correct title', () => {
+      assert.ok(
+        homepage.data.includes('<title>Kai Valo |') || homepage.data.includes('Kai Valo'),
+        'Title should contain Kai Valo',
+      );
+    });
 
-    // Test services section
-    await (async () => {
-      try {
-        const res = await httpGet('http://localhost:4173');
-        if (res.data.includes('id="services"')) {
-          console.log('✓ services section is present');
-          passed++;
-        } else {
-          console.log('✗ services section is present');
-          console.log('  Services section not found');
-          failed++;
-        }
-      } catch (e) {
-        console.log('✗ services section is present');
-        console.log(`  ${e.message}`);
-        failed++;
-      }
-    })();
+    it('hero headline is present', () => {
+      assert.ok(
+        homepage.data.includes('solve things') || homepage.data.includes('Tools that'),
+        'Hero headline should be present',
+      );
+    });
 
-    // Test MechanicAI service
-    await (async () => {
-      try {
-        const res = await httpGet('http://localhost:4173');
-        if (res.data.includes('Auto Repair Decoder') || res.data.includes('services')) {
-          console.log('✓ MechanicAI service card is present');
-          passed++;
-        } else {
-          console.log('✗ MechanicAI service card is present');
-          console.log('  MechanicAI content not found');
-          failed++;
-        }
-      } catch (e) {
-        console.log('✗ MechanicAI service card is present');
-        console.log(`  ${e.message}`);
-        failed++;
-      }
-    })();
+    it('services section is present', () => {
+      assert.ok(homepage.data.includes('id="services"'), 'Services section should be present');
+    });
 
-    // Test about section
-    await (async () => {
-      try {
-        const res = await httpGet('http://localhost:4173');
-        if (res.data.includes('id="about"') && res.data.includes('Kai Valo')) {
-          console.log('✓ about section is present');
-          passed++;
-        } else {
-          console.log('✗ about section is present');
-          console.log('  About section not found');
-          failed++;
-        }
-      } catch (e) {
-        console.log('✗ about section is present');
-        console.log(`  ${e.message}`);
-        failed++;
-      }
-    })();
+    it('MechanicAI service card is present', () => {
+      assert.ok(
+        homepage.data.includes('Auto Repair Decoder') || homepage.data.includes('services'),
+        'MechanicAI content should be present',
+      );
+    });
 
-    // Test footer
-    await (async () => {
-      try {
-        const res = await httpGet('http://localhost:4173');
-        if (res.data.includes('2026') && (res.data.includes('footer') || res.data.includes('kaivalo'))) {
-          console.log('✓ footer is present');
-          passed++;
-        } else {
-          console.log('✗ footer is present');
-          console.log('  Footer not found');
-          failed++;
-        }
-      } catch (e) {
-        console.log('✗ footer is present');
-        console.log(`  ${e.message}`);
-        failed++;
-      }
-    })();
+    it('about section is present', () => {
+      assert.ok(
+        homepage.data.includes('id="about"') && homepage.data.includes('Kai Valo'),
+        'About section should be present',
+      );
+    });
 
-    // Test SEO meta tags
-    await (async () => {
-      try {
-        const res = await httpGet('http://localhost:4173');
-        const hasOg = res.data.includes('og:title') && res.data.includes('og:description') && res.data.includes('og:image');
-        if (hasOg) {
-          console.log('✓ Open Graph meta tags are present');
-          passed++;
-        } else {
-          console.log('✗ Open Graph meta tags are present');
-          console.log('  OG meta tags not found');
-          failed++;
-        }
-      } catch (e) {
-        console.log('✗ Open Graph meta tags are present');
-        console.log(`  ${e.message}`);
-        failed++;
-      }
-    })();
+    it('footer is present', () => {
+      assert.ok(
+        homepage.data.includes('2026') && (homepage.data.includes('footer') || homepage.data.includes('kaivalo')),
+        'Footer should be present',
+      );
+    });
 
-    // Test Twitter card meta tags
-    await (async () => {
-      try {
-        const res = await httpGet('http://localhost:4173');
-        const hasTwitter = res.data.includes('twitter:card') && res.data.includes('twitter:title');
-        if (hasTwitter) {
-          console.log('✓ Twitter card meta tags are present');
-          passed++;
-        } else {
-          console.log('✗ Twitter card meta tags are present');
-          console.log('  Twitter meta tags not found');
-          failed++;
-        }
-      } catch (e) {
-        console.log('✗ Twitter card meta tags are present');
-        console.log(`  ${e.message}`);
-        failed++;
-      }
-    })();
+    it('Open Graph meta tags are present', () => {
+      assert.ok(homepage.data.includes('og:title'), 'Should have og:title');
+      assert.ok(homepage.data.includes('og:description'), 'Should have og:description');
+      assert.ok(homepage.data.includes('og:image'), 'Should have og:image');
+    });
 
-    // Test favicon
-    await (async () => {
-      try {
-        const res = await httpGet('http://localhost:4173/favicon.ico');
-        if (res.statusCode === 200) {
-          console.log('✓ favicon.ico is accessible');
-          passed++;
-        } else {
-          console.log('✗ favicon.ico is accessible');
-          console.log(`  Status code: ${res.statusCode}`);
-          failed++;
-        }
-      } catch (e) {
-        console.log('✗ favicon.ico is accessible');
-        console.log(`  ${e.message}`);
-        failed++;
-      }
-    })();
+    it('Twitter card meta tags are present', () => {
+      assert.ok(homepage.data.includes('twitter:card'), 'Should have twitter:card');
+      assert.ok(homepage.data.includes('twitter:title'), 'Should have twitter:title');
+    });
 
-    // Test og-image
-    await (async () => {
-      try {
-        const res = await httpGet('http://localhost:4173/og-image.png');
-        if (res.statusCode === 200) {
-          console.log('✓ og-image.png is accessible');
-          passed++;
-        } else {
-          console.log('✗ og-image.png is accessible');
-          console.log(`  Status code: ${res.statusCode}`);
-          failed++;
-        }
-      } catch (e) {
-        console.log('✗ og-image.png is accessible');
-        console.log(`  ${e.message}`);
-        failed++;
-      }
-    })();
+    it('favicon.ico is accessible', () => {
+      assert.strictEqual(faviconRes.statusCode, 200, 'favicon should return 200');
+    });
 
-    // Test CSS is loaded
-    await (async () => {
-      try {
-        const res = await httpGet('http://localhost:4173');
-        if (res.data.includes('.css" rel="stylesheet"')) {
-          console.log('✓ CSS stylesheet is linked');
-          passed++;
-        } else {
-          console.log('✗ CSS stylesheet is linked');
-          console.log('  CSS link not found');
-          failed++;
-        }
-      } catch (e) {
-        console.log('✗ CSS stylesheet is linked');
-        console.log(`  ${e.message}`);
-        failed++;
-      }
-    })();
+    it('og-image.png is accessible', () => {
+      assert.strictEqual(ogImageRes.statusCode, 200, 'og-image should return 200');
+    });
 
-    // Test SvelteKit hydration script
-    await (async () => {
-      try {
-        const res = await httpGet('http://localhost:4173');
-        if (res.data.includes('__sveltekit') && res.data.includes('import(')) {
-          console.log('✓ SvelteKit hydration script is present');
-          passed++;
-        } else {
-          console.log('✗ SvelteKit hydration script is present');
-          console.log('  Hydration script not found');
-          failed++;
-        }
-      } catch (e) {
-        console.log('✗ SvelteKit hydration script is present');
-        console.log(`  ${e.message}`);
-        failed++;
-      }
-    })();
+    it('CSS stylesheet is linked', () => {
+      assert.ok(homepage.data.includes('.css" rel="stylesheet"'), 'CSS link should be present');
+    });
 
-  } finally {
-    // Kill the server
-    try {
-      process.kill(-server.pid, 'SIGTERM');
-    } catch (e) {
-      // Server may have already exited
-    }
-  }
-}
-
-// Run async tests
-runServerTests().then(() => {
-  console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`);
-  process.exit(failed > 0 ? 1 : 0);
-}).catch((e) => {
-  console.error('Test runner error:', e);
-  process.exit(1);
+    it('SvelteKit hydration script is present', () => {
+      assert.ok(homepage.data.includes('__sveltekit'), 'Should have __sveltekit');
+      assert.ok(homepage.data.includes('import('), 'Should have import()');
+    });
+  });
 });
