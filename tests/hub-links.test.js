@@ -3,41 +3,12 @@
  * Validates internal anchors, external links, and mailto links work correctly
  */
 
+import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 
-let passed = 0;
-let failed = 0;
-
-function test(name, fn) {
-	try {
-		fn();
-		passed++;
-		console.log(`✓ ${name}`);
-	} catch (error) {
-		failed++;
-		console.log(`✗ ${name}`);
-		console.log(`  ${error.message}`);
-	}
-}
-
-async function asyncTest(name, fn) {
-	try {
-		await fn();
-		passed++;
-		console.log(`✓ ${name}`);
-	} catch (error) {
-		failed++;
-		console.log(`✗ ${name}`);
-		console.log(`  ${error.message}`);
-	}
-}
-
-console.log('--- Link Validation Tests ---\n');
-
-// Read the source file for static checks
 const projectRoot = path.resolve(import.meta.dirname, '..');
 const pagePath = path.join(projectRoot, 'apps/hub/src/routes/+page.svelte');
 const pageContent = fs.readFileSync(pagePath, 'utf-8');
@@ -47,10 +18,8 @@ let renderedHtml = '';
 try {
 	renderedHtml = execSync('curl -s http://localhost:3100', { encoding: 'utf-8', timeout: 10000 });
 } catch {
-	console.log('WARNING: Could not fetch from localhost:3100, skipping rendered HTML tests');
+	// Server may not be running — rendered HTML tests will be skipped
 }
-
-// ── Source-level link extraction ──
 
 // Extract all href values from the source
 const hrefPattern = /href=["'{]([^"'}]+)["'}]/g;
@@ -60,96 +29,92 @@ while ((match = hrefPattern.exec(pageContent)) !== null) {
 	sourceHrefs.push(match[1]);
 }
 
-test('page has links defined', () => {
-	assert.ok(sourceHrefs.length > 0, 'Expected at least one href in page source');
+describe('source-level link extraction', () => {
+	it('page has links defined', () => {
+		assert.ok(sourceHrefs.length > 0, 'Expected at least one href in page source');
+	});
 });
 
-// ── Internal anchor links ──
+describe('internal anchor links', () => {
+	it('has #services anchor link', () => {
+		assert.ok(sourceHrefs.includes('#services'), 'Missing #services anchor link');
+	});
 
-test('has #services anchor link', () => {
-	assert.ok(sourceHrefs.includes('#services'), 'Missing #services anchor link');
+	it('has #about anchor link', () => {
+		assert.ok(sourceHrefs.includes('#about'), 'Missing #about anchor link');
+	});
+
+	it('#services anchor has matching section id', () => {
+		assert.ok(pageContent.includes('id="services"'), 'Missing id="services" section');
+	});
+
+	it('#about anchor has matching section id', () => {
+		assert.ok(pageContent.includes('id="about"'), 'Missing id="about" section');
+	});
+
+	it('all internal anchors have matching ids', () => {
+		const anchorLinks = sourceHrefs.filter(h => h.startsWith('#') && h !== '#');
+		for (const anchor of anchorLinks) {
+			const targetId = anchor.slice(1);
+			assert.ok(
+				pageContent.includes(`id="${targetId}"`),
+				`Anchor ${anchor} has no matching id="${targetId}" in page`
+			);
+		}
+	});
 });
 
-test('has #about anchor link', () => {
-	assert.ok(sourceHrefs.includes('#about'), 'Missing #about anchor link');
-});
+describe('external links', () => {
+	it('has GitHub profile link', () => {
+		const githubLink = sourceHrefs.find(h => h.includes('github.com'));
+		assert.ok(githubLink, 'Missing GitHub link');
+	});
 
-test('#services anchor has matching section id', () => {
-	assert.ok(pageContent.includes('id="services"'), 'Missing id="services" section');
-});
+	it('GitHub link has full URL', () => {
+		const githubLink = sourceHrefs.find(h => h.includes('github.com'));
+		assert.ok(githubLink.startsWith('https://'), 'GitHub link should use HTTPS');
+	});
 
-test('#about anchor has matching section id', () => {
-	assert.ok(pageContent.includes('id="about"'), 'Missing id="about" section');
-});
+	it('GitHub link opens in new tab', () => {
+		assert.ok(pageContent.includes('target="_blank"'), 'External links should open in new tab');
+	});
 
-// Verify no orphaned anchor links (anchors pointing to non-existent ids)
-test('all internal anchors have matching ids', () => {
-	const anchorLinks = sourceHrefs.filter(h => h.startsWith('#') && h !== '#');
-	for (const anchor of anchorLinks) {
-		const targetId = anchor.slice(1);
+	it('GitHub link has noopener noreferrer', () => {
 		assert.ok(
-			pageContent.includes(`id="${targetId}"`),
-			`Anchor ${anchor} has no matching id="${targetId}" in page`
+			pageContent.includes('rel="noopener noreferrer"'),
+			'External links should have rel="noopener noreferrer"'
 		);
-	}
+	});
 });
 
-// ── External links ──
+describe('mailto link', () => {
+	it('has mailto link', () => {
+		const mailtoLink = sourceHrefs.find(h => h.startsWith('mailto:'));
+		assert.ok(mailtoLink, 'Missing mailto link');
+	});
 
-test('has GitHub profile link', () => {
-	const githubLink = sourceHrefs.find(h => h.includes('github.com'));
-	assert.ok(githubLink, 'Missing GitHub link');
+	it('mailto link has valid email format', () => {
+		const mailtoLink = sourceHrefs.find(h => h.startsWith('mailto:'));
+		const email = mailtoLink.replace('mailto:', '');
+		assert.ok(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email), `Invalid email format: ${email}`);
+	});
+
+	it('mailto uses kaievalo@proton.me', () => {
+		assert.ok(sourceHrefs.includes('mailto:kaievalo@proton.me'), 'Expected kaievalo@proton.me');
+	});
 });
 
-test('GitHub link has full URL', () => {
-	const githubLink = sourceHrefs.find(h => h.includes('github.com'));
-	assert.ok(githubLink.startsWith('https://'), 'GitHub link should use HTTPS');
+describe('coming-soon service links', () => {
+	it('coming-soon services are not rendered as links', () => {
+		const comingSoonPattern = /status:\s*['"]coming-soon['"]/g;
+		const comingSoonCount = (pageContent.match(comingSoonPattern) || []).length;
+		assert.ok(comingSoonCount > 0, 'Expected at least one coming-soon service');
+		assert.ok(pageContent.includes('{#if isLive}'), 'Expected conditional rendering for live vs coming-soon');
+	});
 });
 
-test('GitHub link opens in new tab', () => {
-	assert.ok(pageContent.includes('target="_blank"'), 'External links should open in new tab');
-});
-
-test('GitHub link has noopener noreferrer', () => {
-	assert.ok(
-		pageContent.includes('rel="noopener noreferrer"'),
-		'External links should have rel="noopener noreferrer"'
-	);
-});
-
-// ── Mailto link ──
-
-test('has mailto link', () => {
-	const mailtoLink = sourceHrefs.find(h => h.startsWith('mailto:'));
-	assert.ok(mailtoLink, 'Missing mailto link');
-});
-
-test('mailto link has valid email format', () => {
-	const mailtoLink = sourceHrefs.find(h => h.startsWith('mailto:'));
-	const email = mailtoLink.replace('mailto:', '');
-	assert.ok(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email), `Invalid email format: ${email}`);
-});
-
-test('mailto uses kaievalo@proton.me', () => {
-	assert.ok(sourceHrefs.includes('mailto:kaievalo@proton.me'), 'Expected kaievalo@proton.me');
-});
-
-// ── Coming-soon service links ──
-
-test('coming-soon services are not rendered as links', () => {
-	// Services with "coming-soon" status should render as <div> not <a>
-	// to avoid broken/dead links — only "live" services get <a> tags
-	const comingSoonPattern = /status:\s*['"]coming-soon['"]/g;
-	const comingSoonCount = (pageContent.match(comingSoonPattern) || []).length;
-	assert.ok(comingSoonCount > 0, 'Expected at least one coming-soon service');
-	// The template uses {#if isLive} for <a> and {:else} for <div>
-	assert.ok(pageContent.includes('{#if isLive}'), 'Expected conditional rendering for live vs coming-soon');
-});
-
-// ── Rendered page tests (live server) ──
-
-if (renderedHtml) {
-	// Extract hrefs from rendered HTML
+describe('rendered page tests', () => {
+	// Extract hrefs from rendered HTML (empty array if server not running)
 	const renderedHrefPattern = /href="([^"]+)"/g;
 	const renderedHrefs = [];
 	let rmatch;
@@ -157,42 +122,49 @@ if (renderedHtml) {
 		renderedHrefs.push(rmatch[1]);
 	}
 
-	test('rendered page has links', () => {
+	it('rendered page has links', (t) => {
+		if (!renderedHtml) { t.skip('server not running on port 3100'); return; }
 		assert.ok(renderedHrefs.length > 0, 'Rendered page should contain href attributes');
 	});
 
-	test('rendered page has #services link', () => {
+	it('rendered page has #services link', (t) => {
+		if (!renderedHtml) { t.skip('server not running on port 3100'); return; }
 		assert.ok(renderedHrefs.includes('#services'), 'Rendered page missing #services link');
 	});
 
-	test('rendered page has #about link', () => {
+	it('rendered page has #about link', (t) => {
+		if (!renderedHtml) { t.skip('server not running on port 3100'); return; }
 		assert.ok(renderedHrefs.includes('#about'), 'Rendered page missing #about link');
 	});
 
-	test('rendered page has services section', () => {
+	it('rendered page has services section', (t) => {
+		if (!renderedHtml) { t.skip('server not running on port 3100'); return; }
 		assert.ok(renderedHtml.includes('id="services"'), 'Rendered page missing id="services"');
 	});
 
-	test('rendered page has about section', () => {
+	it('rendered page has about section', (t) => {
+		if (!renderedHtml) { t.skip('server not running on port 3100'); return; }
 		assert.ok(renderedHtml.includes('id="about"'), 'Rendered page missing id="about"');
 	});
 
-	test('rendered page has GitHub link', () => {
+	it('rendered page has GitHub link', (t) => {
+		if (!renderedHtml) { t.skip('server not running on port 3100'); return; }
 		assert.ok(
 			renderedHrefs.some(h => h.includes('github.com')),
 			'Rendered page missing GitHub link'
 		);
 	});
 
-	test('rendered page has mailto link', () => {
+	it('rendered page has mailto link', (t) => {
+		if (!renderedHtml) { t.skip('server not running on port 3100'); return; }
 		assert.ok(
 			renderedHrefs.some(h => h.startsWith('mailto:')),
 			'Rendered page missing mailto link'
 		);
 	});
 
-	// Verify GitHub URL actually resolves (HTTP HEAD)
-	test('GitHub profile URL returns valid response', () => {
+	it('GitHub profile URL returns valid response', (t) => {
+		if (!renderedHtml) { t.skip('server not running on port 3100'); return; }
 		try {
 			const result = execSync(
 				'curl -s -o /dev/null -w "%{http_code}" -L --max-time 10 https://github.com/dominicnunez',
@@ -200,42 +172,42 @@ if (renderedHtml) {
 			);
 			const statusCode = parseInt(result.trim(), 10);
 			assert.ok(statusCode === 200, `GitHub URL returned HTTP ${statusCode}, expected 200`);
-		} catch {
-			// Network may not be available in CI — skip gracefully
-			assert.ok(true, 'Skipped: network unavailable');
+		} catch (e) {
+			if (e.message.includes('ETIMEDOUT') || e.message.includes('ECONNREFUSED') || e.message.includes('ENOTFOUND') || e.status === null) {
+				t.skip('network unavailable');
+			} else {
+				throw e;
+			}
 		}
 	});
 
-	// Verify no broken asset links (favicon, CSS)
-	test('rendered page links to favicon', () => {
+	it('rendered page links to favicon', (t) => {
+		if (!renderedHtml) { t.skip('server not running on port 3100'); return; }
 		assert.ok(
 			renderedHtml.includes('favicon.svg') || renderedHtml.includes('favicon.ico'),
 			'Rendered page should reference favicon'
 		);
 	});
 
-	test('favicon.svg exists in static directory', () => {
+	it('favicon.svg exists in static directory', () => {
 		const faviconPath = path.join(projectRoot, 'apps/hub/static/favicon.svg');
 		assert.ok(fs.existsSync(faviconPath), 'favicon.svg should exist');
 	});
 
-	test('favicon.ico exists in static directory', () => {
+	it('favicon.ico exists in static directory', () => {
 		const faviconPath = path.join(projectRoot, 'apps/hub/static/favicon.ico');
 		assert.ok(fs.existsSync(faviconPath), 'favicon.ico should exist');
 	});
 
-	// No empty or javascript: hrefs
-	test('no empty href attributes', () => {
+	it('no empty href attributes', (t) => {
+		if (!renderedHtml) { t.skip('server not running on port 3100'); return; }
 		const emptyHrefs = renderedHrefs.filter(h => h === '' || h === undefined);
 		assert.strictEqual(emptyHrefs.length, 0, 'Found empty href attributes');
 	});
 
-	test('no javascript: hrefs', () => {
+	it('no javascript: hrefs', (t) => {
+		if (!renderedHtml) { t.skip('server not running on port 3100'); return; }
 		const jsHrefs = renderedHrefs.filter(h => h.startsWith('javascript:'));
 		assert.strictEqual(jsHrefs.length, 0, 'Found javascript: href (security concern)');
 	});
-}
-
-// Summary
-console.log(`\nLink validation: ${passed} passed, ${failed} failed`);
-if (failed > 0) process.exit(1);
+});
