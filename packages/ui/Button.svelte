@@ -7,6 +7,7 @@
 
   /** @type {{ variant?: Variant, size?: Size, disabled?: boolean, onclick?: (e: MouseEvent) => void, class?: string, children?: import('svelte').Snippet }} */
   let {
+    type = 'button',
     variant = 'primary',
     size = 'md',
     disabled = false,
@@ -17,6 +18,7 @@
 </script>
 
 <button
+  {type}
   class="btn btn-{variant} btn-{size} {disabled ? 'btn-disabled' : ''} {className}"
   {disabled}
   onclick={onclick}
