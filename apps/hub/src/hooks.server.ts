@@ -3,11 +3,19 @@ import { sequence } from '@sveltejs/kit/hooks';
 import { env } from '$env/dynamic/private';
 import type { Handle } from '@sveltejs/kit';
 
+const REQUIRED_ENV_VARS = ['WORKOS_CLIENT_ID', 'WORKOS_API_KEY', 'WORKOS_REDIRECT_URI', 'WORKOS_COOKIE_PASSWORD'] as const;
+
+for (const name of REQUIRED_ENV_VARS) {
+	if (!env[name]) {
+		throw new Error(`Missing required environment variable: ${name}`);
+	}
+}
+
 configureAuthKit({
-	clientId: env.WORKOS_CLIENT_ID,
-	apiKey: env.WORKOS_API_KEY,
-	redirectUri: env.WORKOS_REDIRECT_URI,
-	cookiePassword: env.WORKOS_COOKIE_PASSWORD,
+	clientId: env.WORKOS_CLIENT_ID!,
+	apiKey: env.WORKOS_API_KEY!,
+	redirectUri: env.WORKOS_REDIRECT_URI!,
+	cookiePassword: env.WORKOS_COOKIE_PASSWORD!,
 });
 
 const HSTS_MAX_AGE_SECONDS = 63_072_000; // 2 years
