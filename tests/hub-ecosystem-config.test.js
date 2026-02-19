@@ -98,7 +98,6 @@ test('config can be required and has correct structure', async () => {
   const require = createRequire(import.meta.url);
   const config = require(ecosystemConfigPath);
 
-  assert.ok(config, 'config should be importable');
   assert.ok(Array.isArray(config.apps), 'apps should be an array');
   assert.strictEqual(config.apps.length, 1, 'should have exactly one app');
 });
