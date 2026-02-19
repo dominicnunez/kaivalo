@@ -3,7 +3,6 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const testResults = [];
 const rootPath = path.resolve(import.meta.dirname, '..');
 const hubPath = path.join(rootPath, 'apps/hub');
 // Test tailwindcss is installed
