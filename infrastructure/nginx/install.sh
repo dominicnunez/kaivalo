@@ -54,7 +54,6 @@ echo "Testing nginx configuration..."
 if nginx -t; then
     echo ""
     echo "✓ nginx configuration is valid"
-    rm -f "$CONFIG_DEST.bak"
     echo ""
     echo "To apply changes, run:"
     echo "  sudo systemctl reload nginx"
