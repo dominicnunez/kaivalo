@@ -129,7 +129,7 @@ test('ecosystem.config.cjs loads .env file', () => {
 test('ecosystem.config.cjs merges env vars', () => {
 	const config = require(join(HUB_DIR, 'ecosystem.config.cjs'));
 	const env = config.apps[0].env;
-	assert.strictEqual(env.PORT, 3100, 'Should have PORT 3100');
+	assert.strictEqual(env.PORT, '3100', 'Should have PORT 3100');
 	assert.strictEqual(env.HOST, '127.0.0.1', 'Should have HOST');
 	assert.strictEqual(env.NODE_ENV, 'production', 'Should have NODE_ENV');
 	assert.ok(env.WORKOS_CLIENT_ID, 'Should have WORKOS_CLIENT_ID from .env');

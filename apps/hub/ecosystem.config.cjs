@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const envPath = path.join(__dirname, '.env');
-const envVars = { PORT: 3100, HOST: '127.0.0.1', NODE_ENV: 'production' };
+const envVars = { PORT: '3100', HOST: '127.0.0.1', NODE_ENV: 'production' };
 
 if (fs.existsSync(envPath)) {
   for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
