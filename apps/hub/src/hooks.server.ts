@@ -10,9 +10,11 @@ configureAuthKit({
 	cookiePassword: env.WORKOS_COOKIE_PASSWORD,
 });
 
+const HSTS_MAX_AGE_SECONDS = 63_072_000; // 2 years
+
 const securityHeaders: Handle = async ({ event, resolve }) => {
 	const response = await resolve(event);
-	response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
+	response.headers.set('Strict-Transport-Security', `max-age=${HSTS_MAX_AGE_SECONDS}; includeSubDomains; preload`);
 	response.headers.set('X-Frame-Options', 'DENY');
 	response.headers.set('X-Content-Type-Options', 'nosniff');
 	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
