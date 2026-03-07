@@ -3,11 +3,18 @@ import { sequence } from '@sveltejs/kit/hooks';
 import type { HandleServerError } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { randomUUID } from 'node:crypto';
-import { createSecurityHeadersHandle, getProxyTrustConfiguration, getValidatedWorkosEnv } from '$lib/server/workos-security.js';
+import {
+	createSecurityHeadersHandle,
+	getProxyTrustConfiguration,
+	getValidatedWorkosEnv
+} from '$lib/server/workos-security.js';
 import { getErrorName, normalizeRequestId } from '$lib/auth/log-context.js';
 
 const workosEnv = getValidatedWorkosEnv(env);
-const { trustForwardedProto, trustedProxyIps } = getProxyTrustConfiguration(env, workosEnv.origin);
+const { trustForwardedProto, trustedProxyIps } = getProxyTrustConfiguration(
+	env,
+	workosEnv.origin
+);
 configureAuthKit({
 	clientId: workosEnv.clientId,
 	apiKey: workosEnv.apiKey,
@@ -19,11 +26,14 @@ const configuredHandle = sequence(
 	authKitHandle()
 );
 
-export const handle = ({ event, resolve }) => configuredHandle({ event, resolve });
+export const handle = ({ event, resolve }) =>
+	configuredHandle({ event, resolve });
 
 export const handleError: HandleServerError = ({ error, event, status }) => {
 	const incidentId = `hook_${randomUUID()}`;
-	const requestId = normalizeRequestId(event.request.headers.get('x-request-id'));
+	const requestId = normalizeRequestId(
+		event.request.headers.get('x-request-id')
+	);
 	console.error('Unhandled request error', {
 		incidentId,
 		requestId,

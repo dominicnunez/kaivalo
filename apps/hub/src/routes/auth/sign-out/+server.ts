@@ -14,7 +14,10 @@ function getPostHandler(): ReturnType<typeof createSignOutPostHandler> {
 
 	const workosEnv = getValidatedWorkosEnv(env);
 	const signOut = async (event: Parameters<typeof authKit.signOut>[0]) => {
-		if (env.NODE_ENV === 'test' && event.request.headers.get('cookie')?.includes('wos-session=test-fixture')) {
+		if (
+			env.NODE_ENV === 'test' &&
+			event.request.headers.get('cookie')?.includes('wos-session=test-fixture')
+		) {
 			event.cookies.delete('wos-session', {
 				path: '/',
 				httpOnly: true,

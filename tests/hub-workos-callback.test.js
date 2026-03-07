@@ -32,9 +32,21 @@ function getSetCookieHeaders(headers) {
 function assertHardenedCookies(setCookieHeaders) {
 	for (const cookie of setCookieHeaders) {
 		const lower = cookie.toLowerCase();
-		assert.match(lower, /\bhttponly\b/, `set-cookie must include HttpOnly: ${cookie}`);
-		assert.match(lower, /\bsecure\b/, `set-cookie must include Secure: ${cookie}`);
-		assert.match(lower, /\bsamesite=(strict|lax|none)\b/, `set-cookie must include SameSite: ${cookie}`);
+		assert.match(
+			lower,
+			/\bhttponly\b/,
+			`set-cookie must include HttpOnly: ${cookie}`
+		);
+		assert.match(
+			lower,
+			/\bsecure\b/,
+			`set-cookie must include Secure: ${cookie}`
+		);
+		assert.match(
+			lower,
+			/\bsamesite=(strict|lax|none)\b/,
+			`set-cookie must include SameSite: ${cookie}`
+		);
 	}
 }
 
@@ -99,24 +111,40 @@ describe('WorkOS Auth Callback Route', () => {
 				logError: (...args) => logs.push(args)
 			});
 
-			await assert.rejects(() => handler(createEvent({
-				'x-request-id': 'req-123',
-				accept: 'text/html'
-			})), (caught) => {
-				assert.ok(isRedirect(caught), 'unexpected callback failures should throw redirect responses');
-				assert.strictEqual(caught.status, 303);
-				const location = caught.location;
-				assert.ok(location.startsWith('/?error=auth&incident=authcb_'));
-				return true;
-			});
+			await assert.rejects(
+				() =>
+					handler(
+						createEvent({
+							'x-request-id': 'req-123',
+							accept: 'text/html'
+						})
+					),
+				(caught) => {
+					assert.ok(
+						isRedirect(caught),
+						'unexpected callback failures should throw redirect responses'
+					);
+					assert.strictEqual(caught.status, 303);
+					const location = caught.location;
+					assert.ok(location.startsWith('/?error=auth&incident=authcb_'));
+					return true;
+				}
+			);
 
-			assert.strictEqual(logs.length, 1, 'should log one sanitized callback error');
+			assert.strictEqual(
+				logs.length,
+				1,
+				'should log one sanitized callback error'
+			);
 			assert.strictEqual(logs[0][0], 'Auth callback failed');
 			assert.strictEqual(logs[0][1].requestId, 'req-123');
 			assert.strictEqual(logs[0][1].method, 'GET');
 			assert.strictEqual(logs[0][1].pathname, '/auth/callback');
 			assert.strictEqual(logs[0][1].errorName, 'Error');
-			assert.strictEqual(logs[0][1].errorCode, 'AUTH_CALLBACK_UNEXPECTED_FAILURE');
+			assert.strictEqual(
+				logs[0][1].errorCode,
+				'AUTH_CALLBACK_UNEXPECTED_FAILURE'
+			);
 			assert.ok(!('errorUpstreamCode' in logs[0][1]));
 			assert.ok(!('errorCauseName' in logs[0][1]));
 			assert.ok(!('errorCauseCode' in logs[0][1]));
@@ -141,10 +169,15 @@ describe('WorkOS Auth Callback Route', () => {
 				logError: (...args) => logs.push(args)
 			});
 
-			await assert.rejects(() => handler(createEvent({ accept: 'application/json' })));
+			await assert.rejects(() =>
+				handler(createEvent({ accept: 'application/json' }))
+			);
 			assert.strictEqual(logs.length, 1);
 			assert.strictEqual(logs[0][1].errorName, 'Error');
-			assert.strictEqual(logs[0][1].errorUpstreamCode, 'WORKOS_UPSTREAM_FAILURE');
+			assert.strictEqual(
+				logs[0][1].errorUpstreamCode,
+				'WORKOS_UPSTREAM_FAILURE'
+			);
 			assert.strictEqual(logs[0][1].errorCauseName, 'Error');
 			assert.strictEqual(logs[0][1].errorCauseCode, 'ETIMEDOUT');
 			assert.ok(!('errorMessage' in logs[0][1]));
@@ -161,14 +194,26 @@ describe('WorkOS Auth Callback Route', () => {
 				logError: (...args) => logs.push(args)
 			});
 
-			await assert.rejects(() => handler(createEvent({
-				accept: 'application/json'
-			})), (caught) => {
-				assert.ok(isHttpError(caught), 'non-browser callback failures should throw http errors');
-				assert.strictEqual(caught.status, 503);
-				assert.match(caught.body.message, /^Auth callback failed\. Reference: authcb_[0-9a-f-]+$/);
-				return true;
-			});
+			await assert.rejects(
+				() =>
+					handler(
+						createEvent({
+							accept: 'application/json'
+						})
+					),
+				(caught) => {
+					assert.ok(
+						isHttpError(caught),
+						'non-browser callback failures should throw http errors'
+					);
+					assert.strictEqual(caught.status, 503);
+					assert.match(
+						caught.body.message,
+						/^Auth callback failed\. Reference: authcb_[0-9a-f-]+$/
+					);
+					return true;
+				}
+			);
 
 			assert.strictEqual(logs.length, 1);
 			assert.match(logs[0][1].incidentId, /^authcb_[0-9a-f-]+$/);
@@ -185,7 +230,9 @@ describe('WorkOS Auth Callback Route', () => {
 				logError: (...args) => logs.push(args)
 			});
 
-			await assert.rejects(() => handler(createEvent({ 'x-request-id': 'bad value/+extra@chars' })));
+			await assert.rejects(() =>
+				handler(createEvent({ 'x-request-id': 'bad value/+extra@chars' }))
+			);
 
 			assert.strictEqual(logs.length, 1);
 			assert.strictEqual(logs[0][1].requestId, 'bad_value__extra_chars');
@@ -196,8 +243,13 @@ describe('WorkOS Auth Callback Route', () => {
 		it('wires GET /auth/callback to callback handling with redirect fallback behavior', async () => {
 			const preview = await startHubPreview();
 			try {
-				const browserResponse = await httpGet(`${preview.baseUrl}/auth/callback`, { accept: 'text/html' });
-				const apiResponse = await httpGet(`${preview.baseUrl}/auth/callback`, { accept: 'application/json' });
+				const browserResponse = await httpGet(
+					`${preview.baseUrl}/auth/callback`,
+					{ accept: 'text/html' }
+				);
+				const apiResponse = await httpGet(`${preview.baseUrl}/auth/callback`, {
+					accept: 'application/json'
+				});
 
 				assert.strictEqual(browserResponse.statusCode, 303);
 				assert.match(
@@ -205,13 +257,21 @@ describe('WorkOS Auth Callback Route', () => {
 					/^\/\?error=auth&incident=authcb_[0-9a-f-]+$/,
 					'route should surface callback incident redirects when upstream callback handling fails'
 				);
-				assert.strictEqual(browserResponse.headers['cache-control'], 'private, no-store');
-				const varyHeader = (browserResponse.headers['vary'] ?? '').toLowerCase();
+				assert.strictEqual(
+					browserResponse.headers['cache-control'],
+					'private, no-store'
+				);
+				const varyHeader = (
+					browserResponse.headers['vary'] ?? ''
+				).toLowerCase();
 				assert.ok(varyHeader.includes('cookie'));
 				assert.ok(varyHeader.includes('authorization'));
 				assertHardenedCookies(getSetCookieHeaders(browserResponse.headers));
 				assert.strictEqual(apiResponse.statusCode, 503);
-				assert.match(apiResponse.data, /Auth callback failed\. Reference: authcb_[0-9a-f-]+/);
+				assert.match(
+					apiResponse.data,
+					/Auth callback failed\. Reference: authcb_[0-9a-f-]+/
+				);
 			} finally {
 				await preview.stop();
 			}

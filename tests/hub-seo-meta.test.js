@@ -14,9 +14,21 @@ describe('hub seo metadata behavior', () => {
 			assert.strictEqual(homepage.statusCode, 200);
 
 			const title = document.querySelector('title')?.textContent?.trim() ?? '';
-			const description = document.querySelector('meta[name="description"]')?.getAttribute('content')?.trim() ?? '';
-			const imageAlt = document.querySelector('meta[property="og:image:alt"]')?.getAttribute('content')?.trim() ?? '';
-			const twitterCard = document.querySelector('meta[name="twitter:card"]')?.getAttribute('content')?.trim() ?? '';
+			const description =
+				document
+					.querySelector('meta[name="description"]')
+					?.getAttribute('content')
+					?.trim() ?? '';
+			const imageAlt =
+				document
+					.querySelector('meta[property="og:image:alt"]')
+					?.getAttribute('content')
+					?.trim() ?? '';
+			const twitterCard =
+				document
+					.querySelector('meta[name="twitter:card"]')
+					?.getAttribute('content')
+					?.trim() ?? '';
 
 			assert.notStrictEqual(title, '', 'title should be non-empty');
 			assert.notStrictEqual(description, '', 'description should be non-empty');
@@ -37,13 +49,19 @@ describe('hub seo metadata behavior', () => {
 			const { document } = dom.window;
 
 			const ogUrl = new URL(
-				document.querySelector('meta[property="og:url"]')?.getAttribute('content') ?? ''
+				document
+					.querySelector('meta[property="og:url"]')
+					?.getAttribute('content') ?? ''
 			);
 			const ogImage = new URL(
-				document.querySelector('meta[property="og:image"]')?.getAttribute('content') ?? ''
+				document
+					.querySelector('meta[property="og:image"]')
+					?.getAttribute('content') ?? ''
 			);
 			const twitterImage = new URL(
-				document.querySelector('meta[name="twitter:image"]')?.getAttribute('content') ?? ''
+				document
+					.querySelector('meta[name="twitter:image"]')
+					?.getAttribute('content') ?? ''
 			);
 
 			assert.strictEqual(ogUrl.protocol, 'https:');

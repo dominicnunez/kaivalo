@@ -24,8 +24,10 @@
 					Reference: {page.error.incidentId}
 				</p>
 			{/if}
-			<a href="/"
-				class="hover-fade inline-flex items-center gap-2 px-5 py-3 rounded-lg font-semibold text-sm bg-accent text-bg-primary">
+			<a
+				href="/"
+				class="hover-fade inline-flex items-center gap-2 px-5 py-3 rounded-lg font-semibold text-sm bg-accent text-bg-primary"
+			>
 				Back to home
 			</a>
 		</div>

@@ -45,7 +45,9 @@ function httpGet(port, path) {
 			},
 			(res) => {
 				const chunks = [];
-				res.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+				res.on('data', (chunk) =>
+					chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+				);
 				res.on('end', () => {
 					resolve({
 						statusCode: res.statusCode ?? 0,
@@ -86,11 +88,26 @@ describe('node server static asset classification', () => {
 		assert.strictEqual(dynamicResponse.statusCode, 200);
 		assert.strictEqual(dynamicResponse.headers['cache-control'], undefined);
 		assert.strictEqual(dynamicResponse.headers['x-frame-options'], 'DENY');
-		assert.strictEqual(dynamicResponse.headers['x-content-type-options'], 'nosniff');
-		assert.strictEqual(dynamicResponse.headers['referrer-policy'], 'strict-origin-when-cross-origin');
-		assert.strictEqual(dynamicResponse.headers['permissions-policy'], 'camera=(), microphone=(), geolocation=()');
-		assert.strictEqual(staticResponse.headers['cache-control'], 'public, max-age=86400, stale-while-revalidate=600');
-		assert.strictEqual(staticResponse.headers['x-content-type-options'], 'nosniff');
+		assert.strictEqual(
+			dynamicResponse.headers['x-content-type-options'],
+			'nosniff'
+		);
+		assert.strictEqual(
+			dynamicResponse.headers['referrer-policy'],
+			'strict-origin-when-cross-origin'
+		);
+		assert.strictEqual(
+			dynamicResponse.headers['permissions-policy'],
+			'camera=(), microphone=(), geolocation=()'
+		);
+		assert.strictEqual(
+			staticResponse.headers['cache-control'],
+			'public, max-age=86400, stale-while-revalidate=600'
+		);
+		assert.strictEqual(
+			staticResponse.headers['x-content-type-options'],
+			'nosniff'
+		);
 		assert.strictEqual(dynamicResponse.body, '{"ok":true}');
 		assert.strictEqual(staticResponse.body, '{"ok":true}');
 	});

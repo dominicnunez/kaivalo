@@ -15,11 +15,16 @@ export function normalizeRequestId(requestId) {
 		return 'missing';
 	}
 
-	if (trimmed.length <= REQUEST_ID_MAX_LENGTH && REQUEST_ID_ALLOWED_CHARS.test(trimmed)) {
+	if (
+		trimmed.length <= REQUEST_ID_MAX_LENGTH &&
+		REQUEST_ID_ALLOWED_CHARS.test(trimmed)
+	) {
 		return trimmed;
 	}
 
-	const normalized = trimmed.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, REQUEST_ID_MAX_LENGTH);
+	const normalized = trimmed
+		.replace(/[^A-Za-z0-9_-]/g, '_')
+		.slice(0, REQUEST_ID_MAX_LENGTH);
 	return normalized || 'invalid';
 }
 

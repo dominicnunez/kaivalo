@@ -86,7 +86,13 @@ function normalizeExpectedOrigin(value) {
 		throw new Error('expectedOrigin must be a valid URL origin');
 	}
 
-	if (parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash) {
+	if (
+		parsed.username ||
+		parsed.password ||
+		parsed.pathname !== '/' ||
+		parsed.search ||
+		parsed.hash
+	) {
 		throw new Error('expectedOrigin must be a valid URL origin');
 	}
 
@@ -97,7 +103,11 @@ function normalizeExpectedOrigin(value) {
  * @param {CreateSignOutPostHandlerOptions} options
  * @returns {(event: RequestEvent) => Promise<Response>}
  */
-export function createSignOutPostHandler({ signOut, expectedOrigin, logError = console.error }) {
+export function createSignOutPostHandler({
+	signOut,
+	expectedOrigin,
+	logError = console.error
+}) {
 	const trustedOrigin = normalizeExpectedOrigin(expectedOrigin);
 
 	/** @param {RequestEvent} event */
@@ -111,7 +121,9 @@ export function createSignOutPostHandler({ signOut, expectedOrigin, logError = c
 				throw err;
 			}
 
-			const requestId = normalizeRequestId(event.request.headers.get('x-request-id'));
+			const requestId = normalizeRequestId(
+				event.request.headers.get('x-request-id')
+			);
 			const incidentId = `authso_${randomUUID()}`;
 			logError('Sign-out failed', {
 				requestId,

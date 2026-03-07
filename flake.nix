@@ -15,6 +15,7 @@
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
             nodejs_24
+            git
             typescript-language-server
             svelte-language-server
             python3

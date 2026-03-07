@@ -1,17 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-	mockGetValidatedWorkosEnv,
-	mockGetUser,
-	mockGetSignInUrl
-} = vi.hoisted(() => ({
-	mockGetValidatedWorkosEnv: vi.fn(() => ({
-		origin: 'https://kaivalo.test',
-		redirectUri: 'https://kaivalo.test/auth/callback'
-	})),
-	mockGetUser: vi.fn(),
-	mockGetSignInUrl: vi.fn()
-}));
+const { mockGetValidatedWorkosEnv, mockGetUser, mockGetSignInUrl } = vi.hoisted(
+	() => ({
+		mockGetValidatedWorkosEnv: vi.fn(() => ({
+			origin: 'https://kaivalo.test',
+			redirectUri: 'https://kaivalo.test/auth/callback'
+		})),
+		mockGetUser: vi.fn(),
+		mockGetSignInUrl: vi.fn()
+	})
+);
 
 vi.mock('$lib/server/workos-security.js', () => ({
 	getValidatedWorkosEnv: mockGetValidatedWorkosEnv
@@ -75,17 +73,22 @@ describe('layout trusted origin initialization', () => {
 				origin: 'https://tenant.kaivalo.test',
 				redirectUri: 'https://tenant.kaivalo.test/auth/callback'
 			} as never);
-		mockGetSignInUrl.mockResolvedValue('https://tenant.kaivalo.test/auth/sign-in' as never);
+		mockGetSignInUrl.mockResolvedValue(
+			'https://tenant.kaivalo.test/auth/sign-in' as never
+		);
 		const load = await loadWithFreshModule();
 
 		const firstResult = await load(createEvent('https://tenant.kaivalo.test/'));
-		const secondResult = await load(createEvent('https://tenant.kaivalo.test/'));
+		const secondResult = await load(
+			createEvent('https://tenant.kaivalo.test/')
+		);
 
 		expect(firstResult).toEqual({
 			user: null,
 			signInUrl: null,
 			authError: {
-				message: 'Sign-in is temporarily unavailable. Please try again shortly.',
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
 				incidentId: null
 			}
 		});

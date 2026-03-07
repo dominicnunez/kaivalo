@@ -24,7 +24,8 @@
 			icon: Mic,
 			title: 'PodStudio',
 			tagline: 'Podcast management',
-			description: 'Equipment tracking and session scheduling for podcast studios.'
+			description:
+				'Equipment tracking and session scheduling for podcast studios.'
 		}
 	];
 
@@ -61,7 +62,10 @@
 			const now = new Date();
 			const nextMidnight = new Date(now);
 			nextMidnight.setHours(24, 0, 0, 0);
-			const delayUntilMidnight = Math.max(0, nextMidnight.getTime() - now.getTime());
+			const delayUntilMidnight = Math.max(
+				0,
+				nextMidnight.getTime() - now.getTime()
+			);
 			yearRefreshTimeout = setTimeout(() => {
 				currentYear = new Date().getFullYear();
 				yearRefreshInterval = setInterval(() => {
@@ -144,7 +148,6 @@
 			clearTimeout(timeout);
 		};
 	});
-
 </script>
 
 <svelte:head>
@@ -163,69 +166,89 @@
 </svelte:head>
 
 <!-- ════════ HERO ════════ -->
-<section class="relative flex items-center overflow-hidden pt-12 pb-2 sm:pt-16 sm:pb-4 md:min-h-[30vh] md:py-0">
+<section
+	class="relative flex items-center overflow-hidden pt-12 pb-2 sm:pt-16 sm:pb-4 md:min-h-[30vh] md:py-0"
+>
 	<!-- Aurora background -->
 	<div class="aurora"></div>
 
 	<!-- Sign In — top right of section -->
-	<div class="absolute top-4 right-4 sm:top-6 sm:right-8 z-20 animate-enter delay-1">
-			{#if data.user}
-				<div class="flex items-center gap-3">
-					{#if data.user.profilePictureUrl}
-						<img
-							src={data.user.profilePictureUrl}
-							alt={data.user.firstName ?? 'User'}
-							referrerpolicy="no-referrer"
-							crossorigin="anonymous"
-							class="avatar-border w-7 h-7 rounded-full object-cover"
-						/>
-					{:else}
-						<div class="avatar-fallback w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium">
-							{(data.user.firstName?.[0] ?? data.user.email?.[0] ?? '?').toUpperCase()}
-						</div>
-					{/if}
-					<span class="text-secondary text-xs hidden sm:inline">
-						{data.user.firstName ?? data.user.email}
-					</span>
-					<form method="POST" action="/auth/sign-out">
-						<button type="submit"
-							class="signout-btn hover-border inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer">
-							<LogOut class="w-3.5 h-3.5" />
-							Sign out
-						</button>
-					</form>
-				</div>
-			{:else}
-				{#if data.signInUrl}
-					<a href={data.signInUrl}
-						class="chasing-border signin-btn inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-medium">
-						<LogIn class="w-3.5 h-3.5" />
-						Sign in
-					</a>
+	<div
+		class="absolute top-4 right-4 sm:top-6 sm:right-8 z-20 animate-enter delay-1"
+	>
+		{#if data.user}
+			<div class="flex items-center gap-3">
+				{#if data.user.profilePictureUrl}
+					<img
+						src={data.user.profilePictureUrl}
+						alt={data.user.firstName ?? 'User'}
+						referrerpolicy="no-referrer"
+						crossorigin="anonymous"
+						class="avatar-border w-7 h-7 rounded-full object-cover"
+					/>
 				{:else}
-					<button type="button"
-						class="signin-btn inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-medium opacity-60 cursor-not-allowed"
-						disabled
-						aria-disabled="true"
-						title="Sign-in is temporarily unavailable">
-						<LogIn class="w-3.5 h-3.5" />
-						Sign in unavailable
-					</button>
+					<div
+						class="avatar-fallback w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium"
+					>
+						{(
+							data.user.firstName?.[0] ??
+							data.user.email?.[0] ??
+							'?'
+						).toUpperCase()}
+					</div>
 				{/if}
-			{/if}
+				<span class="text-secondary text-xs hidden sm:inline">
+					{data.user.firstName ?? data.user.email}
+				</span>
+				<form method="POST" action="/auth/sign-out">
+					<button
+						type="submit"
+						class="signout-btn hover-border inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer"
+					>
+						<LogOut class="w-3.5 h-3.5" />
+						Sign out
+					</button>
+				</form>
+			</div>
+		{:else if data.signInUrl}
+			<a
+				href={data.signInUrl}
+				class="chasing-border signin-btn inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-medium"
+			>
+				<LogIn class="w-3.5 h-3.5" />
+				Sign in
+			</a>
+		{:else}
+			<button
+				type="button"
+				class="signin-btn inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-medium opacity-60 cursor-not-allowed"
+				disabled
+				aria-disabled="true"
+				title="Sign-in is temporarily unavailable"
+			>
+				<LogIn class="w-3.5 h-3.5" />
+				Sign in unavailable
+			</button>
+		{/if}
 	</div>
 
 	<Container size="lg" class="relative z-10">
 		<div class="max-w-2xl">
 			<!-- Headline -->
-			<h1 class="font-display text-4xl sm:text-5xl md:text-7xl font-bold leading-[0.95] tracking-tight mb-4 sm:mb-6 animate-enter delay-2">
-				Tools that<br/>
+			<h1
+				class="font-display text-4xl sm:text-5xl md:text-7xl font-bold leading-[0.95] tracking-tight mb-4 sm:mb-6 animate-enter delay-2"
+			>
+				Tools that<br />
 				<span class="text-accent">solve things.</span>
 			</h1>
 
 			<!-- Subheadline with typewriter effect -->
-			<div class="text-secondary text-base sm:text-lg md:text-xl leading-relaxed max-w-xl animate-enter delay-3 font-mono">
-				Making {currentText}<span class="typewriter-cursor typewriter-cursor-spacing">|</span>simple.
+			<div
+				class="text-secondary text-base sm:text-lg md:text-xl leading-relaxed max-w-xl animate-enter delay-3 font-mono"
+			>
+				Making {currentText}<span
+					class="typewriter-cursor typewriter-cursor-spacing">|</span
+				>simple.
 			</div>
 		</div>
 	</Container>
@@ -236,7 +259,9 @@
 	<Container size="lg">
 		<!-- Section header — left aligned -->
 		<div class="mb-8 sm:mb-10 max-w-lg">
-			<h2 class="font-display text-lg sm:text-xl md:text-2xl font-bold tracking-tight">
+			<h2
+				class="font-display text-lg sm:text-xl md:text-2xl font-bold tracking-tight"
+			>
 				Coming soon...
 			</h2>
 		</div>
@@ -245,18 +270,30 @@
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
 			{#each services as service}
 				{@const Icon = service.icon}
-				<div class="service-card-shell group rounded-xl border p-6 sm:p-8 service-card">
+				<div
+					class="service-card-shell group rounded-xl border p-6 sm:p-8 service-card"
+				>
 					<div class="flex items-start justify-between mb-5 sm:mb-6">
-						<div class="icon-shell-soon w-10 sm:w-11 h-10 sm:h-11 rounded-lg flex items-center justify-center transition-colors duration-300">
-							<Icon class="text-muted w-5 h-5 transition-colors duration-300 icon-muted" />
+						<div
+							class="icon-shell-soon w-10 sm:w-11 h-10 sm:h-11 rounded-lg flex items-center justify-center transition-colors duration-300"
+						>
+							<Icon
+								class="text-muted w-5 h-5 transition-colors duration-300 icon-muted"
+							/>
 						</div>
-						<span class="badge-soon inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium transition-colors duration-300 soon-badge">
+						<span
+							class="badge-soon inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium transition-colors duration-300 soon-badge"
+						>
 							Soon
 						</span>
 					</div>
 
-					<h3 class="font-display text-lg sm:text-xl font-semibold mb-1">{service.title}</h3>
-					<p class="text-muted font-mono text-xs mb-3 sm:mb-4">{service.tagline}</p>
+					<h3 class="font-display text-lg sm:text-xl font-semibold mb-1">
+						{service.title}
+					</h3>
+					<p class="text-muted font-mono text-xs mb-3 sm:mb-4">
+						{service.tagline}
+					</p>
 					<p class="text-muted text-sm leading-relaxed">
 						{service.description}
 					</p>
@@ -269,17 +306,23 @@
 <!-- ════════ ABOUT ════════ -->
 <section id="about" class="relative py-8 sm:py-12">
 	<Container size="lg">
-		<h2 class="font-display text-lg sm:text-xl md:text-2xl font-bold tracking-tight mb-6 sm:mb-8">
+		<h2
+			class="font-display text-lg sm:text-xl md:text-2xl font-bold tracking-tight mb-6 sm:mb-8"
+		>
 			Philosophy
 		</h2>
 		<div class="max-w-2xl">
-			<p class="text-secondary text-sm sm:text-base leading-relaxed mb-4 sm:mb-5">
+			<p
+				class="text-secondary text-sm sm:text-base leading-relaxed mb-4 sm:mb-5"
+			>
 				Information asymmetry is a solvable problem.
 			</p>
-			<p class="text-secondary text-sm sm:text-base leading-relaxed mb-4 sm:mb-5">
+			<p
+				class="text-secondary text-sm sm:text-base leading-relaxed mb-4 sm:mb-5"
+			>
 				Chimney cleaning shouldn't mean sticky notes and weather guessing.
-				Podcast studios shouldn't track equipment on spreadsheets.
-				If something is confusing, there should be a tool that makes it clear.
+				Podcast studios shouldn't track equipment on spreadsheets. If something
+				is confusing, there should be a tool that makes it clear.
 			</p>
 			<p class="text-muted text-xs sm:text-sm">
 				One account, all tools. Sign up once and everything just works.
@@ -291,17 +334,24 @@
 <!-- ════════ FOOTER ════════ -->
 <footer class="footer-shell py-8 sm:py-10 border-t">
 	<Container size="lg">
-		<div class="flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6">
+		<div
+			class="flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6"
+		>
 			<!-- Left: mark -->
 			<div class="flex items-center gap-3">
-				<span class="text-accent font-display text-sm font-semibold tracking-tight">Kaivalo</span>
+				<span
+					class="text-accent font-display text-sm font-semibold tracking-tight"
+					>Kaivalo</span
+				>
 				<span class="text-muted font-mono text-xs">© {currentYear}</span>
 			</div>
 
 			<!-- Right: links -->
 			<div class="flex items-center gap-6">
-				<a href="mailto:kaivalo@proton.me"
-					class="text-muted hover-text flex items-center gap-2 text-xs">
+				<a
+					href="mailto:kaivalo@proton.me"
+					class="text-muted hover-text flex items-center gap-2 text-xs"
+				>
 					<Mail class="w-3.5 h-3.5" />
 					Contact
 				</a>

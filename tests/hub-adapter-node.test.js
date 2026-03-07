@@ -15,168 +15,197 @@ const STARTUP_DELAY_MS = 250;
 const PROCESS_EXIT_TIMEOUT_MS = 5000;
 
 function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function createFixtureEnv(port) {
-  return {
-    ...process.env,
-    PORT: String(port),
-    NODE_ENV: 'production',
-    WORKOS_CLIENT_ID: process.env.WORKOS_CLIENT_ID ?? 'client_test_fixture',
-    WORKOS_API_KEY: process.env.WORKOS_API_KEY ?? 'sk_test_fixture',
-    WORKOS_REDIRECT_URI: process.env.WORKOS_REDIRECT_URI ?? `http://localhost:${port}/auth/callback`,
-    WORKOS_COOKIE_PASSWORD: process.env.WORKOS_COOKIE_PASSWORD ?? 'ab'.repeat(32),
-    ORIGIN: process.env.ORIGIN ?? `http://127.0.0.1:${port}`,
-  };
+	return {
+		...process.env,
+		PORT: String(port),
+		NODE_ENV: 'production',
+		WORKOS_CLIENT_ID: process.env.WORKOS_CLIENT_ID ?? 'client_test_fixture',
+		WORKOS_API_KEY: process.env.WORKOS_API_KEY ?? 'sk_test_fixture',
+		WORKOS_REDIRECT_URI:
+			process.env.WORKOS_REDIRECT_URI ??
+			`http://localhost:${port}/auth/callback`,
+		WORKOS_COOKIE_PASSWORD:
+			process.env.WORKOS_COOKIE_PASSWORD ?? 'ab'.repeat(32),
+		ORIGIN: process.env.ORIGIN ?? `http://127.0.0.1:${port}`
+	};
 }
 
 async function startBuiltServer() {
-  ensureHubBuild();
+	ensureHubBuild();
 
-  const reservation = await reserveLocalPort();
-  const port = reservation.port;
-  const baseUrl = `http://127.0.0.1:${port}`;
-  const server = spawn('node', [BUILD_ENTRY], {
-    cwd: HUB_DIR,
-    stdio: 'ignore',
-    detached: true,
-    env: createFixtureEnv(port),
-  });
-  await reservation.release();
+	const reservation = await reserveLocalPort();
+	const port = reservation.port;
+	const baseUrl = `http://127.0.0.1:${port}`;
+	const server = spawn('node', [BUILD_ENTRY], {
+		cwd: HUB_DIR,
+		stdio: 'ignore',
+		detached: true,
+		env: createFixtureEnv(port)
+	});
+	await reservation.release();
 
-  for (let i = 0; i < STARTUP_RETRY_COUNT; i += 1) {
-    try {
-      const homepage = await httpGet(baseUrl);
-      if (homepage.statusCode === 200) {
-        return { server, baseUrl };
-      }
-    } catch {
-      // Keep waiting for startup.
-    }
-    await delay(STARTUP_DELAY_MS);
-  }
+	for (let i = 0; i < STARTUP_RETRY_COUNT; i += 1) {
+		try {
+			const homepage = await httpGet(baseUrl);
+			if (homepage.statusCode === 200) {
+				return { server, baseUrl };
+			}
+		} catch {
+			// Keep waiting for startup.
+		}
+		await delay(STARTUP_DELAY_MS);
+	}
 
-  try {
-    process.kill(-server.pid, 'SIGKILL');
-  } catch {
-    // Ignore if already down.
-  }
-  throw new Error('expected server to respond before timeout');
+	try {
+		process.kill(-server.pid, 'SIGKILL');
+	} catch {
+		// Ignore if already down.
+	}
+	throw new Error('expected server to respond before timeout');
 }
 
 function stopProcessGroup(server, signal = 'SIGTERM') {
-  return new Promise((resolve) => {
-    let forced = false;
-    const timeout = setTimeout(() => {
-      try {
-        forced = true;
-        process.kill(-server.pid, 'SIGKILL');
-      } catch {
-        // Ignore already-stopped process.
-      }
-      resolve({ forced });
-    }, PROCESS_EXIT_TIMEOUT_MS);
-    timeout.unref();
+	return new Promise((resolve) => {
+		let forced = false;
+		const timeout = setTimeout(() => {
+			try {
+				forced = true;
+				process.kill(-server.pid, 'SIGKILL');
+			} catch {
+				// Ignore already-stopped process.
+			}
+			resolve({ forced });
+		}, PROCESS_EXIT_TIMEOUT_MS);
+		timeout.unref();
 
-    server.once('exit', () => {
-      clearTimeout(timeout);
-      resolve({ forced });
-    });
+		server.once('exit', () => {
+			clearTimeout(timeout);
+			resolve({ forced });
+		});
 
-    try {
-      process.kill(-server.pid, signal);
-    } catch {
-      clearTimeout(timeout);
-      resolve({ forced: false });
-    }
-  });
+		try {
+			process.kill(-server.pid, signal);
+		} catch {
+			clearTimeout(timeout);
+			resolve({ forced: false });
+		}
+	});
 }
 
 function httpGetWithAgent(url, agent) {
-  return new Promise((resolve, reject) => {
-    const req = http.get(url, { agent }, (res) => {
-      const chunks = [];
-      res.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
-      res.on('end', () => {
-        resolve({
-          statusCode: res.statusCode ?? 0,
-          data: Buffer.concat(chunks).toString('utf8'),
-          headers: res.headers,
-        });
-      });
-    });
-    req.on('error', reject);
-    req.setTimeout(5000, () => req.destroy(new Error('request timeout')));
-  });
+	return new Promise((resolve, reject) => {
+		const req = http.get(url, { agent }, (res) => {
+			const chunks = [];
+			res.on('data', (chunk) =>
+				chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+			);
+			res.on('end', () => {
+				resolve({
+					statusCode: res.statusCode ?? 0,
+					data: Buffer.concat(chunks).toString('utf8'),
+					headers: res.headers
+				});
+			});
+		});
+		req.on('error', reject);
+		req.setTimeout(5000, () => req.destroy(new Error('request timeout')));
+	});
 }
 
 describe('hub production adapter runtime', () => {
-  it('starts the built node server and serves the landing page', { timeout: 30000 }, async () => {
-    const { server, baseUrl } = await startBuiltServer();
+	it(
+		'starts the built node server and serves the landing page',
+		{ timeout: 30000 },
+		async () => {
+			const { server, baseUrl } = await startBuiltServer();
 
-    try {
-      const homepage = await httpGet(baseUrl);
-      assert.strictEqual(homepage.statusCode, 200);
-      assert.ok(homepage.data.includes('Kaivalo'));
-      assert.ok(homepage.data.toLowerCase().includes('<!doctype html>'));
-    } finally {
-      await stopProcessGroup(server);
-    }
-  });
+			try {
+				const homepage = await httpGet(baseUrl);
+				assert.strictEqual(homepage.statusCode, 200);
+				assert.ok(homepage.data.includes('Kaivalo'));
+				assert.ok(homepage.data.toLowerCase().includes('<!doctype html>'));
+			} finally {
+				await stopProcessGroup(server);
+			}
+		}
+	);
 
-  it('applies static asset security headers in the node adapter entrypoint', { timeout: 30000 }, async () => {
-    const { server, baseUrl } = await startBuiltServer();
+	it(
+		'applies static asset security headers in the node adapter entrypoint',
+		{ timeout: 30000 },
+		async () => {
+			const { server, baseUrl } = await startBuiltServer();
 
-    try {
-      const staticAsset = await httpGet(`${baseUrl}/favicon.svg`);
-      assert.strictEqual(staticAsset.statusCode, 200);
-      assert.strictEqual(staticAsset.headers['x-frame-options'], 'DENY');
-      assert.strictEqual(staticAsset.headers['x-content-type-options'], 'nosniff');
-      assert.strictEqual(staticAsset.headers['referrer-policy'], 'strict-origin-when-cross-origin');
-      assert.strictEqual(staticAsset.headers['permissions-policy'], 'camera=(), microphone=(), geolocation=()');
-      assert.strictEqual(
-        staticAsset.headers['cache-control'],
-        'public, max-age=86400, stale-while-revalidate=600'
-      );
-    } finally {
-      await stopProcessGroup(server);
-    }
-  });
+			try {
+				const staticAsset = await httpGet(`${baseUrl}/favicon.svg`);
+				assert.strictEqual(staticAsset.statusCode, 200);
+				assert.strictEqual(staticAsset.headers['x-frame-options'], 'DENY');
+				assert.strictEqual(
+					staticAsset.headers['x-content-type-options'],
+					'nosniff'
+				);
+				assert.strictEqual(
+					staticAsset.headers['referrer-policy'],
+					'strict-origin-when-cross-origin'
+				);
+				assert.strictEqual(
+					staticAsset.headers['permissions-policy'],
+					'camera=(), microphone=(), geolocation=()'
+				);
+				assert.strictEqual(
+					staticAsset.headers['cache-control'],
+					'public, max-age=86400, stale-while-revalidate=600'
+				);
+			} finally {
+				await stopProcessGroup(server);
+			}
+		}
+	);
 
-  it('drains keep-alive clients and exits cleanly on SIGTERM', { timeout: 30000 }, async () => {
-    const { server, baseUrl } = await startBuiltServer();
-    const keepAliveAgent = new http.Agent({ keepAlive: true, maxSockets: 1 });
+	it(
+		'drains keep-alive clients and exits cleanly on SIGTERM',
+		{ timeout: 30000 },
+		async () => {
+			const { server, baseUrl } = await startBuiltServer();
+			const keepAliveAgent = new http.Agent({ keepAlive: true, maxSockets: 1 });
 
-    try {
-      const warmup = await httpGetWithAgent(baseUrl, keepAliveAgent);
-      assert.strictEqual(warmup.statusCode, 200);
+			try {
+				const warmup = await httpGetWithAgent(baseUrl, keepAliveAgent);
+				assert.strictEqual(warmup.statusCode, 200);
 
-      process.kill(-server.pid, 'SIGTERM');
-      let shutdownOutcome = null;
-      for (let i = 0; i < 10; i += 1) {
-        try {
-          const attempt = await httpGetWithAgent(baseUrl, keepAliveAgent);
-          if (attempt.statusCode === 503) {
-            shutdownOutcome = '503';
-            break;
-          }
-        } catch {
-          shutdownOutcome = 'closed';
-          break;
-        }
-        await delay(30);
-      }
+				process.kill(-server.pid, 'SIGTERM');
+				let shutdownOutcome = null;
+				for (let i = 0; i < 10; i += 1) {
+					try {
+						const attempt = await httpGetWithAgent(baseUrl, keepAliveAgent);
+						if (attempt.statusCode === 503) {
+							shutdownOutcome = '503';
+							break;
+						}
+					} catch {
+						shutdownOutcome = 'closed';
+						break;
+					}
+					await delay(30);
+				}
 
-      assert.ok(shutdownOutcome, 'expected shutdown to either return 503 or close connections');
-    } finally {
-      keepAliveAgent.destroy();
-      const shutdown = await stopProcessGroup(server, 'SIGTERM');
-      assert.strictEqual(
-        shutdown.forced,
-        false,
-        'expected graceful shutdown to exit without requiring SIGKILL fallback'
-      );
-    }
-  });
+				assert.ok(
+					shutdownOutcome,
+					'expected shutdown to either return 503 or close connections'
+				);
+			} finally {
+				keepAliveAgent.destroy();
+				const shutdown = await stopProcessGroup(server, 'SIGTERM');
+				assert.strictEqual(
+					shutdown.forced,
+					false,
+					'expected graceful shutdown to exit without requiring SIGKILL fallback'
+				);
+			}
+		}
+	);
 });

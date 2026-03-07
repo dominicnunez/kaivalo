@@ -1,20 +1,35 @@
 {
-  "name": "kaivalo",
-  "version": "1.0.0",
-  "type": "module",
-  "private": true,
-  "description": "Kaivalo.com services hub monorepo",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
-  "scripts": {
-    "test": "npm --prefix apps/hub run check && npm --prefix apps/hub run test && npm --prefix apps/hub run test:build && node --test --test-concurrency=1 tests/*.test.js",
-    "test:ci": "npm test"
-  },
-  "engines": {
-    "node": ">=24.0.0"
-  },
-  "author": "Kai Valo",
-  "license": "MIT"
+	"name": "kaivalo",
+	"version": "1.0.0",
+	"type": "module",
+	"private": true,
+	"description": "Kaivalo.com services hub monorepo",
+	"workspaces": [
+		"apps/*",
+		"packages/*"
+	],
+	"scripts": {
+		"prepare": "husky",
+		"check": "npm --prefix apps/hub run check",
+		"lint": "eslint . --ext .js,.mjs,.cjs,.ts,.svelte",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"test": "npm run check && npm --prefix apps/hub run test && npm --prefix apps/hub run test:build && node --test --test-concurrency=1 tests/*.test.js",
+		"test:ci": "npm test"
+	},
+	"engines": {
+		"node": ">=24.0.0"
+	},
+	"author": "Kai Valo",
+	"license": "MIT",
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"eslint": "^10.0.3",
+		"eslint-plugin-svelte": "^3.15.0",
+		"globals": "^17.4.0",
+		"husky": "^9.1.7",
+		"prettier": "^3.8.1",
+		"prettier-plugin-svelte": "^3.5.1",
+		"typescript-eslint": "^8.56.1"
+	}
 }

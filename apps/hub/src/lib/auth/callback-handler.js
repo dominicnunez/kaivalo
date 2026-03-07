@@ -27,7 +27,12 @@ import { getErrorName, normalizeRequestId } from './log-context.js';
  * @param {CreateAuthCallbackGetHandlerOptions} options
  * @returns {(event: RequestEvent) => Promise<Response>}
  */
-export function createAuthCallbackGetHandler({ handleCallback, isRedirect, isHttpError, logError = console.error }) {
+export function createAuthCallbackGetHandler({
+	handleCallback,
+	isRedirect,
+	isHttpError,
+	logError = console.error
+}) {
 	/**
 	 * @param {unknown} err
 	 * @returns {unknown}
@@ -50,7 +55,10 @@ export function createAuthCallbackGetHandler({ handleCallback, isRedirect, isHtt
 		}
 
 		const candidateCode = err.code;
-		if (typeof candidateCode !== 'string' && typeof candidateCode !== 'number') {
+		if (
+			typeof candidateCode !== 'string' &&
+			typeof candidateCode !== 'number'
+		) {
 			return null;
 		}
 
@@ -83,7 +91,9 @@ export function createAuthCallbackGetHandler({ handleCallback, isRedirect, isHtt
 				throw err;
 			}
 
-			const requestId = normalizeRequestId(event.request.headers.get('x-request-id'));
+			const requestId = normalizeRequestId(
+				event.request.headers.get('x-request-id')
+			);
 			const incidentId = `authcb_${randomUUID()}`;
 			const errorCause = getErrorCause(err);
 			/** @type {CallbackLogContext} */
@@ -113,7 +123,10 @@ export function createAuthCallbackGetHandler({ handleCallback, isRedirect, isHtt
 				throw error(503, `Auth callback failed. Reference: ${incidentId}`);
 			}
 
-			throw redirect(303, `/?error=auth&incident=${encodeURIComponent(incidentId)}`);
+			throw redirect(
+				303,
+				`/?error=auth&incident=${encodeURIComponent(incidentId)}`
+			);
 		}
 	};
 }

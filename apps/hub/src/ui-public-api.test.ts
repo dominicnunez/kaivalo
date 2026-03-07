@@ -45,7 +45,9 @@ describe('ui public api exports', () => {
 			header: 'Safe card',
 			children: snippet
 		});
-		expect(screen.getByRole('link', { name: /safe card/i }).getAttribute('href')).toBe('/services');
+		expect(
+			screen.getByRole('link', { name: /safe card/i }).getAttribute('href')
+		).toBe('/services');
 	});
 
 	it('exports a Container component with public runtime marker', () => {
@@ -53,7 +55,9 @@ describe('ui public api exports', () => {
 			children: snippet
 		});
 
-		expect(wrapped.container.querySelector('[data-ui="container"]')).not.toBeNull();
+		expect(
+			wrapped.container.querySelector('[data-ui="container"]')
+		).not.toBeNull();
 		expect(wrapped.container.textContent).toContain('Rendered child');
 	});
 });

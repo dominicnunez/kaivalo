@@ -23,9 +23,11 @@ const PRODUCTION_NODE_ENV = 'production';
 const REDACTED_VALUE = '[redacted]';
 const MIN_PORT = 1;
 const MAX_PORT = 65_535;
-const SENSITIVE_ASSIGNMENT_PATTERN = /\b((?:access[_-]?token|refresh[_-]?token|id[_-]?token|token|api[_-]?key|client[_-]?secret|secret|password|oauth\s+code)\s*[=:]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi;
+const SENSITIVE_ASSIGNMENT_PATTERN =
+	/\b((?:access[_-]?token|refresh[_-]?token|id[_-]?token|token|api[_-]?key|client[_-]?secret|secret|password|oauth\s+code)\s*[=:]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi;
 const BEARER_TOKEN_PATTERN = /\b(bearer\s+)[^\s,;]+/gi;
-const SENSITIVE_QUERY_PARAM_PATTERN = /([?&](?:access_token|refresh_token|id_token|token|api_key|client_secret|code|password)=)[^&#\s]*/gi;
+const SENSITIVE_QUERY_PARAM_PATTERN =
+	/([?&](?:access_token|refresh_token|id_token|token|api_key|client_secret|code|password)=)[^&#\s]*/gi;
 
 /**
  * @param {Record<string, string | undefined>} env
@@ -45,7 +47,9 @@ function parsePort(portValue) {
 	}
 	const normalized = portValue.trim();
 	if (!/^\d+$/.test(normalized)) {
-		throw new Error(`PORT must be an integer between ${MIN_PORT} and ${MAX_PORT}`);
+		throw new Error(
+			`PORT must be an integer between ${MIN_PORT} and ${MAX_PORT}`
+		);
 	}
 	const parsed = Number(normalized);
 	if (!Number.isInteger(parsed) || parsed < MIN_PORT || parsed > MAX_PORT) {
@@ -157,9 +161,15 @@ export function getRequestPathname(req) {
  *   forwardedProto: string;
  * }}
  */
-export function evaluateSecureRequest(req, trustForwardedProto, trustedProxyIpSet) {
+export function evaluateSecureRequest(
+	req,
+	trustForwardedProto,
+	trustedProxyIpSet
+) {
 	const remoteAddress = canonicalizeIpAddress(req.socket?.remoteAddress);
-	const forwardedProto = getTrustedForwardedProto(req.headers['x-forwarded-proto']);
+	const forwardedProto = getTrustedForwardedProto(
+		req.headers['x-forwarded-proto']
+	);
 
 	if (trustForwardedProto && forwardedProto) {
 		if (remoteAddress && trustedProxyIpSet.has(remoteAddress)) {
@@ -172,7 +182,9 @@ export function evaluateSecureRequest(req, trustForwardedProto, trustedProxyIpSe
 		}
 
 		return {
-			isSecure: req.socket ? 'encrypted' in req.socket && req.socket.encrypted === true : false,
+			isSecure: req.socket
+				? 'encrypted' in req.socket && req.socket.encrypted === true
+				: false,
 			ignoredForwardedProto: true,
 			remoteAddress,
 			forwardedProto
@@ -180,7 +192,9 @@ export function evaluateSecureRequest(req, trustForwardedProto, trustedProxyIpSe
 	}
 
 	return {
-		isSecure: req.socket ? 'encrypted' in req.socket && req.socket.encrypted === true : false,
+		isSecure: req.socket
+			? 'encrypted' in req.socket && req.socket.encrypted === true
+			: false,
 		ignoredForwardedProto: false,
 		remoteAddress,
 		forwardedProto
@@ -224,7 +238,10 @@ export function buildRequestFailureLog(req, error, env) {
 export function createHubServer(options) {
 	const logger = options.logger ?? console;
 	const workosEnv = getValidatedWorkosEnv(options.env);
-	const { trustForwardedProto, trustedProxyIps } = getProxyTrustConfiguration(options.env, workosEnv.origin);
+	const { trustForwardedProto, trustedProxyIps } = getProxyTrustConfiguration(
+		options.env,
+		workosEnv.origin
+	);
 	const trustedProxyIpSet = new Set(trustedProxyIps);
 
 	let activeRequests = 0;
@@ -257,7 +274,9 @@ export function createHubServer(options) {
 		} catch (error) {
 			logger.error('Fatal handler threw', {
 				error: getErrorDiagnostics(error, {
-					includeSensitiveDetails: shouldIncludeSensitiveErrorDetails(options.env)
+					includeSensitiveDetails: shouldIncludeSensitiveErrorDetails(
+						options.env
+					)
 				})
 			});
 		}
@@ -281,7 +300,10 @@ export function createHubServer(options) {
 	function shouldLogForwardedProtoWarning(key) {
 		const now = Date.now();
 		const lastLoggedAt = forwardedProtoWarningKeys.get(key);
-		if (typeof lastLoggedAt === 'number' && now - lastLoggedAt <= FORWARDED_PROTO_WARNING_TTL_MS) {
+		if (
+			typeof lastLoggedAt === 'number' &&
+			now - lastLoggedAt <= FORWARDED_PROTO_WARNING_TTL_MS
+		) {
 			return false;
 		}
 
@@ -298,7 +320,11 @@ export function createHubServer(options) {
 	}
 
 	const server = http.createServer((req, res) => {
-		const secureRequest = evaluateSecureRequest(req, trustForwardedProto, trustedProxyIpSet);
+		const secureRequest = evaluateSecureRequest(
+			req,
+			trustForwardedProto,
+			trustedProxyIpSet
+		);
 
 		if (shuttingDown) {
 			res.statusCode = 503;
@@ -316,11 +342,14 @@ export function createHubServer(options) {
 			if (secureRequest.ignoredForwardedProto) {
 				const warningKey = `${secureRequest.remoteAddress || 'unknown'}|${secureRequest.forwardedProto || 'unknown'}`;
 				if (shouldLogForwardedProtoWarning(warningKey)) {
-					logger.warn('Ignoring x-forwarded-proto from untrusted proxy address', {
-						pathname,
-						remoteAddress: secureRequest.remoteAddress || 'unknown',
-						forwardedProto: secureRequest.forwardedProto || 'unknown'
-					});
+					logger.warn(
+						'Ignoring x-forwarded-proto from untrusted proxy address',
+						{
+							pathname,
+							remoteAddress: secureRequest.remoteAddress || 'unknown',
+							forwardedProto: secureRequest.forwardedProto || 'unknown'
+						}
+					);
 				}
 			}
 		} else {
@@ -352,7 +381,10 @@ export function createHubServer(options) {
 			if (!res.writableEnded) {
 				res.end('Internal Server Error');
 			}
-			logger.error('Request handler failed', buildRequestFailureLog(req, error, options.env));
+			logger.error(
+				'Request handler failed',
+				buildRequestFailureLog(req, error, options.env)
+			);
 		};
 
 		try {
@@ -372,10 +404,14 @@ export function createHubServer(options) {
 		});
 	});
 
-	const forceShutdownTimeoutMs = Number.parseInt(options.env.SHUTDOWN_TIMEOUT_MS ?? '', 10);
-	const effectiveShutdownTimeoutMs = Number.isInteger(forceShutdownTimeoutMs) && forceShutdownTimeoutMs > 0
-		? forceShutdownTimeoutMs
-		: SHUTDOWN_TIMEOUT_MS;
+	const forceShutdownTimeoutMs = Number.parseInt(
+		options.env.SHUTDOWN_TIMEOUT_MS ?? '',
+		10
+	);
+	const effectiveShutdownTimeoutMs =
+		Number.isInteger(forceShutdownTimeoutMs) && forceShutdownTimeoutMs > 0
+			? forceShutdownTimeoutMs
+			: SHUTDOWN_TIMEOUT_MS;
 
 	function beginShutdown() {
 		if (shutdownPromise) {

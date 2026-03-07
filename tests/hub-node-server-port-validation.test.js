@@ -33,7 +33,10 @@ describe('node server port validation', () => {
 		assert.strictEqual(fatalEvents[0].exitCode, 1);
 		assert.strictEqual(fatalEvents[0].host, '127.0.0.1');
 		assert.strictEqual(fatalEvents[0].port, 3000);
-		assert.strictEqual(fatalEvents[0].error?.message, 'PORT must be between 1 and 65535');
+		assert.strictEqual(
+			fatalEvents[0].error?.message,
+			'PORT must be between 1 and 65535'
+		);
 	});
 
 	it('reports malformed PORT values through startup fatal handling', () => {
@@ -49,6 +52,9 @@ describe('node server port validation', () => {
 		assert.strictEqual(fatalEvents.length, 1);
 		assert.strictEqual(fatalEvents[0].reason, 'startup-error');
 		assert.strictEqual(fatalEvents[0].exitCode, 1);
-		assert.strictEqual(fatalEvents[0].error?.message, 'PORT must be an integer between 1 and 65535');
+		assert.strictEqual(
+			fatalEvents[0].error?.message,
+			'PORT must be an integer between 1 and 65535'
+		);
 	});
 });

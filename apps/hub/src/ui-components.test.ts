@@ -90,23 +90,33 @@ describe('ui components', () => {
 		});
 
 		const safeLink = safeRender.container.querySelector('a');
-		const disallowedAbsoluteLink = disallowedAbsoluteRender.container.querySelector('a');
-		const allowedAbsoluteLink = allowedAbsoluteRender.container.querySelector('a');
+		const disallowedAbsoluteLink =
+			disallowedAbsoluteRender.container.querySelector('a');
+		const allowedAbsoluteLink =
+			allowedAbsoluteRender.container.querySelector('a');
 		const unsafeLink = unsafeRender.container.querySelector('a');
-		const insecureAbsoluteLink = insecureAbsoluteRender.container.querySelector('a');
-		const credentialedAbsoluteLink = credentialedAbsoluteRender.container.querySelector('a');
-		const nonDefaultPortLink = nonDefaultPortRender.container.querySelector('a');
-		const normalizedAllowlistLink = normalizedAllowlistRender.container.querySelector('a');
+		const insecureAbsoluteLink =
+			insecureAbsoluteRender.container.querySelector('a');
+		const credentialedAbsoluteLink =
+			credentialedAbsoluteRender.container.querySelector('a');
+		const nonDefaultPortLink =
+			nonDefaultPortRender.container.querySelector('a');
+		const normalizedAllowlistLink =
+			normalizedAllowlistRender.container.querySelector('a');
 		expect(safeLink).not.toBeNull();
 		expect(safeLink?.getAttribute('href')).toBe('/services');
 		expect(disallowedAbsoluteLink).toBeNull();
-		expect(allowedAbsoluteLink?.getAttribute('href')).toBe('https://kaivalo.com/services');
+		expect(allowedAbsoluteLink?.getAttribute('href')).toBe(
+			'https://kaivalo.com/services'
+		);
 		expect(safeRender.container.textContent).toContain('Header');
 		expect(unsafeLink).toBeNull();
 		expect(insecureAbsoluteLink).toBeNull();
 		expect(credentialedAbsoluteLink).toBeNull();
 		expect(nonDefaultPortLink).toBeNull();
-		expect(normalizedAllowlistLink?.getAttribute('href')).toBe('https://kaivalo.com/services');
+		expect(normalizedAllowlistLink?.getAttribute('href')).toBe(
+			'https://kaivalo.com/services'
+		);
 		expect(unsafeRender.container.querySelector('div')).not.toBeNull();
 	});
 

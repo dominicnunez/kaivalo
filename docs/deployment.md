@@ -3,12 +3,14 @@
 This repo owns the application side of deployment.
 
 It owns:
+
 - the container image build
 - the GitHub Actions deployment workflow
 - the app health endpoint
 - the runtime environment contract for the running app
 
 It does not own:
+
 - VPS bootstrap
 - reverse proxy setup
 - host SSH policy
@@ -21,6 +23,7 @@ Those host and infrastructure details intentionally live in a private infra repo
 The deployment workflow is defined in `.github/workflows/deploy.yml`.
 
 At a high level it:
+
 - runs the test suite
 - builds and pushes the production image to GHCR
 - deploys to the `production` GitHub Environment
@@ -29,6 +32,7 @@ At a high level it:
 ## GitHub Environment
 
 Create a `production` GitHub Environment in this repo and add:
+
 - `DEPLOY_HOST`
 - `DEPLOY_PORT`
 - `DEPLOY_USER`
@@ -38,6 +42,7 @@ Create a `production` GitHub Environment in this repo and add:
 These values are only for the CI-to-host deployment path.
 
 Recommended:
+
 - require reviewers for the `production` environment
 - restrict production deployment to `main` and/or release tags
 
@@ -52,6 +57,7 @@ This repo does not document private server-local file locations; that belongs to
 ## Triggering A Deploy
 
 The current workflow supports:
+
 - manual dispatch from GitHub Actions
 
 ### Making Deploys Automatic
@@ -76,16 +82,18 @@ on:
     branches:
       - main
     tags:
-      - "v*"
+      - 'v*'
   workflow_dispatch:
 ```
 
 Recommended:
+
 - use the `production` GitHub Environment so deploy secrets stay gated
 - restrict automatic production deploys to reviewed branches or release tags
 - keep required reviewers enabled if you want human approval before production deploys
 
 When triggered successfully, the workflow should:
+
 1. pass tests
 2. publish an image
 3. deploy that image digest to production
@@ -93,6 +101,7 @@ When triggered successfully, the workflow should:
 ## Post-Deploy Verification
 
 After a deployment, verify:
+
 - the workflow completed successfully
 - the landing page loads
 - `/healthz` returns `200` with plain-text `ok`
@@ -103,12 +112,14 @@ After a deployment, verify:
 If deployment fails, use this split:
 
 App repo responsibilities:
+
 - investigate workflow failures
 - investigate test failures
 - investigate image build failures
 - investigate application behavior regressions
 
 Infra repo responsibilities:
+
 - VPS bootstrap and host readiness
 - reverse proxy and host routing
 - host-side deploy and rollback primitives

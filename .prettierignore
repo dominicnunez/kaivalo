@@ -1,0 +1,4 @@
+node_modules/
+apps/hub/.svelte-kit/
+apps/hub/build/
+coverage/

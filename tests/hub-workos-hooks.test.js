@@ -32,7 +32,10 @@ function assertVaryIncludes(varyHeader, expectedTokens) {
 			.filter(Boolean)
 	);
 	for (const token of expectedTokens) {
-		assert.ok(present.has(token.toLowerCase()), `Expected Vary to include ${token}`);
+		assert.ok(
+			present.has(token.toLowerCase()),
+			`Expected Vary to include ${token}`
+		);
 	}
 }
 
@@ -48,7 +51,10 @@ function assertVaryOmits(varyHeader, unexpectedTokens) {
 			.filter(Boolean)
 	);
 	for (const token of unexpectedTokens) {
-		assert.ok(!present.has(token.toLowerCase()), `Expected Vary to omit ${token}`);
+		assert.ok(
+			!present.has(token.toLowerCase()),
+			`Expected Vary to omit ${token}`
+		);
 	}
 }
 
@@ -66,21 +72,30 @@ describe('WorkOS env validation', () => {
 
 	it('rejects cookie password values that are not 64 hex characters', () => {
 		assert.throws(
-			() => assertValidWorkosEnv({ ...validEnv, WORKOS_COOKIE_PASSWORD: 'short-value' }),
+			() =>
+				assertValidWorkosEnv({
+					...validEnv,
+					WORKOS_COOKIE_PASSWORD: 'short-value'
+				}),
 			/WORKOS_COOKIE_PASSWORD must be 64 hex characters/
 		);
 	});
 
 	it('rejects malformed redirect URIs', () => {
 		assert.throws(
-			() => assertValidWorkosEnv({ ...validEnv, WORKOS_REDIRECT_URI: 'not-a-url' }),
+			() =>
+				assertValidWorkosEnv({ ...validEnv, WORKOS_REDIRECT_URI: 'not-a-url' }),
 			/WORKOS_REDIRECT_URI must be a valid absolute callback URL/
 		);
 	});
 
 	it('rejects non-https redirect URIs for non-local hosts', () => {
 		assert.throws(
-			() => assertValidWorkosEnv({ ...validEnv, WORKOS_REDIRECT_URI: 'http://kaivalo.test/auth/callback' }),
+			() =>
+				assertValidWorkosEnv({
+					...validEnv,
+					WORKOS_REDIRECT_URI: 'http://kaivalo.test/auth/callback'
+				}),
 			/WORKOS_REDIRECT_URI must use https outside local development/
 		);
 	});
@@ -171,27 +186,39 @@ describe('WorkOS env validation', () => {
 
 	it('rejects ORIGIN values containing path segments', () => {
 		assert.throws(
-			() => assertValidWorkosEnv({ ...validEnv, ORIGIN: 'https://kaivalo.test/app' }),
+			() =>
+				assertValidWorkosEnv({
+					...validEnv,
+					ORIGIN: 'https://kaivalo.test/app'
+				}),
 			/ORIGIN must be a valid URL origin/
 		);
 	});
 
 	it('rejects non-https ORIGIN values for non-local hosts', () => {
 		assert.throws(
-			() => assertValidWorkosEnv({ ...validEnv, ORIGIN: 'http://kaivalo.test' }),
+			() =>
+				assertValidWorkosEnv({ ...validEnv, ORIGIN: 'http://kaivalo.test' }),
 			/ORIGIN must use https outside local development/
 		);
 	});
 
 	it('rejects credentialed ORIGIN values', () => {
 		assert.throws(
-			() => assertValidWorkosEnv({ ...validEnv, ORIGIN: 'https://user:pass@kaivalo.test' }),
+			() =>
+				assertValidWorkosEnv({
+					...validEnv,
+					ORIGIN: 'https://user:pass@kaivalo.test'
+				}),
 			/ORIGIN must be a valid URL origin/
 		);
 	});
 
 	it('normalizes ORIGIN values with trailing slashes', () => {
-		const parsed = getValidatedWorkosEnv({ ...validEnv, ORIGIN: 'https://kaivalo.test/' });
+		const parsed = getValidatedWorkosEnv({
+			...validEnv,
+			ORIGIN: 'https://kaivalo.test/'
+		});
 		assert.strictEqual(parsed.origin, 'https://kaivalo.test');
 	});
 
@@ -317,7 +344,12 @@ describe('proxy trust configuration', () => {
 					},
 					'https://kaivalo.test'
 				),
-			new RegExp(PROXY_HSTS_CONFIGURATION_ERROR_MESSAGE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+			new RegExp(
+				PROXY_HSTS_CONFIGURATION_ERROR_MESSAGE.replace(
+					/[.*+?^${}()|[\]\\]/g,
+					'\\$&'
+				)
+			)
 		);
 	});
 
@@ -345,7 +377,12 @@ describe('proxy trust configuration', () => {
 					},
 					'https://kaivalo.test'
 				),
-			new RegExp(LOOPBACK_PROXY_TRUST_ERROR_MESSAGE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+			new RegExp(
+				LOOPBACK_PROXY_TRUST_ERROR_MESSAGE.replace(
+					/[.*+?^${}()|[\]\\]/g,
+					'\\$&'
+				)
+			)
 		);
 	});
 
@@ -373,9 +410,18 @@ describe('Security header handle behavior', () => {
 
 		assert.strictEqual(response.headers.get('Strict-Transport-Security'), null);
 		assert.strictEqual(response.headers.get('X-Frame-Options'), 'DENY');
-		assert.strictEqual(response.headers.get('X-Content-Type-Options'), 'nosniff');
-		assert.strictEqual(response.headers.get('Referrer-Policy'), 'strict-origin-when-cross-origin');
-		assert.strictEqual(response.headers.get('Permissions-Policy'), 'camera=(), microphone=(), geolocation=()');
+		assert.strictEqual(
+			response.headers.get('X-Content-Type-Options'),
+			'nosniff'
+		);
+		assert.strictEqual(
+			response.headers.get('Referrer-Policy'),
+			'strict-origin-when-cross-origin'
+		);
+		assert.strictEqual(
+			response.headers.get('Permissions-Policy'),
+			'camera=(), microphone=(), geolocation=()'
+		);
 		assert.strictEqual(response.headers.get('Content-Security-Policy'), null);
 	});
 
@@ -395,13 +441,31 @@ describe('Security header handle behavior', () => {
 		});
 
 		assert.strictEqual(response.status, 500);
-		assert.strictEqual(response.headers.get('Strict-Transport-Security'), 'max-age=63072000; includeSubDomains');
+		assert.strictEqual(
+			response.headers.get('Strict-Transport-Security'),
+			'max-age=63072000; includeSubDomains'
+		);
 		assert.strictEqual(response.headers.get('X-Frame-Options'), 'DENY');
-		assert.strictEqual(response.headers.get('X-Content-Type-Options'), 'nosniff');
-		assert.strictEqual(response.headers.get('Referrer-Policy'), 'strict-origin-when-cross-origin');
-		assert.strictEqual(response.headers.get('Permissions-Policy'), 'camera=(), microphone=(), geolocation=()');
-		assert.strictEqual(response.headers.get('Cache-Control'), 'private, no-store');
-		assertVaryIncludes(response.headers.get('Vary'), ['Cookie', 'Authorization']);
+		assert.strictEqual(
+			response.headers.get('X-Content-Type-Options'),
+			'nosniff'
+		);
+		assert.strictEqual(
+			response.headers.get('Referrer-Policy'),
+			'strict-origin-when-cross-origin'
+		);
+		assert.strictEqual(
+			response.headers.get('Permissions-Policy'),
+			'camera=(), microphone=(), geolocation=()'
+		);
+		assert.strictEqual(
+			response.headers.get('Cache-Control'),
+			'private, no-store'
+		);
+		assertVaryIncludes(response.headers.get('Vary'), [
+			'Cookie',
+			'Authorization'
+		]);
 	});
 
 	it('rethrows redirect responses from downstream handlers', async () => {
@@ -453,7 +517,10 @@ describe('Security header handle behavior', () => {
 			resolve: async () => new Response('ok', { status: 200 })
 		});
 
-		assert.strictEqual(secureResponse.headers.get('Strict-Transport-Security'), 'max-age=63072000; includeSubDomains');
+		assert.strictEqual(
+			secureResponse.headers.get('Strict-Transport-Security'),
+			'max-age=63072000; includeSubDomains'
+		);
 	});
 
 	it('only trusts x-forwarded-proto from configured proxy IPs', async () => {
@@ -496,9 +563,18 @@ describe('Security header handle behavior', () => {
 			resolve: async () => new Response('ok', { status: 200 })
 		});
 
-		assert.strictEqual(spoofedResponse.headers.get('Strict-Transport-Security'), null);
-		assert.strictEqual(untrustedProxyResponse.headers.get('Strict-Transport-Security'), null);
-		assert.strictEqual(proxiedResponse.headers.get('Strict-Transport-Security'), 'max-age=63072000; includeSubDomains');
+		assert.strictEqual(
+			spoofedResponse.headers.get('Strict-Transport-Security'),
+			null
+		);
+		assert.strictEqual(
+			untrustedProxyResponse.headers.get('Strict-Transport-Security'),
+			null
+		);
+		assert.strictEqual(
+			proxiedResponse.headers.get('Strict-Transport-Security'),
+			'max-age=63072000; includeSubDomains'
+		);
 	});
 
 	it('treats equivalent IPv6 proxy address forms as trusted', async () => {
@@ -518,7 +594,10 @@ describe('Security header handle behavior', () => {
 			resolve: async () => new Response('ok', { status: 200 })
 		});
 
-		assert.strictEqual(proxiedResponse.headers.get('Strict-Transport-Security'), 'max-age=63072000; includeSubDomains');
+		assert.strictEqual(
+			proxiedResponse.headers.get('Strict-Transport-Security'),
+			'max-age=63072000; includeSubDomains'
+		);
 	});
 
 	it('applies reusable caching for public HTML documents', async () => {
@@ -535,7 +614,10 @@ describe('Security header handle behavior', () => {
 				})
 		});
 
-		assert.strictEqual(response.headers.get('Cache-Control'), 'public, max-age=300, stale-while-revalidate=60');
+		assert.strictEqual(
+			response.headers.get('Cache-Control'),
+			'public, max-age=300, stale-while-revalidate=60'
+		);
 		assertVaryOmits(response.headers.get('Vary'), ['Cookie']);
 		assertVaryOmits(response.headers.get('Vary'), ['Authorization']);
 	});
@@ -544,7 +626,9 @@ describe('Security header handle behavior', () => {
 		const handle = createSecurityHeadersHandle();
 		const authRouteResponse = await handle({
 			event: {
-				request: new Request('https://kaivalo.test/auth/sign-out', { method: 'GET' }),
+				request: new Request('https://kaivalo.test/auth/sign-out', {
+					method: 'GET'
+				}),
 				url: new URL('https://kaivalo.test/auth/sign-out')
 			},
 			resolve: async () =>
@@ -568,9 +652,18 @@ describe('Security header handle behavior', () => {
 				})
 		});
 
-		assert.strictEqual(authRouteResponse.headers.get('Cache-Control'), 'private, no-store');
-		assert.strictEqual(cookieResponse.headers.get('Cache-Control'), 'private, no-store');
-		assertVaryIncludes(authRouteResponse.headers.get('Vary'), ['Cookie', 'Authorization']);
+		assert.strictEqual(
+			authRouteResponse.headers.get('Cache-Control'),
+			'private, no-store'
+		);
+		assert.strictEqual(
+			cookieResponse.headers.get('Cache-Control'),
+			'private, no-store'
+		);
+		assertVaryIncludes(authRouteResponse.headers.get('Vary'), [
+			'Cookie',
+			'Authorization'
+		]);
 		assertVaryIncludes(cookieResponse.headers.get('Vary'), ['Cookie']);
 		assertVaryOmits(cookieResponse.headers.get('Vary'), ['Authorization']);
 	});
@@ -592,7 +685,10 @@ describe('Security header handle behavior', () => {
 				})
 		});
 
-		assert.strictEqual(response.headers.get('Cache-Control'), 'public, max-age=300, stale-while-revalidate=60');
+		assert.strictEqual(
+			response.headers.get('Cache-Control'),
+			'public, max-age=300, stale-while-revalidate=60'
+		);
 		assertVaryOmits(response.headers.get('Vary'), ['Cookie']);
 		assertVaryOmits(response.headers.get('Vary'), ['Authorization']);
 	});
@@ -614,7 +710,10 @@ describe('Security header handle behavior', () => {
 				})
 		});
 
-		assert.strictEqual(response.headers.get('Cache-Control'), 'private, no-store');
+		assert.strictEqual(
+			response.headers.get('Cache-Control'),
+			'private, no-store'
+		);
 		assertVaryIncludes(response.headers.get('Vary'), ['Authorization']);
 		assertVaryOmits(response.headers.get('Vary'), ['Cookie']);
 	});
@@ -636,7 +735,10 @@ describe('Security header handle behavior', () => {
 				})
 		});
 
-		assert.strictEqual(response.headers.get('Cache-Control'), 'private, no-store');
+		assert.strictEqual(
+			response.headers.get('Cache-Control'),
+			'private, no-store'
+		);
 		assertVaryIncludes(response.headers.get('Vary'), ['Cookie']);
 		assertVaryOmits(response.headers.get('Vary'), ['Authorization']);
 	});
@@ -658,7 +760,10 @@ describe('Security header handle behavior', () => {
 				})
 		});
 
-		assert.strictEqual(response.headers.get('Cache-Control'), 'public, max-age=60');
+		assert.strictEqual(
+			response.headers.get('Cache-Control'),
+			'public, max-age=60'
+		);
 	});
 
 	it('overrides explicit public cache-control for sensitive auth-cookie-bearing document requests', async () => {
@@ -681,7 +786,10 @@ describe('Security header handle behavior', () => {
 				})
 		});
 
-		assert.strictEqual(response.headers.get('Cache-Control'), 'private, no-store');
+		assert.strictEqual(
+			response.headers.get('Cache-Control'),
+			'private, no-store'
+		);
 		assertVaryIncludes(response.headers.get('Vary'), ['Cookie']);
 		assertVaryOmits(response.headers.get('Vary'), ['Authorization']);
 	});
@@ -706,8 +814,14 @@ describe('Security header handle behavior', () => {
 				})
 		});
 
-		assert.strictEqual(response.headers.get('Cache-Control'), 'private, no-store');
-		assertVaryIncludes(response.headers.get('Vary'), ['Cookie', 'Authorization']);
+		assert.strictEqual(
+			response.headers.get('Cache-Control'),
+			'private, no-store'
+		);
+		assertVaryIncludes(response.headers.get('Vary'), [
+			'Cookie',
+			'Authorization'
+		]);
 	});
 
 	it('does not force no-store caching on non-sensitive non-document responses', async () => {
@@ -744,7 +858,10 @@ describe('Security header handle behavior', () => {
 				})
 		});
 
-		assert.strictEqual(response.headers.get('Cache-Control'), 'private, no-store');
+		assert.strictEqual(
+			response.headers.get('Cache-Control'),
+			'private, no-store'
+		);
 		assertVaryIncludes(response.headers.get('Vary'), ['Authorization']);
 		assertVaryOmits(response.headers.get('Vary'), ['Cookie']);
 	});
@@ -766,7 +883,10 @@ describe('Security header handle behavior', () => {
 				})
 		});
 
-		assert.strictEqual(response.headers.get('Cache-Control'), 'private, no-store');
+		assert.strictEqual(
+			response.headers.get('Cache-Control'),
+			'private, no-store'
+		);
 		assertVaryIncludes(response.headers.get('Vary'), ['Cookie']);
 		assertVaryOmits(response.headers.get('Vary'), ['Authorization']);
 	});
@@ -775,7 +895,9 @@ describe('Security header handle behavior', () => {
 		const handle = createSecurityHeadersHandle();
 		const response = await handle({
 			event: {
-				request: new Request('https://kaivalo.test/auth/callback', { method: 'GET' }),
+				request: new Request('https://kaivalo.test/auth/callback', {
+					method: 'GET'
+				}),
 				url: new URL('https://kaivalo.test/auth/callback')
 			},
 			resolve: async () =>
@@ -788,15 +910,23 @@ describe('Security header handle behavior', () => {
 				})
 		});
 
-		assert.strictEqual(response.headers.get('Cache-Control'), 'private, no-store');
-		assertVaryIncludes(response.headers.get('Vary'), ['Cookie', 'Authorization']);
+		assert.strictEqual(
+			response.headers.get('Cache-Control'),
+			'private, no-store'
+		);
+		assertVaryIncludes(response.headers.get('Vary'), [
+			'Cookie',
+			'Authorization'
+		]);
 	});
 
 	it('forces no-store caching on non-document responses that set cookies', async () => {
 		const handle = createSecurityHeadersHandle();
 		const response = await handle({
 			event: {
-				request: new Request('https://kaivalo.test/api/session', { method: 'POST' }),
+				request: new Request('https://kaivalo.test/api/session', {
+					method: 'POST'
+				}),
 				url: new URL('https://kaivalo.test/api/session')
 			},
 			resolve: async () =>
@@ -809,7 +939,10 @@ describe('Security header handle behavior', () => {
 				})
 		});
 
-		assert.strictEqual(response.headers.get('Cache-Control'), 'private, no-store');
+		assert.strictEqual(
+			response.headers.get('Cache-Control'),
+			'private, no-store'
+		);
 		assertVaryIncludes(response.headers.get('Vary'), ['Cookie']);
 		assertVaryOmits(response.headers.get('Vary'), ['Authorization']);
 	});
@@ -825,23 +958,41 @@ describe('Security headers on preview responses', () => {
 	it('serves security headers from hooks on real responses', async () => {
 		preview = await startHubPreview();
 		const homepage = await httpGet(preview.baseUrl);
-		const contentSecurityPolicy = homepage.headers['content-security-policy'] ?? '';
+		const contentSecurityPolicy =
+			homepage.headers['content-security-policy'] ?? '';
 
 		assert.strictEqual(homepage.statusCode, 200);
-		assert.strictEqual(homepage.headers['strict-transport-security'], undefined);
+		assert.strictEqual(
+			homepage.headers['strict-transport-security'],
+			undefined
+		);
 		assert.strictEqual(homepage.headers['x-frame-options'], 'DENY');
 		assert.strictEqual(homepage.headers['x-content-type-options'], 'nosniff');
-		assert.strictEqual(homepage.headers['referrer-policy'], 'strict-origin-when-cross-origin');
-		assert.strictEqual(homepage.headers['cache-control'], 'public, max-age=300, stale-while-revalidate=60');
-		assert.ok(!(homepage.headers['vary'] ?? '').toLowerCase().includes('cookie'));
-		assert.ok(!(homepage.headers['vary'] ?? '').toLowerCase().includes('authorization'));
+		assert.strictEqual(
+			homepage.headers['referrer-policy'],
+			'strict-origin-when-cross-origin'
+		);
+		assert.strictEqual(
+			homepage.headers['cache-control'],
+			'public, max-age=300, stale-while-revalidate=60'
+		);
+		assert.ok(
+			!(homepage.headers['vary'] ?? '').toLowerCase().includes('cookie')
+		);
+		assert.ok(
+			!(homepage.headers['vary'] ?? '').toLowerCase().includes('authorization')
+		);
 		assert.ok(contentSecurityPolicy.includes("default-src 'self'"));
 		assert.ok(contentSecurityPolicy.includes("script-src 'self'"));
 		assert.ok(contentSecurityPolicy.includes("style-src 'self'"));
 		assert.ok(contentSecurityPolicy.includes("font-src 'self'"));
 		assert.ok(contentSecurityPolicy.includes('https://images.workoscdn.com'));
-		assert.ok(contentSecurityPolicy.includes('https://avatars.githubusercontent.com'));
-		assert.ok(contentSecurityPolicy.includes('https://lh3.googleusercontent.com'));
+		assert.ok(
+			contentSecurityPolicy.includes('https://avatars.githubusercontent.com')
+		);
+		assert.ok(
+			contentSecurityPolicy.includes('https://lh3.googleusercontent.com')
+		);
 		assert.ok(contentSecurityPolicy.includes("object-src 'none'"));
 		assert.ok(contentSecurityPolicy.includes("frame-ancestors 'none'"));
 		assert.ok(!contentSecurityPolicy.includes("style-src 'unsafe-inline'"));

@@ -15,8 +15,8 @@ const { mockEnv } = vi.hoisted(() => ({
 vi.mock('@workos/authkit-sveltekit', () => ({
 	authKit: {
 		getUser: vi.fn(),
-		getSignInUrl: vi.fn(),
-	},
+		getSignInUrl: vi.fn()
+	}
 }));
 
 vi.mock('$env/dynamic/private', () => ({
@@ -47,7 +47,7 @@ describe('layout server load', () => {
 		mockedAuthKit.getUser.mockResolvedValue({
 			firstName: 'Kai',
 			email: 'kai@example.com',
-			profilePictureUrl: 'https://avatars.githubusercontent.com/u/1',
+			profilePictureUrl: 'https://avatars.githubusercontent.com/u/1'
 		} as never);
 
 		const result = await load(baseEvent);
@@ -57,7 +57,7 @@ describe('layout server load', () => {
 			user: {
 				firstName: 'Kai',
 				email: 'kai@example.com',
-				profilePictureUrl: 'https://avatars.githubusercontent.com/u/1',
+				profilePictureUrl: 'https://avatars.githubusercontent.com/u/1'
 			},
 			signInUrl: null,
 			authError: null
@@ -68,7 +68,7 @@ describe('layout server load', () => {
 		mockedAuthKit.getUser.mockResolvedValue({
 			firstName: 'Kai',
 			email: 'kai@example.com',
-			profilePictureUrl: 'https://attacker.example/track.png',
+			profilePictureUrl: 'https://attacker.example/track.png'
 		} as never);
 
 		const result = await load(baseEvent);
@@ -77,7 +77,7 @@ describe('layout server load', () => {
 			user: {
 				firstName: 'Kai',
 				email: 'kai@example.com',
-				profilePictureUrl: null,
+				profilePictureUrl: null
 			},
 			signInUrl: null,
 			authError: null
@@ -86,7 +86,10 @@ describe('layout server load', () => {
 
 	it.each([
 		['http url', 'http://avatars.githubusercontent.com/u/1'],
-		['credentialed https url', 'https://user:pass@avatars.githubusercontent.com/u/1'],
+		[
+			'credentialed https url',
+			'https://user:pass@avatars.githubusercontent.com/u/1'
+		],
 		['javascript url', 'javascript:alert(1)'],
 		['data url', 'data:image/png;base64,iVBORw0KGgo='],
 		['malformed value', 'not-a-url'],
@@ -95,7 +98,7 @@ describe('layout server load', () => {
 		mockedAuthKit.getUser.mockResolvedValue({
 			firstName: 'Kai',
 			email: 'kai@example.com',
-			profilePictureUrl: candidate,
+			profilePictureUrl: candidate
 		} as never);
 
 		const result = await load(baseEvent);
@@ -103,7 +106,7 @@ describe('layout server load', () => {
 			user: {
 				firstName: 'Kai',
 				email: 'kai@example.com',
-				profilePictureUrl: null,
+				profilePictureUrl: null
 			},
 			signInUrl: null,
 			authError: null
@@ -112,7 +115,9 @@ describe('layout server load', () => {
 
 	it('returns trusted sign-in URL for unauthenticated requests', async () => {
 		mockedAuthKit.getUser.mockResolvedValue(null as never);
-		mockedAuthKit.getSignInUrl.mockResolvedValue('https://api.workos.com/user_management/authorize' as never);
+		mockedAuthKit.getSignInUrl.mockResolvedValue(
+			'https://api.workos.com/user_management/authorize' as never
+		);
 
 		const result = await load(baseEvent);
 
@@ -126,14 +131,17 @@ describe('layout server load', () => {
 
 	it('returns explicit auth-unavailable state when sign-in URL host is untrusted', async () => {
 		mockedAuthKit.getUser.mockResolvedValue(null as never);
-		mockedAuthKit.getSignInUrl.mockResolvedValue('https://evil.example/login' as never);
+		mockedAuthKit.getSignInUrl.mockResolvedValue(
+			'https://evil.example/login' as never
+		);
 
 		const result = await load(baseEvent);
 		expect(result).toEqual({
 			user: null,
 			signInUrl: null,
 			authError: {
-				message: 'Sign-in is temporarily unavailable. Please try again shortly.',
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
 				incidentId: null
 			}
 		});
@@ -143,48 +151,68 @@ describe('layout server load', () => {
 		'https://attacker.test/login',
 		'https://attacker.test/auth/sign-in',
 		'https://attacker.test/user_management/authorize'
-	])('rejects sign-in URLs that only match attacker-controlled request host: %s', async (candidate) => {
-		mockedAuthKit.getUser.mockResolvedValue(null as never);
-		mockedAuthKit.getSignInUrl.mockResolvedValue(candidate as never);
+	])(
+		'rejects sign-in URLs that only match attacker-controlled request host: %s',
+		async (candidate) => {
+			mockedAuthKit.getUser.mockResolvedValue(null as never);
+			mockedAuthKit.getSignInUrl.mockResolvedValue(candidate as never);
 
-		const result = await load(createEvent('https://attacker.test/'));
-		expect(result).toEqual({
-			user: null,
-			signInUrl: null,
-			authError: {
-				message: 'Sign-in is temporarily unavailable. Please try again shortly.',
-				incidentId: null
-			}
-		});
-	});
+			const result = await load(createEvent('https://attacker.test/'));
+			expect(result).toEqual({
+				user: null,
+				signInUrl: null,
+				authError: {
+					message:
+						'Sign-in is temporarily unavailable. Please try again shortly.',
+					incidentId: null
+				}
+			});
+		}
+	);
 
 	it.each([
 		['protocol-relative url', '//evil.example/login'],
 		['near-match relative auth path', '/auth/sign-in-evil'],
 		['near-match relative authorize path', '/user_management/authorize-extra'],
-		['credentialed https url', 'https://user:pass@api.workos.com/user_management/authorize'],
+		[
+			'credentialed https url',
+			'https://user:pass@api.workos.com/user_management/authorize'
+		],
 		['credentialed same-host url', 'https://user:pass@kaivalo.test/sign-in'],
 		['non-https scheme', 'http://api.workos.com/user_management/authorize'],
-		['trusted host with untrusted port', 'https://api.workos.com:444/user_management/authorize'],
+		[
+			'trusted host with untrusted port',
+			'https://api.workos.com:444/user_management/authorize'
+		],
 		['trusted host with untrusted path', 'https://api.workos.com/logout'],
-		['near-match absolute auth path', 'https://api.workos.com/auth/sign-in-evil'],
-		['near-match absolute authorize path', 'https://api.workos.com/user_management/authorize-extra'],
+		[
+			'near-match absolute auth path',
+			'https://api.workos.com/auth/sign-in-evil'
+		],
+		[
+			'near-match absolute authorize path',
+			'https://api.workos.com/user_management/authorize-extra'
+		],
 		['javascript scheme', 'javascript:alert(1)'],
 		['malformed value', 'not-a-url']
-	])('returns explicit auth-unavailable state for unsafe sign-in URL: %s', async (_label, candidate) => {
-		mockedAuthKit.getUser.mockResolvedValue(null as never);
-		mockedAuthKit.getSignInUrl.mockResolvedValue(candidate as never);
+	])(
+		'returns explicit auth-unavailable state for unsafe sign-in URL: %s',
+		async (_label, candidate) => {
+			mockedAuthKit.getUser.mockResolvedValue(null as never);
+			mockedAuthKit.getSignInUrl.mockResolvedValue(candidate as never);
 
-		const result = await load(baseEvent);
-		expect(result).toEqual({
-			user: null,
-			signInUrl: null,
-			authError: {
-				message: 'Sign-in is temporarily unavailable. Please try again shortly.',
-				incidentId: null
-			}
-		});
-	});
+			const result = await load(baseEvent);
+			expect(result).toEqual({
+				user: null,
+				signInUrl: null,
+				authError: {
+					message:
+						'Sign-in is temporarily unavailable. Please try again shortly.',
+					incidentId: null
+				}
+			});
+		}
+	);
 
 	it('converts trusted same-host absolute sign-in URL to relative path', async () => {
 		mockedAuthKit.getUser.mockResolvedValue(null as never);
@@ -202,7 +230,9 @@ describe('layout server load', () => {
 
 	it('accepts safe relative sign-in URLs', async () => {
 		mockedAuthKit.getUser.mockResolvedValue(null as never);
-		mockedAuthKit.getSignInUrl.mockResolvedValue('/auth/sign-in?screen_hint=sign-up' as never);
+		mockedAuthKit.getSignInUrl.mockResolvedValue(
+			'/auth/sign-in?screen_hint=sign-up' as never
+		);
 
 		const result = await load(baseEvent);
 		expect(result).toEqual({
@@ -214,29 +244,41 @@ describe('layout server load', () => {
 
 	it('rejects relative sign-in URLs outside allowed auth paths', async () => {
 		mockedAuthKit.getUser.mockResolvedValue(null as never);
-		mockedAuthKit.getSignInUrl.mockResolvedValue('/logout?next=/admin' as never);
+		mockedAuthKit.getSignInUrl.mockResolvedValue(
+			'/logout?next=/admin' as never
+		);
 
 		const result = await load(baseEvent);
 		expect(result).toEqual({
 			user: null,
 			signInUrl: null,
 			authError: {
-				message: 'Sign-in is temporarily unavailable. Please try again shortly.',
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
 				incidentId: null
 			}
 		});
 	});
 
 	it('returns auth-unavailable state and logs incident id when upstream auth calls throw', async () => {
-		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-		mockedAuthKit.getUser.mockRejectedValue(new Error('upstream failed') as never);
+		const errorSpy = vi
+			.spyOn(console, 'error')
+			.mockImplementation(() => undefined);
+		mockedAuthKit.getUser.mockRejectedValue(
+			new Error('upstream failed') as never
+		);
 
-		const result = await load(createEvent('https://kaivalo.test/', { 'x-request-id': 'bad value + trace' }));
+		const result = await load(
+			createEvent('https://kaivalo.test/', {
+				'x-request-id': 'bad value + trace'
+			})
+		);
 		expect(result).toEqual({
 			user: null,
 			signInUrl: null,
 			authError: {
-				message: 'Sign-in is temporarily unavailable. Please try again shortly.',
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
 				incidentId: expect.stringMatching(/^authlayout_/)
 			}
 		});
@@ -246,7 +288,7 @@ describe('layout server load', () => {
 				errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
 				errorName: 'Error',
 				pathname: '/',
-				requestId: 'bad_value___trace',
+				requestId: 'bad_value___trace'
 			})
 		);
 		errorSpy.mockRestore();
@@ -256,7 +298,11 @@ describe('layout server load', () => {
 		mockedAuthKit.getUser.mockResolvedValue(null as never);
 		mockedAuthKit.getSignInUrl.mockResolvedValue('/auth/sign-in' as never);
 
-		const result = await load(createEvent('https://kaivalo.test/', { 'x-kaivalo-test-auth-failure': '1' }));
+		const result = await load(
+			createEvent('https://kaivalo.test/', {
+				'x-kaivalo-test-auth-failure': '1'
+			})
+		);
 
 		expect(result).toEqual({
 			user: null,
@@ -266,17 +312,24 @@ describe('layout server load', () => {
 	});
 
 	it('forces auth-unavailable state only when header and test toggle are both enabled', async () => {
-		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		const errorSpy = vi
+			.spyOn(console, 'error')
+			.mockImplementation(() => undefined);
 		mockEnv.KAIVALO_ENABLE_TEST_AUTH_FAILURE = '1';
 
-		const result = await load(createEvent('https://kaivalo.test/', { 'x-kaivalo-test-auth-failure': '1' }));
+		const result = await load(
+			createEvent('https://kaivalo.test/', {
+				'x-kaivalo-test-auth-failure': '1'
+			})
+		);
 
 		expect(mockedAuthKit.getUser).not.toHaveBeenCalled();
 		expect(result).toEqual({
 			user: null,
 			signInUrl: null,
 			authError: {
-				message: 'Sign-in is temporarily unavailable. Please try again shortly.',
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
 				incidentId: expect.stringMatching(/^authlayout_/)
 			}
 		});
@@ -284,7 +337,7 @@ describe('layout server load', () => {
 			'Auth layout load failed',
 			expect.objectContaining({
 				errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
-				errorName: 'Error',
+				errorName: 'Error'
 			})
 		);
 		errorSpy.mockRestore();

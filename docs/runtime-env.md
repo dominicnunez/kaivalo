@@ -55,6 +55,7 @@ For a development-oriented starting point, see `apps/hub/.env.example`.
 ## Production Expectations
 
 For production:
+
 - `ORIGIN` and `WORKOS_REDIRECT_URI` must stay on the same origin
 - `WORKOS_REDIRECT_URI` must end in `/auth/callback`
 - `TRUST_X_FORWARDED_PROTO=true` requires a correct `TRUSTED_PROXY_IPS` value

@@ -20,7 +20,9 @@ describe('proxy ip trust canonicalization', () => {
 			resolve: async () => new Response('ok', { status: 200 })
 		});
 
-		expect(response.headers.get('Strict-Transport-Security')).toBe('max-age=63072000; includeSubDomains');
+		expect(response.headers.get('Strict-Transport-Security')).toBe(
+			'max-age=63072000; includeSubDomains'
+		);
 	});
 
 	it('uses the trusted proxy proto hop from the right side of comma-separated values', async () => {
@@ -57,7 +59,9 @@ describe('proxy ip trust canonicalization', () => {
 			resolve: async () => new Response('ok', { status: 200 })
 		});
 
-		expect(httpFromTrustedProxy.headers.get('Strict-Transport-Security')).toBeNull();
+		expect(
+			httpFromTrustedProxy.headers.get('Strict-Transport-Security')
+		).toBeNull();
 	});
 
 	it('rejects malformed client addresses at the trust boundary', async () => {

@@ -1,19 +1,31 @@
 import { isHttpError, isRedirect } from '@sveltejs/kit';
 import { canonicalizeIpAddress } from './ip-address.js';
 
-const REQUIRED_ENV_VARS = ['WORKOS_CLIENT_ID', 'WORKOS_API_KEY', 'WORKOS_REDIRECT_URI', 'WORKOS_COOKIE_PASSWORD'];
+const REQUIRED_ENV_VARS = [
+	'WORKOS_CLIENT_ID',
+	'WORKOS_API_KEY',
+	'WORKOS_REDIRECT_URI',
+	'WORKOS_COOKIE_PASSWORD'
+];
 const HEX_64_PATTERN = /^[a-f0-9]{64}$/i;
 const HSTS_MAX_AGE_SECONDS = 63_072_000;
 const LOCAL_REDIRECT_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 const AUTH_ROUTE_PATH_PREFIX = '/auth/';
-const PUBLIC_DOCUMENT_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=60';
+const PUBLIC_DOCUMENT_CACHE_CONTROL =
+	'public, max-age=300, stale-while-revalidate=60';
 const SENSITIVE_DOCUMENT_CACHE_CONTROL = 'private, no-store';
 const STATIC_IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
-const STATIC_ROOT_ASSET_CACHE_CONTROL = 'public, max-age=86400, stale-while-revalidate=600';
-const STATIC_FONT_ASSET_CACHE_CONTROL = 'public, max-age=604800, stale-while-revalidate=86400';
+const STATIC_ROOT_ASSET_CACHE_CONTROL =
+	'public, max-age=86400, stale-while-revalidate=600';
+const STATIC_FONT_ASSET_CACHE_CONTROL =
+	'public, max-age=604800, stale-while-revalidate=86400';
 const CACHE_VARY_COOKIE_HEADER = 'Cookie';
 const CACHE_VARY_AUTHORIZATION_HEADER = 'Authorization';
-const SENSITIVE_COOKIE_NAMES = new Set(['wos-session', '__secure-wos-session', '__host-wos-session']);
+const SENSITIVE_COOKIE_NAMES = new Set([
+	'wos-session',
+	'__secure-wos-session',
+	'__host-wos-session'
+]);
 const WORKOS_REDIRECT_PATHNAME = '/auth/callback';
 const FORWARDED_PROTO_HEADER = 'x-forwarded-proto';
 const HTTPS_PROTO = 'https';
@@ -44,13 +56,19 @@ function parseRedirectUrl(value) {
 		if (parsed.username || parsed.password) {
 			throw new Error();
 		}
-		if (parsed.pathname !== WORKOS_REDIRECT_PATHNAME || parsed.search || parsed.hash) {
+		if (
+			parsed.pathname !== WORKOS_REDIRECT_PATHNAME ||
+			parsed.search ||
+			parsed.hash
+		) {
 			throw new Error();
 		}
 
 		return parsed;
 	} catch {
-		throw new Error('WORKOS_REDIRECT_URI must be a valid absolute callback URL');
+		throw new Error(
+			'WORKOS_REDIRECT_URI must be a valid absolute callback URL'
+		);
 	}
 }
 
@@ -71,7 +89,9 @@ function parseOriginUrl(value) {
 
 		return parsed;
 	} catch {
-		throw new Error('ORIGIN must be a valid URL origin (for example: https://kaivalo.com)');
+		throw new Error(
+			'ORIGIN must be a valid URL origin (for example: https://kaivalo.com)'
+		);
 	}
 }
 
@@ -90,9 +110,10 @@ function assertHttpOrHttpsProtocol(url, envVarName) {
  * @returns {boolean}
  */
 function isLocalRedirectUrl(redirectUrl) {
-	const hostname = redirectUrl.hostname.startsWith('[') && redirectUrl.hostname.endsWith(']')
-		? redirectUrl.hostname.slice(1, -1)
-		: redirectUrl.hostname;
+	const hostname =
+		redirectUrl.hostname.startsWith('[') && redirectUrl.hostname.endsWith(']')
+			? redirectUrl.hostname.slice(1, -1)
+			: redirectUrl.hostname;
 	return LOCAL_REDIRECT_HOSTS.has(hostname);
 }
 
@@ -129,7 +150,10 @@ function hasEquivalentOrigin(left, right) {
 		return false;
 	}
 
-	return left.protocol === right.protocol && getEffectivePort(left) === getEffectivePort(right);
+	return (
+		left.protocol === right.protocol &&
+		getEffectivePort(left) === getEffectivePort(right)
+	);
 }
 
 /**
@@ -146,7 +170,10 @@ function isTestEnvironment(nodeEnv) {
  */
 function isDocumentResponse(response) {
 	const contentType = response.headers.get('Content-Type')?.toLowerCase() ?? '';
-	return contentType.includes('text/html') || contentType.includes('application/xhtml+xml');
+	return (
+		contentType.includes('text/html') ||
+		contentType.includes('application/xhtml+xml')
+	);
 }
 
 /**
@@ -170,15 +197,18 @@ function buildTrustedProxyIpSet(trustedProxyIps) {
  * @returns {string[]}
  */
 function parseTrustedProxyIps(trustedProxyIpsValue) {
-	const entries = trustedProxyIpsValue
-		?.split(',')
-		.map((value) => value.trim())
-		.filter((value) => value.length > 0) ?? [];
+	const entries =
+		trustedProxyIpsValue
+			?.split(',')
+			.map((value) => value.trim())
+			.filter((value) => value.length > 0) ?? [];
 
 	return entries.map((entry) => {
 		const canonical = canonicalizeIpAddress(entry);
 		if (!canonical) {
-			throw new Error(`TRUSTED_PROXY_IPS contains invalid IP address: ${entry}`);
+			throw new Error(
+				`TRUSTED_PROXY_IPS contains invalid IP address: ${entry}`
+			);
 		}
 		return canonical;
 	});
@@ -211,7 +241,10 @@ function isLocalOrigin(origin) {
  * @returns {boolean}
  */
 function isTrustedProxyHop(event, trustedProxyIps) {
-	if (trustedProxyIps.size === 0 || typeof event.getClientAddress !== 'function') {
+	if (
+		trustedProxyIps.size === 0 ||
+		typeof event.getClientAddress !== 'function'
+	) {
 		return false;
 	}
 
@@ -273,7 +306,9 @@ function isAuthRouteRequest(event) {
  */
 function isSecureRequest(event, trustForwardedProto, trustedProxyIps) {
 	if (trustForwardedProto && isTrustedProxyHop(event, trustedProxyIps)) {
-		const forwardedProto = getTrustedForwardedProto(event.request?.headers.get(FORWARDED_PROTO_HEADER));
+		const forwardedProto = getTrustedForwardedProto(
+			event.request?.headers.get(FORWARDED_PROTO_HEADER)
+		);
 		if (forwardedProto) {
 			return forwardedProto === HTTPS_PROTO;
 		}
@@ -320,7 +355,9 @@ function hasSensitiveCookieHeader(event) {
 	}
 
 	const cookieNames = extractCookieNames(cookieHeader);
-	return cookieNames.some((cookieName) => SENSITIVE_COOKIE_NAMES.has(cookieName));
+	return cookieNames.some((cookieName) =>
+		SENSITIVE_COOKIE_NAMES.has(cookieName)
+	);
 }
 
 /**
@@ -328,7 +365,11 @@ function hasSensitiveCookieHeader(event) {
  * @returns {boolean}
  */
 function isSensitiveRequest(event) {
-	return isAuthRouteRequest(event) || hasSensitiveCookieHeader(event) || hasAuthorizationHeader(event);
+	return (
+		isAuthRouteRequest(event) ||
+		hasSensitiveCookieHeader(event) ||
+		hasAuthorizationHeader(event)
+	);
 }
 
 /**
@@ -338,7 +379,11 @@ function isSensitiveRequest(event) {
  */
 function getVaryHeadersForRequest(event, response) {
 	const varyHeaders = [];
-	if (isAuthRouteRequest(event) || hasSensitiveCookieHeader(event) || responseSetsCookies(response)) {
+	if (
+		isAuthRouteRequest(event) ||
+		hasSensitiveCookieHeader(event) ||
+		responseSetsCookies(response)
+	) {
 		varyHeaders.push(CACHE_VARY_COOKIE_HEADER);
 	}
 	if (hasAuthorizationHeader(event) || isAuthRouteRequest(event)) {
@@ -490,12 +535,20 @@ function setHeader(headers, name, value) {
  */
 export function applyBaselineSecurityHeaders(headers, isSecure) {
 	if (isSecure) {
-		setHeader(headers, 'Strict-Transport-Security', `max-age=${HSTS_MAX_AGE_SECONDS}; includeSubDomains`);
+		setHeader(
+			headers,
+			'Strict-Transport-Security',
+			`max-age=${HSTS_MAX_AGE_SECONDS}; includeSubDomains`
+		);
 	}
 	setHeader(headers, 'X-Frame-Options', 'DENY');
 	setHeader(headers, 'X-Content-Type-Options', 'nosniff');
 	setHeader(headers, 'Referrer-Policy', 'strict-origin-when-cross-origin');
-	setHeader(headers, 'Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+	setHeader(
+		headers,
+		'Permissions-Policy',
+		'camera=(), microphone=(), geolocation=()'
+	);
 }
 
 /**
@@ -547,17 +600,27 @@ export function getValidatedWorkosEnv(env) {
 
 	const clientId = readRequiredTrimmedEnvValue(env, 'WORKOS_CLIENT_ID');
 	const apiKey = readRequiredTrimmedEnvValue(env, 'WORKOS_API_KEY');
-	const redirectUriValue = readRequiredTrimmedEnvValue(env, 'WORKOS_REDIRECT_URI');
-	const cookiePassword = readRequiredTrimmedEnvValue(env, 'WORKOS_COOKIE_PASSWORD');
+	const redirectUriValue = readRequiredTrimmedEnvValue(
+		env,
+		'WORKOS_REDIRECT_URI'
+	);
+	const cookiePassword = readRequiredTrimmedEnvValue(
+		env,
+		'WORKOS_COOKIE_PASSWORD'
+	);
 
 	if (!HEX_64_PATTERN.test(cookiePassword)) {
-		throw new Error('WORKOS_COOKIE_PASSWORD must be 64 hex characters (openssl rand -hex 32)');
+		throw new Error(
+			'WORKOS_COOKIE_PASSWORD must be 64 hex characters (openssl rand -hex 32)'
+		);
 	}
 
 	const redirectUrl = parseRedirectUrl(redirectUriValue);
 	assertHttpOrHttpsProtocol(redirectUrl, 'WORKOS_REDIRECT_URI');
 	if (redirectUrl.protocol !== 'https:' && !isLocalRedirectUrl(redirectUrl)) {
-		throw new Error('WORKOS_REDIRECT_URI must use https outside local development');
+		throw new Error(
+			'WORKOS_REDIRECT_URI must use https outside local development'
+		);
 	}
 
 	const originValue = env.ORIGIN?.trim();
@@ -610,19 +673,30 @@ export function assertValidWorkosEnv(env) {
  * }}
  */
 export function getProxyTrustConfiguration(env, origin) {
-	const trustForwardedProto = env.TRUST_X_FORWARDED_PROTO?.trim().toLowerCase() === 'true';
-	const trustedProxyIps = trustForwardedProto ? parseTrustedProxyIps(env.TRUSTED_PROXY_IPS) : [];
+	const trustForwardedProto =
+		env.TRUST_X_FORWARDED_PROTO?.trim().toLowerCase() === 'true';
+	const trustedProxyIps = trustForwardedProto
+		? parseTrustedProxyIps(env.TRUSTED_PROXY_IPS)
+		: [];
 	const isProduction = env.NODE_ENV?.trim().toLowerCase() === 'production';
 
 	if (trustForwardedProto && trustedProxyIps.length === 0) {
-		throw new Error('TRUSTED_PROXY_IPS must be configured when TRUST_X_FORWARDED_PROTO=true');
+		throw new Error(
+			'TRUSTED_PROXY_IPS must be configured when TRUST_X_FORWARDED_PROTO=true'
+		);
 	}
 	if (isProduction && !trustForwardedProto && origin.startsWith('https://')) {
 		throw new Error(PROXY_HSTS_CONFIGURATION_ERROR_MESSAGE);
 	}
-	if (isProduction && trustForwardedProto && origin.startsWith('https://') && !isLocalOrigin(origin)) {
+	if (
+		isProduction &&
+		trustForwardedProto &&
+		origin.startsWith('https://') &&
+		!isLocalOrigin(origin)
+	) {
 		const hasOnlyLoopbackTrustedProxies =
-			trustedProxyIps.length > 0 && trustedProxyIps.every((ipAddress) => isLoopbackIpAddress(ipAddress));
+			trustedProxyIps.length > 0 &&
+			trustedProxyIps.every((ipAddress) => isLoopbackIpAddress(ipAddress));
 		if (hasOnlyLoopbackTrustedProxies) {
 			throw new Error(LOOPBACK_PROXY_TRUST_ERROR_MESSAGE);
 		}
@@ -668,18 +742,31 @@ export function createSecurityHeadersHandle(options = {}) {
 			isSecureRequest(event, trustForwardedProto, trustedProxyIps)
 		);
 
-		const isSensitiveResponse = isSensitiveRequest(event) || responseSetsCookies(response);
+		const isSensitiveResponse =
+			isSensitiveRequest(event) || responseSetsCookies(response);
 		if (isSensitiveResponse) {
 			response.headers.set('Cache-Control', SENSITIVE_DOCUMENT_CACHE_CONTROL);
-			appendVaryHeaders(response.headers, getVaryHeadersForRequest(event, response));
+			appendVaryHeaders(
+				response.headers,
+				getVaryHeadersForRequest(event, response)
+			);
 			return response;
 		}
 
-		if ((method === 'GET' || method === 'HEAD') && isDocumentResponse(response)) {
+		if (
+			(method === 'GET' || method === 'HEAD') &&
+			isDocumentResponse(response)
+		) {
 			if (!response.headers.has('Cache-Control')) {
-				response.headers.set('Cache-Control', getDocumentCacheControl(response));
+				response.headers.set(
+					'Cache-Control',
+					getDocumentCacheControl(response)
+				);
 			}
-			appendVaryHeaders(response.headers, getVaryHeadersForRequest(event, response));
+			appendVaryHeaders(
+				response.headers,
+				getVaryHeadersForRequest(event, response)
+			);
 		}
 		return response;
 	};

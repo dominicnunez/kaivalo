@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { getStaticAssetCacheControl, getValidatedWorkosEnv, shouldApplyStaticAssetHeaders } from './workos-security.js';
+import {
+	getStaticAssetCacheControl,
+	getValidatedWorkosEnv,
+	shouldApplyStaticAssetHeaders
+} from './workos-security.js';
 
 const validLocalEnv = {
 	WORKOS_CLIENT_ID: 'client_fixture',
@@ -12,19 +16,25 @@ const validLocalEnv = {
 describe('static asset security policy', () => {
 	it('marks immutable app bundles as immutable cached static assets', () => {
 		const pathname = '/_app/immutable/chunks/index.abc123.js';
-		expect(getStaticAssetCacheControl(pathname)).toBe('public, max-age=31536000, immutable');
+		expect(getStaticAssetCacheControl(pathname)).toBe(
+			'public, max-age=31536000, immutable'
+		);
 		expect(shouldApplyStaticAssetHeaders(pathname)).toBe(true);
 	});
 
 	it('applies static policy to known root assets', () => {
 		const pathname = '/robots.txt';
-		expect(getStaticAssetCacheControl(pathname)).toBe('public, max-age=86400, stale-while-revalidate=600');
+		expect(getStaticAssetCacheControl(pathname)).toBe(
+			'public, max-age=86400, stale-while-revalidate=600'
+		);
 		expect(shouldApplyStaticAssetHeaders(pathname)).toBe(true);
 	});
 
 	it('applies static policy to font assets with explicit cache control', () => {
 		const pathname = '/fonts/clash-display-400.woff2';
-		expect(getStaticAssetCacheControl(pathname)).toBe('public, max-age=604800, stale-while-revalidate=86400');
+		expect(getStaticAssetCacheControl(pathname)).toBe(
+			'public, max-age=604800, stale-while-revalidate=86400'
+		);
 		expect(shouldApplyStaticAssetHeaders(pathname)).toBe(true);
 	});
 

@@ -8,14 +8,14 @@ const newestMtimeCache = new Map();
  * @returns {string}
  */
 function getDirectoryKey(stats) {
-  return `${stats.dev}:${stats.ino}`;
+	return `${stats.dev}:${stats.ino}`;
 }
 
 /**
  * Clears the process-level mtime memoization cache.
  */
 export function clearNewestMtimeCache() {
-  newestMtimeCache.clear();
+	newestMtimeCache.clear();
 }
 
 /**
@@ -24,61 +24,61 @@ export function clearNewestMtimeCache() {
  * @returns {number}
  */
 export function getNewestMtimeMs(targetPath, visitedDirectories = new Set()) {
-  const isTopLevelCall = visitedDirectories.size === 0;
-  if (isTopLevelCall && newestMtimeCache.has(targetPath)) {
-    return newestMtimeCache.get(targetPath);
-  }
+	const isTopLevelCall = visitedDirectories.size === 0;
+	if (isTopLevelCall && newestMtimeCache.has(targetPath)) {
+		return newestMtimeCache.get(targetPath);
+	}
 
-  let newestMtimeMs = 0;
-  if (!existsSync(targetPath)) {
-    if (isTopLevelCall) {
-      newestMtimeCache.set(targetPath, newestMtimeMs);
-    }
-    return newestMtimeMs;
-  }
+	let newestMtimeMs = 0;
+	if (!existsSync(targetPath)) {
+		if (isTopLevelCall) {
+			newestMtimeCache.set(targetPath, newestMtimeMs);
+		}
+		return newestMtimeMs;
+	}
 
-  const stats = lstatSync(targetPath);
-  if (stats.isSymbolicLink()) {
-    if (isTopLevelCall) {
-      newestMtimeCache.set(targetPath, newestMtimeMs);
-    }
-    return newestMtimeMs;
-  }
+	const stats = lstatSync(targetPath);
+	if (stats.isSymbolicLink()) {
+		if (isTopLevelCall) {
+			newestMtimeCache.set(targetPath, newestMtimeMs);
+		}
+		return newestMtimeMs;
+	}
 
-  if (stats.isFile()) {
-    newestMtimeMs = stats.mtimeMs;
-    if (isTopLevelCall) {
-      newestMtimeCache.set(targetPath, newestMtimeMs);
-    }
-    return newestMtimeMs;
-  }
-  if (!stats.isDirectory()) {
-    if (isTopLevelCall) {
-      newestMtimeCache.set(targetPath, newestMtimeMs);
-    }
-    return newestMtimeMs;
-  }
+	if (stats.isFile()) {
+		newestMtimeMs = stats.mtimeMs;
+		if (isTopLevelCall) {
+			newestMtimeCache.set(targetPath, newestMtimeMs);
+		}
+		return newestMtimeMs;
+	}
+	if (!stats.isDirectory()) {
+		if (isTopLevelCall) {
+			newestMtimeCache.set(targetPath, newestMtimeMs);
+		}
+		return newestMtimeMs;
+	}
 
-  const directoryKey = getDirectoryKey(stats);
-  if (visitedDirectories.has(directoryKey)) {
-    if (isTopLevelCall) {
-      newestMtimeCache.set(targetPath, newestMtimeMs);
-    }
-    return newestMtimeMs;
-  }
-  visitedDirectories.add(directoryKey);
+	const directoryKey = getDirectoryKey(stats);
+	if (visitedDirectories.has(directoryKey)) {
+		if (isTopLevelCall) {
+			newestMtimeCache.set(targetPath, newestMtimeMs);
+		}
+		return newestMtimeMs;
+	}
+	visitedDirectories.add(directoryKey);
 
-  newestMtimeMs = stats.mtimeMs;
-  for (const entry of readdirSync(targetPath, { withFileTypes: true })) {
-    const entryPath = path.join(targetPath, entry.name);
-    const entryMtimeMs = getNewestMtimeMs(entryPath, visitedDirectories);
-    if (entryMtimeMs > newestMtimeMs) {
-      newestMtimeMs = entryMtimeMs;
-    }
-  }
+	newestMtimeMs = stats.mtimeMs;
+	for (const entry of readdirSync(targetPath, { withFileTypes: true })) {
+		const entryPath = path.join(targetPath, entry.name);
+		const entryMtimeMs = getNewestMtimeMs(entryPath, visitedDirectories);
+		if (entryMtimeMs > newestMtimeMs) {
+			newestMtimeMs = entryMtimeMs;
+		}
+	}
 
-  if (isTopLevelCall) {
-    newestMtimeCache.set(targetPath, newestMtimeMs);
-  }
-  return newestMtimeMs;
+	if (isTopLevelCall) {
+		newestMtimeCache.set(targetPath, newestMtimeMs);
+	}
+	return newestMtimeMs;
 }

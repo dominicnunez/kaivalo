@@ -23,9 +23,9 @@ function parseArgs(argv) {
 }
 
 function parseVersion(version) {
-	const match = String(version).trim().match(
-		/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/
-	);
+	const match = String(version)
+		.trim()
+		.match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/);
 	if (!match) {
 		throw new Error(`Invalid semver version: ${version}`);
 	}
@@ -109,9 +109,12 @@ async function readCurrentVersion() {
 	const lockfilePath = resolve(process.cwd(), 'package-lock.json');
 	const raw = await readFile(lockfilePath, 'utf8');
 	const lockfile = JSON.parse(raw);
-	const currentVersion = lockfile?.packages?.['node_modules/@sveltejs/kit']?.version;
+	const currentVersion =
+		lockfile?.packages?.['node_modules/@sveltejs/kit']?.version;
 	if (!currentVersion) {
-		throw new Error('Could not find resolved @sveltejs/kit version in package-lock.json');
+		throw new Error(
+			'Could not find resolved @sveltejs/kit version in package-lock.json'
+		);
 	}
 	return currentVersion;
 }
@@ -124,7 +127,9 @@ async function readLatestMetadata() {
 	});
 
 	if (!response.ok) {
-		throw new Error(`Failed to fetch latest @sveltejs/kit metadata: ${response.status} ${response.statusText}`);
+		throw new Error(
+			`Failed to fetch latest @sveltejs/kit metadata: ${response.status} ${response.statusText}`
+		);
 	}
 
 	const latestMetadata = await response.json();
@@ -145,9 +150,15 @@ function buildSummary(result) {
 	];
 
 	if (result.hasNewerUpstream) {
-		lines.push('', 'A newer upstream `@sveltejs/kit` release exists and should be reviewed.');
+		lines.push(
+			'',
+			'A newer upstream `@sveltejs/kit` release exists and should be reviewed.'
+		);
 	} else {
-		lines.push('', 'The repository is already on the latest published `@sveltejs/kit` release.');
+		lines.push(
+			'',
+			'The repository is already on the latest published `@sveltejs/kit` release.'
+		);
 	}
 
 	return lines.join('\n');
@@ -172,7 +183,8 @@ async function main() {
 	const options = parseArgs(process.argv.slice(2));
 	const currentVersion = await readCurrentVersion();
 	const latestMetadata = await readLatestMetadata();
-	const hasNewerUpstream = compareVersions(latestMetadata.version, currentVersion) > 0;
+	const hasNewerUpstream =
+		compareVersions(latestMetadata.version, currentVersion) > 0;
 	const result = {
 		currentVersion,
 		latestVersion: latestMetadata.version,

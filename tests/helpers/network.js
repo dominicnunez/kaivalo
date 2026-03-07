@@ -29,7 +29,9 @@ export function reserveLocalPort(host = '127.0.0.1') {
 		reservation.listen(0, host, () => {
 			const address = reservation.address();
 			if (!address || typeof address === 'string') {
-				void release().finally(() => reject(new Error('Unable to reserve local TCP port')));
+				void release().finally(() =>
+					reject(new Error('Unable to reserve local TCP port'))
+				);
 				return;
 			}
 			resolve({ port: address.port, release });

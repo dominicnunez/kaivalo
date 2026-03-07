@@ -8,7 +8,10 @@ import { TRUSTED_AVATAR_HOSTS } from '$lib/server/trusted-hosts.js';
 
 const TRUSTED_AVATAR_HOSTNAME_SET = new Set(TRUSTED_AVATAR_HOSTS);
 const TRUSTED_SIGN_IN_ORIGINS = new Set(['https://api.workos.com']);
-const TRUSTED_SIGN_IN_PATH_PREFIXES = ['/auth/sign-in', '/user_management/authorize'];
+const TRUSTED_SIGN_IN_PATH_PREFIXES = [
+	'/auth/sign-in',
+	'/user_management/authorize'
+];
 let trustedSignInOriginSetCache: Set<string> | null = null;
 
 function getTrustedSignInOriginSet(): Set<string> {
@@ -34,7 +37,9 @@ function isTrustedAvatarHost(hostname: string): boolean {
 	return TRUSTED_AVATAR_HOSTNAME_SET.has(hostname);
 }
 
-function sanitizeAvatarUrl(candidate: string | null | undefined): string | null {
+function sanitizeAvatarUrl(
+	candidate: string | null | undefined
+): string | null {
 	if (!candidate) {
 		return null;
 	}
@@ -67,7 +72,9 @@ function sanitizeSignInUrl(
 
 		const parsedRelativeUrl = new URL(candidate, eventOrigin);
 		return isTrustedSignInPath(parsedRelativeUrl.pathname)
-			? parsedRelativeUrl.pathname + parsedRelativeUrl.search + parsedRelativeUrl.hash
+			? parsedRelativeUrl.pathname +
+					parsedRelativeUrl.search +
+					parsedRelativeUrl.hash
 			: null;
 	}
 
@@ -102,11 +109,13 @@ function isTrustedSignInPath(pathname: string): boolean {
 	);
 }
 
-function shouldForceAuthFailure(event: Parameters<LayoutServerLoad>[0]): boolean {
+function shouldForceAuthFailure(
+	event: Parameters<LayoutServerLoad>[0]
+): boolean {
 	return (
-		env.NODE_ENV === 'test'
-		&& env.KAIVALO_ENABLE_TEST_AUTH_FAILURE === '1'
-		&& event.request.headers.get('x-kaivalo-test-auth-failure') === '1'
+		env.NODE_ENV === 'test' &&
+		env.KAIVALO_ENABLE_TEST_AUTH_FAILURE === '1' &&
+		event.request.headers.get('x-kaivalo-test-auth-failure') === '1'
 	);
 }
 
@@ -131,14 +140,20 @@ export const load: LayoutServerLoad = async (event) => {
 		let signInUrl = null;
 		if (!user) {
 			const trustedSignInOrigins = getTrustedSignInOriginSet();
-			signInUrl = sanitizeSignInUrl(await authKit.getSignInUrl(), event.url.origin, trustedSignInOrigins);
+			signInUrl = sanitizeSignInUrl(
+				await authKit.getSignInUrl(),
+				event.url.origin,
+				trustedSignInOrigins
+			);
 		}
-		const authError = user || signInUrl
-			? null
-			: {
-					message: 'Sign-in is temporarily unavailable. Please try again shortly.',
-					incidentId: null
-			  };
+		const authError =
+			user || signInUrl
+				? null
+				: {
+						message:
+							'Sign-in is temporarily unavailable. Please try again shortly.',
+						incidentId: null
+					};
 		if (authError) {
 			markAuthFailureNoStore(event);
 		}
@@ -149,14 +164,16 @@ export const load: LayoutServerLoad = async (event) => {
 						firstName: user.firstName,
 						email: user.email,
 						profilePictureUrl: sanitizeAvatarUrl(user.profilePictureUrl)
-				  }
+					}
 				: null,
 			signInUrl: user ? null : signInUrl,
 			authError
 		};
 	} catch (err) {
 		const incidentId = `authlayout_${randomUUID()}`;
-		const requestId = normalizeRequestId(event.request.headers.get('x-request-id'));
+		const requestId = normalizeRequestId(
+			event.request.headers.get('x-request-id')
+		);
 		console.error('Auth layout load failed', {
 			requestId,
 			incidentId,
@@ -171,7 +188,8 @@ export const load: LayoutServerLoad = async (event) => {
 			user: null,
 			signInUrl: null,
 			authError: {
-				message: 'Sign-in is temporarily unavailable. Please try again shortly.',
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
 				incidentId
 			}
 		};

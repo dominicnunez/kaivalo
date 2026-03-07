@@ -6,7 +6,11 @@ type HookInput = {
 };
 
 const configureAuthKit = vi.fn();
-const authKitHandle = vi.fn(() => async ({ event, resolve }: HookInput) => resolve(event));
+const authKitHandle = vi.fn(
+	() =>
+		async ({ event, resolve }: HookInput) =>
+			resolve(event)
+);
 const privateEnv: Record<string, string> = {};
 
 vi.mock('@workos/authkit-sveltekit', () => ({
@@ -19,9 +23,13 @@ vi.mock('$env/dynamic/private', () => ({
 }));
 
 vi.mock('@sveltejs/kit/hooks', () => ({
-	sequence: (...handles: Array<(input: HookInput) => Promise<Response>>) =>
+	sequence:
+		(...handles: Array<(input: HookInput) => Promise<Response>>) =>
 		async ({ event, resolve }: HookInput) => {
-			const run = async (index: number, currentEvent: unknown): Promise<Response> => {
+			const run = async (
+				index: number,
+				currentEvent: unknown
+			): Promise<Response> => {
 				const current = handles[index];
 				if (!current) {
 					return resolve(currentEvent);
@@ -69,11 +77,16 @@ describe('hooks server behavior', () => {
 			event: createEvent('https://kaivalo.test/auth/callback', {
 				cookie: 'sid=abc123'
 			}) as never,
-			resolve: async () => new Response('<html></html>', { headers: { 'Content-Type': 'text/html' } })
+			resolve: async () =>
+				new Response('<html></html>', {
+					headers: { 'Content-Type': 'text/html' }
+				})
 		});
 
 		expect(response.headers.get('cache-control')).toBe('private, no-store');
-		expect(response.headers.get('strict-transport-security')).toContain('max-age=');
+		expect(response.headers.get('strict-transport-security')).toContain(
+			'max-age='
+		);
 		expect(response.headers.get('x-frame-options')).toBe('DENY');
 		expect(response.headers.get('x-content-type-options')).toBe('nosniff');
 		expect(configureAuthKit).toHaveBeenCalledTimes(1);
@@ -84,10 +97,15 @@ describe('hooks server behavior', () => {
 		const { handle } = await import('./hooks.server');
 		const response = await handle({
 			event: createEvent('https://kaivalo.test/') as never,
-			resolve: async () => new Response('<html></html>', { headers: { 'Content-Type': 'text/html' } })
+			resolve: async () =>
+				new Response('<html></html>', {
+					headers: { 'Content-Type': 'text/html' }
+				})
 		});
 
-		expect(response.headers.get('cache-control')).toBe('public, max-age=300, stale-while-revalidate=60');
+		expect(response.headers.get('cache-control')).toBe(
+			'public, max-age=300, stale-while-revalidate=60'
+		);
 		expect(response.headers.get('vary')).toBeNull();
 	});
 
@@ -95,7 +113,11 @@ describe('hooks server behavior', () => {
 		const { handle } = await import('./hooks.server');
 		const response = await handle({
 			event: createEvent('https://kaivalo.test/missing') as never,
-			resolve: async () => new Response('<html>not found</html>', { status: 404, headers: { 'Content-Type': 'text/html' } })
+			resolve: async () =>
+				new Response('<html>not found</html>', {
+					status: 404,
+					headers: { 'Content-Type': 'text/html' }
+				})
 		});
 
 		expect(response.headers.get('cache-control')).toBe('private, no-store');
@@ -103,7 +125,9 @@ describe('hooks server behavior', () => {
 	});
 
 	it('returns sanitized error payload with an incident id from handleError', async () => {
-		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		const errorSpy = vi
+			.spyOn(console, 'error')
+			.mockImplementation(() => undefined);
 		const { handleError } = await import('./hooks.server');
 
 		const result = handleError({

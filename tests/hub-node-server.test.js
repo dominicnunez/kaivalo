@@ -57,7 +57,9 @@ function httpGet(port, headers = {}) {
 			},
 			(res) => {
 				const chunks = [];
-				res.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+				res.on('data', (chunk) =>
+					chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+				);
 				res.on('end', () => {
 					resolve({
 						statusCode: res.statusCode ?? 0,
@@ -121,7 +123,9 @@ describe('node server diagnostics', () => {
 		const cause = new Error('oauth code=secret-token');
 		const err = new Error('failed for token=abc123', { cause });
 		err.code = 'AUTH_FAILURE';
-		const diagnostics = getErrorDiagnostics(err, { includeSensitiveDetails: false });
+		const diagnostics = getErrorDiagnostics(err, {
+			includeSensitiveDetails: false
+		});
 
 		assert.deepStrictEqual(diagnostics, {
 			type: 'Error',
@@ -134,11 +138,15 @@ describe('node server diagnostics', () => {
 			method: 'GET',
 			url: '/auth/callback?access_token=topsecret'
 		};
-		const logRecord = buildRequestFailureLog(req, new Error('failed for token=abc123'), {
-			...baseEnv,
-			NODE_ENV: 'production',
-			KAIVALO_INCLUDE_SENSITIVE_ERROR_LOGS: 'true'
-		});
+		const logRecord = buildRequestFailureLog(
+			req,
+			new Error('failed for token=abc123'),
+			{
+				...baseEnv,
+				NODE_ENV: 'production',
+				KAIVALO_INCLUDE_SENSITIVE_ERROR_LOGS: 'true'
+			}
+		);
 
 		assert.strictEqual(logRecord.pathname, '/auth/callback');
 		assert.strictEqual(logRecord.error.type, 'Error');
@@ -150,21 +158,28 @@ describe('node server diagnostics', () => {
 	it('includes stack and cause diagnostics only in explicit debug mode', () => {
 		const cause = new Error('oauth code=secret-token');
 		const err = new Error('failed for token=abc123', { cause });
-		const diagnostics = getErrorDiagnostics(err, { includeSensitiveDetails: true });
+		const diagnostics = getErrorDiagnostics(err, {
+			includeSensitiveDetails: true
+		});
 
 		assert.strictEqual(diagnostics.type, 'Error');
 		assert.strictEqual(diagnostics.message, 'failed for token=[redacted]');
 		assert.strictEqual(diagnostics.causeType, 'Error');
 		assert.strictEqual(diagnostics.causeMessage, 'oauth code=[redacted]');
-		assert.ok(typeof diagnostics.stack === 'string' && diagnostics.stack.length > 0);
+		assert.ok(
+			typeof diagnostics.stack === 'string' && diagnostics.stack.length > 0
+		);
 		assert.ok(!diagnostics.stack?.includes('secret-token'));
 		assert.ok(!diagnostics.stack?.includes('abc123'));
 	});
 
 	it('redacts sensitive URL query values in non-error diagnostics', () => {
-		const diagnostics = getErrorDiagnostics('failed callback /auth/callback?code=sensitive&state=ok', {
-			includeSensitiveDetails: true
-		});
+		const diagnostics = getErrorDiagnostics(
+			'failed callback /auth/callback?code=sensitive&state=ok',
+			{
+				includeSensitiveDetails: true
+			}
+		);
 
 		assert.deepStrictEqual(diagnostics, {
 			type: 'NonErrorThrown',
@@ -218,7 +233,9 @@ describe('node server proxy trust handling', () => {
 		await httpGet(port, { 'x-forwarded-proto': 'https' });
 		await httpGet(port, { 'x-forwarded-proto': 'https' });
 
-		assert.deepStrictEqual(warnings, ['Ignoring x-forwarded-proto from untrusted proxy address']);
+		assert.deepStrictEqual(warnings, [
+			'Ignoring x-forwarded-proto from untrusted proxy address'
+		]);
 	});
 
 	it('returns a 500 response when async request handlers reject', async () => {
@@ -247,8 +264,14 @@ describe('node server proxy trust handling', () => {
 		assert.strictEqual(response.headers['cache-control'], 'private, no-store');
 		assert.strictEqual(response.headers['x-frame-options'], 'DENY');
 		assert.strictEqual(response.headers['x-content-type-options'], 'nosniff');
-		assert.strictEqual(response.headers['referrer-policy'], 'strict-origin-when-cross-origin');
-		assert.strictEqual(response.headers['permissions-policy'], 'camera=(), microphone=(), geolocation=()');
+		assert.strictEqual(
+			response.headers['referrer-policy'],
+			'strict-origin-when-cross-origin'
+		);
+		assert.strictEqual(
+			response.headers['permissions-policy'],
+			'camera=(), microphone=(), geolocation=()'
+		);
 		assert.deepStrictEqual(errors, ['Request handler failed']);
 	});
 
@@ -309,7 +332,12 @@ describe('node server proxy trust handling', () => {
 					},
 					'https://kaivalo.test'
 				),
-			new RegExp(LOOPBACK_PROXY_TRUST_ERROR_MESSAGE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+			new RegExp(
+				LOOPBACK_PROXY_TRUST_ERROR_MESSAGE.replace(
+					/[.*+?^${}()|[\]\\]/g,
+					'\\$&'
+				)
+			)
 		);
 	});
 });
@@ -410,7 +438,9 @@ describe('node server lifecycle', () => {
 
 		const shutdownResult = await Promise.race([
 			beginShutdown().then((exitCode) => ({ timedOut: false, exitCode })),
-			new Promise((resolve) => setTimeout(() => resolve({ timedOut: true, exitCode: -1 }), 250))
+			new Promise((resolve) =>
+				setTimeout(() => resolve({ timedOut: true, exitCode: -1 }), 250)
+			)
 		]);
 		assert.strictEqual(shutdownResult.timedOut, false);
 		assert.strictEqual(shutdownResult.exitCode, 1);
@@ -457,8 +487,14 @@ describe('node server lifecycle', () => {
 		assert.strictEqual(headers['cache-control'], 'private, no-store');
 		assert.strictEqual(headers['x-frame-options'], 'DENY');
 		assert.strictEqual(headers['x-content-type-options'], 'nosniff');
-		assert.strictEqual(headers['referrer-policy'], 'strict-origin-when-cross-origin');
-		assert.strictEqual(headers['permissions-policy'], 'camera=(), microphone=(), geolocation=()');
+		assert.strictEqual(
+			headers['referrer-policy'],
+			'strict-origin-when-cross-origin'
+		);
+		assert.strictEqual(
+			headers['permissions-policy'],
+			'camera=(), microphone=(), geolocation=()'
+		);
 	});
 
 	it('cleans up SIGINT and SIGTERM listeners when the server closes', async () => {
@@ -469,31 +505,57 @@ describe('node server lifecycle', () => {
 		await firstReservation.release();
 		const firstServer = startHubServer({
 			handler: (_req, res) => res.end('ok'),
-			env: { ...baseEnv, HOST: '127.0.0.1', PORT: String(firstReservation.port) },
+			env: {
+				...baseEnv,
+				HOST: '127.0.0.1',
+				PORT: String(firstReservation.port)
+			},
 			logger: { log: () => {}, warn: () => {}, error: () => {} }
 		});
 		servers.push(firstServer);
 		await waitForServerListening(firstServer);
-		assert.strictEqual(process.listenerCount('SIGINT'), initialSigIntListeners + 1);
-		assert.strictEqual(process.listenerCount('SIGTERM'), initialSigTermListeners + 1);
+		assert.strictEqual(
+			process.listenerCount('SIGINT'),
+			initialSigIntListeners + 1
+		);
+		assert.strictEqual(
+			process.listenerCount('SIGTERM'),
+			initialSigTermListeners + 1
+		);
 		await new Promise((resolve) => firstServer.close(() => resolve()));
 		assert.strictEqual(process.listenerCount('SIGINT'), initialSigIntListeners);
-		assert.strictEqual(process.listenerCount('SIGTERM'), initialSigTermListeners);
+		assert.strictEqual(
+			process.listenerCount('SIGTERM'),
+			initialSigTermListeners
+		);
 
 		const secondReservation = await reserveLocalPort();
 		await secondReservation.release();
 		const secondServer = startHubServer({
 			handler: (_req, res) => res.end('ok'),
-			env: { ...baseEnv, HOST: '127.0.0.1', PORT: String(secondReservation.port) },
+			env: {
+				...baseEnv,
+				HOST: '127.0.0.1',
+				PORT: String(secondReservation.port)
+			},
 			logger: { log: () => {}, warn: () => {}, error: () => {} }
 		});
 		servers.push(secondServer);
 		await waitForServerListening(secondServer);
-		assert.strictEqual(process.listenerCount('SIGINT'), initialSigIntListeners + 1);
-		assert.strictEqual(process.listenerCount('SIGTERM'), initialSigTermListeners + 1);
+		assert.strictEqual(
+			process.listenerCount('SIGINT'),
+			initialSigIntListeners + 1
+		);
+		assert.strictEqual(
+			process.listenerCount('SIGTERM'),
+			initialSigTermListeners + 1
+		);
 		await new Promise((resolve) => secondServer.close(() => resolve()));
 		assert.strictEqual(process.listenerCount('SIGINT'), initialSigIntListeners);
-		assert.strictEqual(process.listenerCount('SIGTERM'), initialSigTermListeners);
+		assert.strictEqual(
+			process.listenerCount('SIGTERM'),
+			initialSigTermListeners
+		);
 	});
 
 	it('handles listen failures with controlled exit and listener cleanup', async () => {
@@ -521,11 +583,16 @@ describe('node server lifecycle', () => {
 			assert.strictEqual(fatalEvents[0].exitCode, 1);
 			assert.strictEqual(fatalEvents[0].reason, 'startup-error');
 			assert.deepStrictEqual(logs, ['Failed to start hub server']);
-			assert.strictEqual(process.listenerCount('SIGINT'), initialSigIntListeners);
-			assert.strictEqual(process.listenerCount('SIGTERM'), initialSigTermListeners);
+			assert.strictEqual(
+				process.listenerCount('SIGINT'),
+				initialSigIntListeners
+			);
+			assert.strictEqual(
+				process.listenerCount('SIGTERM'),
+				initialSigTermListeners
+			);
 		} finally {
 			await reservation.release();
 		}
 	});
-
 });
