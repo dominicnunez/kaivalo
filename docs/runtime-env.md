@@ -51,6 +51,7 @@ For a development-oriented starting point, see `apps/hub/.env.example`.
 
 - `SHUTDOWN_TIMEOUT_MS`
   Optional graceful-shutdown timeout in milliseconds before force exit.
+  Must be a whole positive integer when set.
 
 ## Production Expectations
 
@@ -74,6 +75,6 @@ WORKOS_CLIENT_ID=client_...
 WORKOS_API_KEY=sk_...
 WORKOS_COOKIE_PASSWORD=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 TRUST_X_FORWARDED_PROTO=true
-TRUSTED_PROXY_IPS=127.0.0.1,::1
+TRUSTED_PROXY_IPS=203.0.113.10,2001:db8::10
 SHUTDOWN_TIMEOUT_MS=30000
 ```

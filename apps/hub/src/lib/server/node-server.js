@@ -4,6 +4,7 @@ import { canonicalizeIpAddress } from './ip-address.js';
 import {
 	applyBaselineSecurityHeaders,
 	applyStaticAssetHeaders,
+	getStaticAssetCacheControlForResponse,
 	getTrustedForwardedProto,
 	getProxyTrustConfiguration,
 	getValidatedWorkosEnv,
@@ -54,6 +55,27 @@ function parsePort(portValue) {
 	const parsed = Number(normalized);
 	if (!Number.isInteger(parsed) || parsed < MIN_PORT || parsed > MAX_PORT) {
 		throw new Error(`PORT must be between ${MIN_PORT} and ${MAX_PORT}`);
+	}
+	return parsed;
+}
+
+/**
+ * @param {string | undefined} rawValue
+ * @param {string} envName
+ * @param {number} defaultValue
+ * @returns {number}
+ */
+function parsePositiveIntegerEnvValue(rawValue, envName, defaultValue) {
+	if (rawValue === undefined || rawValue.trim() === '') {
+		return defaultValue;
+	}
+	const normalized = rawValue.trim();
+	if (!/^\d+$/.test(normalized)) {
+		throw new Error(`${envName} must be a positive integer`);
+	}
+	const parsed = Number(normalized);
+	if (!Number.isInteger(parsed) || parsed <= 0) {
+		throw new Error(`${envName} must be a positive integer`);
 	}
 	return parsed;
 }
@@ -337,8 +359,36 @@ export function createHubServer(options) {
 
 		const pathname = getRequestPathname(req);
 		const isStaticAssetRequest = shouldApplyStaticAssetHeaders(pathname);
-		if (isStaticAssetRequest) {
-			applyStaticAssetHeaders(res, pathname, secureRequest.isSecure);
+		let responseHeadersApplied = false;
+
+		const applyResponseSecurityHeaders = () => {
+			if (responseHeadersApplied || res.headersSent) {
+				return;
+			}
+			responseHeadersApplied = true;
+			applyBaselineSecurityHeaders(res, secureRequest.isSecure);
+			if (!isStaticAssetRequest) {
+				return;
+			}
+
+			const contentTypeHeader = res.getHeader('Content-Type');
+			const contentType =
+				typeof contentTypeHeader === 'string'
+					? contentTypeHeader
+					: Array.isArray(contentTypeHeader)
+						? (contentTypeHeader.find((value) => typeof value === 'string') ??
+							null)
+						: null;
+			const staticCacheControl = getStaticAssetCacheControlForResponse({
+				pathname,
+				statusCode: res.statusCode,
+				contentType,
+				hasSetCookie: res.getHeader('Set-Cookie') !== undefined
+			});
+			if (staticCacheControl && !res.hasHeader('Cache-Control')) {
+				applyStaticAssetHeaders(res, pathname, secureRequest.isSecure);
+			}
+
 			if (secureRequest.ignoredForwardedProto) {
 				const warningKey = `${secureRequest.remoteAddress || 'unknown'}|${secureRequest.forwardedProto || 'unknown'}`;
 				if (shouldLogForwardedProtoWarning(warningKey)) {
@@ -352,9 +402,29 @@ export function createHubServer(options) {
 					);
 				}
 			}
-		} else {
-			applyBaselineSecurityHeaders(res, secureRequest.isSecure);
-		}
+		};
+
+		const originalWriteHead = res.writeHead.bind(res);
+		const patchedWriteHead =
+			/** @type {typeof res.writeHead} */
+			(
+				(...args) => {
+					applyResponseSecurityHeaders();
+					return Reflect.apply(originalWriteHead, res, args);
+				}
+			);
+		res.writeHead = patchedWriteHead;
+
+		const originalEnd = res.end.bind(res);
+		const patchedEnd =
+			/** @type {typeof res.end} */
+			(
+				(...args) => {
+					applyResponseSecurityHeaders();
+					return Reflect.apply(originalEnd, res, args);
+				}
+			);
+		res.end = patchedEnd;
 
 		activeRequests += 1;
 		let settled = false;
@@ -404,14 +474,11 @@ export function createHubServer(options) {
 		});
 	});
 
-	const forceShutdownTimeoutMs = Number.parseInt(
-		options.env.SHUTDOWN_TIMEOUT_MS ?? '',
-		10
+	const effectiveShutdownTimeoutMs = parsePositiveIntegerEnvValue(
+		options.env.SHUTDOWN_TIMEOUT_MS,
+		'SHUTDOWN_TIMEOUT_MS',
+		SHUTDOWN_TIMEOUT_MS
 	);
-	const effectiveShutdownTimeoutMs =
-		Number.isInteger(forceShutdownTimeoutMs) && forceShutdownTimeoutMs > 0
-			? forceShutdownTimeoutMs
-			: SHUTDOWN_TIMEOUT_MS;
 
 	function beginShutdown() {
 		if (shutdownPromise) {

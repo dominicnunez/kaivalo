@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	getStaticAssetCacheControl,
+	getStaticAssetCacheControlForResponse,
 	getValidatedWorkosEnv,
 	shouldApplyStaticAssetHeaders
 } from './workos-security.js';
@@ -48,6 +49,30 @@ describe('static asset security policy', () => {
 		const pathname = '/health.json';
 		expect(getStaticAssetCacheControl(pathname)).toBeNull();
 		expect(shouldApplyStaticAssetHeaders(pathname)).toBe(false);
+	});
+
+	it('only applies static caching when the response looks like an asset', () => {
+		expect(
+			getStaticAssetCacheControlForResponse({
+				pathname: '/favicon.svg',
+				statusCode: 200,
+				contentType: 'image/svg+xml; charset=utf-8'
+			})
+		).toBe('public, max-age=86400, stale-while-revalidate=600');
+		expect(
+			getStaticAssetCacheControlForResponse({
+				pathname: '/favicon.svg',
+				statusCode: 200,
+				contentType: 'application/json; charset=utf-8'
+			})
+		).toBeNull();
+		expect(
+			getStaticAssetCacheControlForResponse({
+				pathname: '/favicon.svg',
+				statusCode: 404,
+				contentType: 'image/svg+xml'
+			})
+		).toBeNull();
 	});
 });
 

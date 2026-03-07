@@ -124,6 +124,19 @@ describe('hooks server behavior', () => {
 		expect(response.headers.get('vary')).toBeNull();
 	});
 
+	it('lets unexpected downstream failures propagate to the framework error path', async () => {
+		const { handle } = await import('./hooks.server');
+
+		await expect(
+			handle({
+				event: createEvent('https://kaivalo.test/broken') as never,
+				resolve: async () => {
+					throw new Error('unexpected downstream failure');
+				}
+			})
+		).rejects.toThrow('unexpected downstream failure');
+	});
+
 	it('returns sanitized error payload with an incident id from handleError', async () => {
 		const errorSpy = vi
 			.spyOn(console, 'error')

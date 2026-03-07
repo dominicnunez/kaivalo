@@ -1,4 +1,3 @@
-import { isHttpError, isRedirect } from '@sveltejs/kit';
 import { canonicalizeIpAddress } from './ip-address.js';
 
 const REQUIRED_ENV_VARS = [
@@ -41,6 +40,24 @@ const ROOT_STATIC_ASSET_PATHS = new Set([
 	'/site.webmanifest'
 ]);
 const FONT_ASSET_PATH_PREFIX = '/fonts/';
+const STATIC_ASSET_RESPONSE_CONTENT_TYPE_PREFIXES = [
+	'image/',
+	'font/',
+	'audio/',
+	'video/'
+];
+const STATIC_ASSET_RESPONSE_CONTENT_TYPES = new Set([
+	'application/font-woff',
+	'application/javascript',
+	'application/manifest+json',
+	'application/octet-stream',
+	'application/wasm',
+	'application/xml',
+	'text/css',
+	'text/javascript',
+	'text/plain',
+	'text/xml'
+]);
 export const PROXY_HSTS_CONFIGURATION_ERROR_MESSAGE =
 	'Production HTTPS origin requires trusted proxy proto forwarding for reliable HSTS. Set TRUST_X_FORWARDED_PROTO=true and TRUSTED_PROXY_IPS to trusted proxy addresses for proxied HTTPS deployments.';
 export const LOOPBACK_PROXY_TRUST_ERROR_MESSAGE =
@@ -165,14 +182,42 @@ function isTestEnvironment(nodeEnv) {
 }
 
 /**
+ * @param {string | null | undefined} contentType
+ * @returns {string}
+ */
+function getResponseMediaType(contentType) {
+	return contentType?.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+}
+
+/**
  * @param {Response} response
  * @returns {boolean}
  */
 function isDocumentResponse(response) {
-	const contentType = response.headers.get('Content-Type')?.toLowerCase() ?? '';
+	const contentType = getResponseMediaType(
+		response.headers.get('Content-Type')
+	);
 	return (
 		contentType.includes('text/html') ||
 		contentType.includes('application/xhtml+xml')
+	);
+}
+
+/**
+ * @param {string} mediaType
+ * @returns {boolean}
+ */
+function isStaticAssetMediaType(mediaType) {
+	if (!mediaType) {
+		return false;
+	}
+
+	if (STATIC_ASSET_RESPONSE_CONTENT_TYPES.has(mediaType)) {
+		return true;
+	}
+
+	return STATIC_ASSET_RESPONSE_CONTENT_TYPE_PREFIXES.some((prefix) =>
+		mediaType.startsWith(prefix)
 	);
 }
 
@@ -489,6 +534,34 @@ export function getStaticAssetCacheControl(pathname) {
 }
 
 /**
+ * @param {{
+ *   pathname: string | undefined | null
+ *   statusCode?: number | undefined
+ *   contentType?: string | null | undefined
+ *   hasSetCookie?: boolean | undefined
+ * }} options
+ * @returns {string | null}
+ */
+export function getStaticAssetCacheControlForResponse({
+	pathname,
+	statusCode = 200,
+	contentType,
+	hasSetCookie = false
+}) {
+	const cacheControl = getStaticAssetCacheControl(pathname);
+	if (!cacheControl) {
+		return null;
+	}
+	if (hasSetCookie || statusCode < 200 || statusCode >= 300) {
+		return null;
+	}
+
+	return isStaticAssetMediaType(getResponseMediaType(contentType))
+		? cacheControl
+		: null;
+}
+
+/**
  * @param {string | undefined | null} pathname
  * @returns {boolean}
  */
@@ -719,22 +792,7 @@ export function createSecurityHeadersHandle(options = {}) {
 	const trustForwardedProto = options.trustForwardedProto === true;
 	const trustedProxyIps = buildTrustedProxyIpSet(options.trustedProxyIps);
 	return async ({ event, resolve }) => {
-		let response;
-		try {
-			response = await resolve(event);
-		} catch (error) {
-			if (isRedirect(error) || isHttpError(error)) {
-				throw error;
-			}
-			if (error instanceof Response) {
-				response = error;
-			} else {
-				response = new Response('Internal Server Error', {
-					status: 500,
-					headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-				});
-			}
-		}
+		const response = await resolve(event);
 		const method = event.request?.method ?? 'GET';
 
 		applyBaselineSecurityHeaders(
@@ -767,6 +825,19 @@ export function createSecurityHeadersHandle(options = {}) {
 				response.headers,
 				getVaryHeadersForRequest(event, response)
 			);
+			return response;
+		}
+
+		if (!response.headers.has('Cache-Control')) {
+			const staticCacheControl = getStaticAssetCacheControlForResponse({
+				pathname: event.url?.pathname,
+				statusCode: response.status,
+				contentType: response.headers.get('Content-Type'),
+				hasSetCookie: responseSetsCookies(response)
+			});
+			if (staticCacheControl) {
+				response.headers.set('Cache-Control', staticCacheControl);
+			}
 		}
 		return response;
 	};

@@ -425,47 +425,27 @@ describe('Security header handle behavior', () => {
 		assert.strictEqual(response.headers.get('Content-Security-Policy'), null);
 	});
 
-	it('hardens fallback responses when downstream handlers throw', async () => {
+	it('rethrows unexpected downstream failures for centralized handling', async () => {
 		const handle = createSecurityHeadersHandle();
-		const response = await handle({
-			event: {
-				request: new Request('https://kaivalo.test/auth/callback', {
-					method: 'GET',
-					headers: { authorization: 'Bearer fixture-token' }
+		await assert.rejects(
+			() =>
+				handle({
+					event: {
+						request: new Request('https://kaivalo.test/auth/callback', {
+							method: 'GET',
+							headers: { authorization: 'Bearer fixture-token' }
+						}),
+						url: new URL('https://kaivalo.test/auth/callback')
+					},
+					resolve: async () => {
+						throw new Error('boom');
+					}
 				}),
-				url: new URL('https://kaivalo.test/auth/callback')
-			},
-			resolve: async () => {
-				throw new Error('boom');
+			(error) => {
+				assert.strictEqual(error?.message, 'boom');
+				return true;
 			}
-		});
-
-		assert.strictEqual(response.status, 500);
-		assert.strictEqual(
-			response.headers.get('Strict-Transport-Security'),
-			'max-age=63072000; includeSubDomains'
 		);
-		assert.strictEqual(response.headers.get('X-Frame-Options'), 'DENY');
-		assert.strictEqual(
-			response.headers.get('X-Content-Type-Options'),
-			'nosniff'
-		);
-		assert.strictEqual(
-			response.headers.get('Referrer-Policy'),
-			'strict-origin-when-cross-origin'
-		);
-		assert.strictEqual(
-			response.headers.get('Permissions-Policy'),
-			'camera=(), microphone=(), geolocation=()'
-		);
-		assert.strictEqual(
-			response.headers.get('Cache-Control'),
-			'private, no-store'
-		);
-		assertVaryIncludes(response.headers.get('Vary'), [
-			'Cookie',
-			'Authorization'
-		]);
 	});
 
 	it('rethrows redirect responses from downstream handlers', async () => {
@@ -839,6 +819,30 @@ describe('Security header handle behavior', () => {
 		});
 
 		assert.strictEqual(response.headers.get('Cache-Control'), null);
+	});
+
+	it('does not apply static cache policy to dynamic json from asset-like paths', async () => {
+		const handle = createSecurityHeadersHandle();
+		const response = await handle({
+			event: {
+				request: new Request('https://kaivalo.test/favicon.svg', {
+					method: 'GET'
+				}),
+				url: new URL('https://kaivalo.test/favicon.svg')
+			},
+			resolve: async () =>
+				new Response('{"ok":true}', {
+					status: 200,
+					headers: { 'Content-Type': 'application/json; charset=utf-8' }
+				})
+		});
+
+		assert.strictEqual(response.headers.get('Cache-Control'), null);
+		assert.strictEqual(response.headers.get('X-Frame-Options'), 'DENY');
+		assert.strictEqual(
+			response.headers.get('X-Content-Type-Options'),
+			'nosniff'
+		);
 	});
 
 	it('forces no-store caching on authorization-bearing non-document responses', async () => {

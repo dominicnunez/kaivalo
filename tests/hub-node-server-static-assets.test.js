@@ -100,15 +100,38 @@ describe('node server static asset classification', () => {
 			dynamicResponse.headers['permissions-policy'],
 			'camera=(), microphone=(), geolocation=()'
 		);
-		assert.strictEqual(
-			staticResponse.headers['cache-control'],
-			'public, max-age=86400, stale-while-revalidate=600'
-		);
+		assert.strictEqual(staticResponse.headers['cache-control'], undefined);
 		assert.strictEqual(
 			staticResponse.headers['x-content-type-options'],
 			'nosniff'
 		);
 		assert.strictEqual(dynamicResponse.body, '{"ok":true}');
 		assert.strictEqual(staticResponse.body, '{"ok":true}');
+	});
+
+	it('applies static cache headers only after the response proves it is an asset', async () => {
+		const { server } = createHubServer({
+			handler: (req, res) => {
+				res.statusCode = 200;
+				if (req.url === '/favicon.svg') {
+					res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+				} else {
+					res.setHeader('Content-Type', 'application/json; charset=utf-8');
+				}
+				res.end(req.url === '/favicon.svg' ? '<svg />' : '{"ok":true}');
+			},
+			env: baseEnv
+		});
+		servers.push(server);
+		const port = await listenOnEphemeralPort(server);
+
+		const staticResponse = await httpGet(port, '/favicon.svg');
+		const dynamicResponse = await httpGet(port, '/favicon.json');
+
+		assert.strictEqual(
+			staticResponse.headers['cache-control'],
+			'public, max-age=86400, stale-while-revalidate=600'
+		);
+		assert.strictEqual(dynamicResponse.headers['cache-control'], undefined);
 	});
 });

@@ -57,4 +57,23 @@ describe('node server port validation', () => {
 			'PORT must be an integer between 1 and 65535'
 		);
 	});
+
+	it('reports malformed shutdown timeout values through startup fatal handling', () => {
+		const fatalEvents = [];
+		const server = startHubServer({
+			handler: (_req, res) => res.end('ok'),
+			env: { ...baseEnv, SHUTDOWN_TIMEOUT_MS: '30000abc' },
+			logger: { log: () => {}, warn: () => {}, error: () => {} },
+			onFatal: (details) => fatalEvents.push(details)
+		});
+
+		assert.strictEqual(server, null);
+		assert.strictEqual(fatalEvents.length, 1);
+		assert.strictEqual(fatalEvents[0].reason, 'startup-error');
+		assert.strictEqual(fatalEvents[0].exitCode, 1);
+		assert.strictEqual(
+			fatalEvents[0].error?.message,
+			'SHUTDOWN_TIMEOUT_MS must be a positive integer'
+		);
+	});
 });
