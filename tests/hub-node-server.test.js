@@ -45,14 +45,15 @@ function listenOnEphemeralPort(server) {
 /**
  * @param {number} port
  * @param {Record<string, string>} [headers]
+ * @param {string} [path]
  */
-function httpGet(port, headers = {}) {
+function httpGet(port, headers = {}, path = '/favicon.svg') {
 	return new Promise((resolve, reject) => {
 		const req = http.get(
 			{
 				hostname: '127.0.0.1',
 				port,
-				path: '/favicon.svg',
+				path,
 				headers
 			},
 			(res) => {
@@ -271,6 +272,48 @@ describe('node server proxy trust handling', () => {
 		assert.strictEqual(
 			response.headers['permissions-policy'],
 			'camera=(), microphone=(), geolocation=()'
+		);
+		assert.deepStrictEqual(errors, ['Request handler failed']);
+	});
+
+	it('terminates partially-written responses without rewriting committed headers', async () => {
+		const errors = [];
+		const logger = {
+			log: () => {},
+			warn: () => {},
+			error: /** @param {string} message */ (message) => errors.push(message)
+		};
+		const { server } = createHubServer({
+			handler: async (_req, res) => {
+				res.statusCode = 200;
+				res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+				res.write('partial ');
+				throw new Error('failed after writing response bytes');
+			},
+			env: {
+				...baseEnv
+			},
+			logger
+		});
+		servers.push(server);
+
+		const port = await listenOnEphemeralPort(server);
+		const response = await httpGet(port, {}, '/partial-response');
+
+		assert.strictEqual(
+			response.statusCode,
+			200,
+			'committed status code should remain intact after a late failure'
+		);
+		assert.strictEqual(response.body, 'partial Internal Server Error');
+		assert.strictEqual(
+			response.headers['content-type'],
+			'text/plain; charset=utf-8'
+		);
+		assert.strictEqual(response.headers['cache-control'], undefined);
+		assert.ok(
+			typeof response.headers['x-content-type-options'] === 'string',
+			'security headers should still be present on committed partial responses'
 		);
 		assert.deepStrictEqual(errors, ['Request handler failed']);
 	});
