@@ -1,0 +1,344 @@
+/* Kaivalo Hub - Global Styles */
+
+@font-face {
+  font-family: 'Clash Display';
+  src: url('/fonts/clash-display-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Clash Display';
+  src: url('/fonts/clash-display-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Clash Display';
+  src: url('/fonts/clash-display-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Clash Display';
+  src: url('/fonts/clash-display-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Tailwind CSS v4 */
+@import "tailwindcss";
+
+/* Design Tokens */
+@layer base {
+  :root {
+    --bg-primary: #06060a;
+    --bg-secondary: #0e0e14;
+    --bg-tertiary: #16161f;
+    --bg-card: #0c0c12;
+    --text-primary: #f0f0f2;
+    --text-secondary: #8b8b9e;
+    --text-muted: #7e7e92;
+    --accent: #22c55e;
+    --accent-dim: rgba(34, 197, 94, 0.15);
+    --accent-glow: rgba(34, 197, 94, 0.08);
+    --accent-warning: #fbbf24;
+    --accent-warning-dim: rgba(245, 158, 11, 0.1);
+    --border: rgba(255, 255, 255, 0.06);
+    --border-hover: rgba(255, 255, 255, 0.12);
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  ::selection {
+    background-color: var(--accent-dim);
+    color: var(--accent);
+  }
+
+  body {
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Typography */
+@layer components {
+  .font-display {
+    font-family: 'Clash Display', ui-sans-serif, system-ui, sans-serif;
+  }
+
+  .font-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  .body-contents {
+    display: contents;
+  }
+
+  .auth-error-banner {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .auth-error-dismiss {
+    color: var(--text-muted);
+  }
+
+  .text-secondary {
+    color: var(--text-secondary);
+  }
+
+  .text-muted {
+    color: var(--text-muted);
+  }
+
+  .text-accent {
+    color: var(--accent);
+  }
+
+  .text-bg-primary {
+    color: var(--bg-primary);
+  }
+
+  .bg-accent {
+    background: var(--accent);
+  }
+
+  .avatar-border {
+    border: 1px solid var(--border);
+  }
+
+  .avatar-fallback {
+    background: var(--accent-dim);
+    color: var(--accent);
+    border: 1px solid var(--border);
+  }
+
+  .signout-btn {
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    background: none;
+  }
+
+  .typewriter-cursor-spacing {
+    margin-left: -0.1em;
+    margin-right: 0.15em;
+  }
+
+  .service-card-shell {
+    border-color: var(--text-muted);
+    background: var(--bg-card);
+  }
+
+  .icon-shell-soon {
+    background: var(--bg-tertiary);
+  }
+
+  .badge-soon {
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+  }
+
+  .footer-shell {
+    border-color: var(--border);
+  }
+}
+
+/* Grain overlay */
+.grain::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E") repeat;
+  opacity: 0.025;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Aurora gradient mesh */
+.aurora {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.aurora::before {
+  content: '';
+  position: absolute;
+  top: -30%;
+  left: -10%;
+  width: 60%;
+  height: 80%;
+  background: radial-gradient(ellipse at center, rgba(34, 197, 94, 0.22) 0%, transparent 70%);
+  filter: blur(80px);
+}
+
+.aurora::after {
+  content: '';
+  position: absolute;
+  top: -20%;
+  right: -15%;
+  width: 50%;
+  height: 70%;
+  background: radial-gradient(ellipse at center, rgba(34, 197, 94, 0.12) 0%, transparent 70%);
+  filter: blur(100px);
+}
+
+/* Staggered entrance animations */
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-enter {
+  animation: fadeSlideUp 0.7s ease-out both;
+}
+
+.delay-1 { animation-delay: 0.1s; }
+.delay-2 { animation-delay: 0.2s; }
+.delay-3 { animation-delay: 0.35s; }
+
+/* Interactive hover states */
+.hover-border {
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.hover-border:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+
+.hover-fade {
+  transition: opacity 0.2s ease;
+}
+
+.hover-fade:hover {
+  opacity: 0.9;
+}
+
+.hover-text {
+  transition: color 0.2s ease;
+}
+
+.hover-text:hover {
+  color: var(--accent);
+}
+
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Typewriter effect */
+.typewriter-cursor {
+  color: var(--accent);
+  animation: blink 0.7s step-end infinite;
+}
+
+/* Service card hover effects */
+.service-card {
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.service-card:hover {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.08);
+}
+.group:hover .icon-muted {
+  color: var(--accent) !important;
+}
+.group:hover .soon-badge {
+  color: var(--accent) !important;
+  background: var(--accent-dim) !important;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
+
+/* Chasing tail border effect for Sign In button */
+@property --border-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes rotate-border {
+  to { --border-angle: 360deg; }
+}
+
+.signin-btn {
+  background: var(--accent) !important;
+  color: #000 !important;
+  transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+  border: 1px solid transparent;
+}
+
+.signin-btn:hover {
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--accent);
+}
+
+.chasing-border {
+  position: relative;
+  overflow: visible;
+}
+
+.chasing-border::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  padding: 3px;
+  background: conic-gradient(
+    from var(--border-angle),
+    transparent 0deg,
+    transparent 280deg,
+    rgba(34, 197, 94, 0.2) 310deg,
+    #22c55e 340deg,
+    #4ade80 355deg,
+    #86efac 360deg
+  );
+  border-radius: inherit;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: rotate-border 2s linear infinite;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.chasing-border:hover::before {
+  opacity: 1;
+}

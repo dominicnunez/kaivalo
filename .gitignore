@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+.svelte-kit/
+build/
+coverage/
+
+# Environment files
+.env
+.env.*
+!.env.example
+.direnv/
+
+# Editor settings
+.vscode/
+
+# Deployment and process artifacts
+ecosystem.config.*
+process*.json
+dump.pm2
+.pm2/
+pids/
+logs/
+*.pm2.log

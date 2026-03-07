@@ -1,0 +1,20 @@
+{
+  "name": "kaivalo",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Kaivalo.com services hub monorepo",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm --prefix apps/hub run check && npm --prefix apps/hub run test && npm --prefix apps/hub run test:build && node --test --test-concurrency=1 tests/*.test.js",
+    "test:ci": "npm test"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "author": "Kai Valo",
+  "license": "MIT"
+}
