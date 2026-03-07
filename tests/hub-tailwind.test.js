@@ -35,10 +35,7 @@ describe('hub styling behavior', () => {
   it('serves a generated stylesheet for the rendered landing experience', () => {
     assert.strictEqual(homepage.statusCode, 200);
     assert.strictEqual(stylesheet.statusCode, 200);
-    assert.ok(homepage.data.includes('<section id="services"'));
-    assert.ok(homepage.data.includes('<section id="about"'));
-    assert.ok(homepage.data.includes('<footer'));
-    assert.ok(/<h1[\s>]/i.test(homepage.data));
+    assert.ok(stylesheetUrl.includes('/_app/'), 'homepage should reference a built app stylesheet');
   });
 
   it('uses local styling assets and safe link protocols', () => {

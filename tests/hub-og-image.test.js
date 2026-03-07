@@ -1,17 +1,19 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert';
-import { getHomeMeta } from '../apps/hub/src/lib/seo/home-meta.js';
+import { JSDOM } from 'jsdom';
 import { httpGet, startHubPreview } from './helpers/hub-preview.js';
 
 describe('hub og image', () => {
   let preview;
   let homepage;
   let ogImageResponse;
+  let document;
 
   before(async () => {
     preview = await startHubPreview();
     homepage = await httpGet(preview.baseUrl);
     ogImageResponse = await httpGet(`${preview.baseUrl}/og-image.png`);
+    document = new JSDOM(homepage.data).window.document;
   });
 
   after(async () => {
@@ -30,8 +32,10 @@ describe('hub og image', () => {
   });
 
   it('renders metadata that points to the served og image URL', () => {
-    const meta = getHomeMeta();
-    assert.ok(meta.image.endsWith('/og-image.png'), 'metadata image URL should reference og-image.png');
-    assert.ok(homepage.data.includes(`content="${meta.image}"`), 'rendered meta tags should include the canonical OG image URL');
+    const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content') ?? '';
+    const twitterImage = document.querySelector('meta[name="twitter:image"]')?.getAttribute('content') ?? '';
+
+    assert.ok(ogImage.endsWith('/og-image.png'), 'og:image should reference og-image.png');
+    assert.strictEqual(twitterImage, ogImage, 'twitter:image should match og:image');
   });
 });

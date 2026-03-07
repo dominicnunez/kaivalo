@@ -9,14 +9,6 @@
 > **Date:** YYYY-MM-DD
 > **Reason:** Explanation (can be multiple lines)
 
-### A large share of repository tests still check source structure instead of runtime behavior
-
-**Location:** `tests/*.test.js` — remaining legacy smoke tests
-**Date:** 2026-03-06
-
-**Reason:** This session moved the high-value landing-page/runtime suites to preview-based behavior checks and removed import-time network probes.
-A full rewrite of all remaining legacy source-structure tests would still be disproportionate for this session because those files are broad, low-risk smoke guards rather than critical auth/runtime paths.
-
 ### The SvelteKit dependency tree still resolves cookie 0.6.0 from upstream
 
 **Location:** `package-lock.json:1224` — `@sveltejs/kit@2.53.4` depends on `cookie@^0.6.0`
