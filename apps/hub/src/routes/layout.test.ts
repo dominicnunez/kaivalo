@@ -86,6 +86,7 @@ describe('layout server load', () => {
 
 	it.each([
 		['http url', 'http://avatars.githubusercontent.com/u/1'],
+		['non-default https port', 'https://avatars.githubusercontent.com:444/u/1'],
 		[
 			'credentialed https url',
 			'https://user:pass@avatars.githubusercontent.com/u/1'

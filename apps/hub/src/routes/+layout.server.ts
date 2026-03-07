@@ -46,7 +46,12 @@ function sanitizeAvatarUrl(
 
 	try {
 		const parsed = new URL(candidate);
-		if (parsed.protocol !== 'https:' || parsed.username || parsed.password) {
+		if (
+			parsed.protocol !== 'https:' ||
+			parsed.username ||
+			parsed.password ||
+			parsed.port
+		) {
 			return null;
 		}
 
