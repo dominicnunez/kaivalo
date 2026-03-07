@@ -134,4 +134,28 @@ describe('node server static asset classification', () => {
 		);
 		assert.strictEqual(dynamicResponse.headers['cache-control'], undefined);
 	});
+
+	it('applies static cache headers when streamed asset responses commit inline headers', async () => {
+		const { server } = createHubServer({
+			handler: (_req, res) => {
+				res.writeHead(200, {
+					'Content-Type': 'image/svg+xml; charset=utf-8'
+				});
+				res.write('<svg');
+				res.end(' />');
+			},
+			env: baseEnv
+		});
+		servers.push(server);
+		const port = await listenOnEphemeralPort(server);
+
+		const response = await httpGet(port, '/favicon.svg');
+
+		assert.strictEqual(response.statusCode, 200);
+		assert.strictEqual(
+			response.headers['cache-control'],
+			'public, max-age=86400, stale-while-revalidate=600'
+		);
+		assert.strictEqual(response.body, '<svg />');
+	});
 });

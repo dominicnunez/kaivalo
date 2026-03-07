@@ -361,32 +361,70 @@ export function createHubServer(options) {
 		const isStaticAssetRequest = shouldApplyStaticAssetHeaders(pathname);
 		let responseHeadersApplied = false;
 
-		const applyResponseSecurityHeaders = () => {
+		/**
+		 * @param {http.OutgoingHttpHeaders | http.OutgoingHttpHeader[] | null | undefined} headerSource
+		 * @param {string} headerName
+		 * @returns {string | string[] | number | undefined}
+		 */
+		const getHeaderFromSource = (headerSource, headerName) => {
+			if (!headerSource) {
+				return undefined;
+			}
+
+			const normalizedHeaderName = headerName.toLowerCase();
+			if (Array.isArray(headerSource)) {
+				for (let index = 0; index < headerSource.length - 1; index += 2) {
+					if (
+						String(headerSource[index]).toLowerCase() === normalizedHeaderName
+					) {
+						return headerSource[index + 1];
+					}
+				}
+				return undefined;
+			}
+
+			for (const [key, value] of Object.entries(headerSource)) {
+				if (key.toLowerCase() === normalizedHeaderName) {
+					return value;
+				}
+			}
+			return undefined;
+		};
+
+		/** @param {{ headerSource?: http.OutgoingHttpHeaders | http.OutgoingHttpHeader[] | null | undefined }} [options] */
+		const applyResponseSecurityHeaders = (options = {}) => {
 			if (responseHeadersApplied || res.headersSent) {
 				return;
 			}
 			responseHeadersApplied = true;
 			applyBaselineSecurityHeaders(res, secureRequest.isSecure);
-			if (!isStaticAssetRequest) {
-				return;
-			}
-
-			const contentTypeHeader = res.getHeader('Content-Type');
-			const contentType =
-				typeof contentTypeHeader === 'string'
-					? contentTypeHeader
-					: Array.isArray(contentTypeHeader)
-						? (contentTypeHeader.find((value) => typeof value === 'string') ??
-							null)
-						: null;
-			const staticCacheControl = getStaticAssetCacheControlForResponse({
-				pathname,
-				statusCode: res.statusCode,
-				contentType,
-				hasSetCookie: res.getHeader('Set-Cookie') !== undefined
-			});
-			if (staticCacheControl && !res.hasHeader('Cache-Control')) {
-				applyStaticAssetHeaders(res, pathname, secureRequest.isSecure);
+			if (isStaticAssetRequest) {
+				const headerSource = options.headerSource;
+				const contentTypeHeader =
+					getHeaderFromSource(headerSource, 'content-type') ??
+					res.getHeader('Content-Type');
+				const contentType =
+					typeof contentTypeHeader === 'string'
+						? contentTypeHeader
+						: Array.isArray(contentTypeHeader)
+							? (contentTypeHeader.find((value) => typeof value === 'string') ??
+								null)
+							: null;
+				const hasSetCookie =
+					getHeaderFromSource(headerSource, 'set-cookie') !== undefined ||
+					res.getHeader('Set-Cookie') !== undefined;
+				const hasCacheControl =
+					getHeaderFromSource(headerSource, 'cache-control') !== undefined ||
+					res.hasHeader('Cache-Control');
+				const staticCacheControl = getStaticAssetCacheControlForResponse({
+					pathname,
+					statusCode: res.statusCode,
+					contentType,
+					hasSetCookie
+				});
+				if (staticCacheControl && !hasCacheControl) {
+					applyStaticAssetHeaders(res, pathname, secureRequest.isSecure);
+				}
 			}
 
 			if (secureRequest.ignoredForwardedProto) {
@@ -409,11 +447,30 @@ export function createHubServer(options) {
 			/** @type {typeof res.writeHead} */
 			(
 				(...args) => {
-					applyResponseSecurityHeaders();
+					const trailingArgument = args.at(-1);
+					applyResponseSecurityHeaders({
+						headerSource:
+							/** @type {http.OutgoingHttpHeaders | http.OutgoingHttpHeader[] | undefined} */ (
+								args.length > 1 && typeof trailingArgument !== 'string'
+									? trailingArgument
+									: undefined
+							)
+					});
 					return Reflect.apply(originalWriteHead, res, args);
 				}
 			);
 		res.writeHead = patchedWriteHead;
+
+		const originalWrite = res.write.bind(res);
+		const patchedWrite =
+			/** @type {typeof res.write} */
+			(
+				(...args) => {
+					applyResponseSecurityHeaders();
+					return Reflect.apply(originalWrite, res, args);
+				}
+			);
+		res.write = patchedWrite;
 
 		const originalEnd = res.end.bind(res);
 		const patchedEnd =
@@ -425,6 +482,19 @@ export function createHubServer(options) {
 				}
 			);
 		res.end = patchedEnd;
+
+		const originalFlushHeaders = res.flushHeaders?.bind(res);
+		if (originalFlushHeaders) {
+			const patchedFlushHeaders =
+				/** @type {typeof res.flushHeaders} */
+				(
+					(...args) => {
+						applyResponseSecurityHeaders();
+						return Reflect.apply(originalFlushHeaders, res, args);
+					}
+				);
+			res.flushHeaders = patchedFlushHeaders;
+		}
 
 		activeRequests += 1;
 		let settled = false;

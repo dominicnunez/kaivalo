@@ -556,9 +556,12 @@ export function getStaticAssetCacheControlForResponse({
 		return null;
 	}
 
-	return isStaticAssetMediaType(getResponseMediaType(contentType))
-		? cacheControl
-		: null;
+	const mediaType = getResponseMediaType(contentType);
+	if (mediaType) {
+		return isStaticAssetMediaType(mediaType) ? cacheControl : null;
+	}
+
+	return isRootStaticAssetPath(pathname) ? cacheControl : null;
 }
 
 /**

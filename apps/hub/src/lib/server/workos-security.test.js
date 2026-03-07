@@ -73,6 +73,20 @@ describe('static asset security policy', () => {
 				contentType: 'image/svg+xml'
 			})
 		).toBeNull();
+		expect(
+			getStaticAssetCacheControlForResponse({
+				pathname: '/favicon.ico',
+				statusCode: 200,
+				contentType: ''
+			})
+		).toBe('public, max-age=86400, stale-while-revalidate=600');
+		expect(
+			getStaticAssetCacheControlForResponse({
+				pathname: '/health.json',
+				statusCode: 200,
+				contentType: ''
+			})
+		).toBeNull();
 	});
 });
 
