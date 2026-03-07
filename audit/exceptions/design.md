@@ -8,5 +8,5 @@
 > ### Plain language description
 >
 > **Location:** `file/path:line` — optional context
-> **Date:** YYYY-MM-DD
+
 > **Reason:** Explanation (can be multiple lines)

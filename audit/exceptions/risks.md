@@ -8,13 +8,12 @@
 > ### Plain language description
 >
 > **Location:** `file/path:line` — optional context
-> **Date:** YYYY-MM-DD
+
 > **Reason:** Explanation (can be multiple lines)
 
 ### The SvelteKit dependency tree still resolves cookie 0.6.0 from upstream
 
 **Location:** `package-lock.json:1224` — `@sveltejs/kit@2.53.4` depends on `cookie@^0.6.0`
-**Date:** 2026-03-07
 
 **Reason:** `npm audit --omit=dev` reports GHSA-pxg6-pf52-xh8x against the transitive `cookie` dependency through `@sveltejs/kit`, and currently reports `fixAvailable: false`.
 This is an upstream dependency constraint rather than an application-code defect: the latest published `@sveltejs/kit` in use here still depends on `cookie@^0.6.0`.
