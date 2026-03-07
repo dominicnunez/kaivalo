@@ -25,7 +25,7 @@ describe('proxy ip trust canonicalization', () => {
 		);
 	});
 
-	it('uses the trusted proxy proto hop from the right side of comma-separated values', async () => {
+	it('uses the trusted proxy proto hop from the left side of comma-separated values', async () => {
 		const handle = createSecurityHeadersHandle({
 			trustForwardedProto: true,
 			trustedProxyIps: ['127.0.0.1']
@@ -35,7 +35,7 @@ describe('proxy ip trust canonicalization', () => {
 			event: {
 				request: new Request('http://kaivalo.test/', {
 					method: 'GET',
-					headers: { 'x-forwarded-proto': 'http, https' }
+					headers: { 'x-forwarded-proto': 'https, http' }
 				}),
 				url: new URL('http://kaivalo.test/'),
 				getClientAddress: () => '127.0.0.1'
@@ -51,7 +51,7 @@ describe('proxy ip trust canonicalization', () => {
 			event: {
 				request: new Request('http://kaivalo.test/', {
 					method: 'GET',
-					headers: { 'x-forwarded-proto': 'https, http' }
+					headers: { 'x-forwarded-proto': 'http, https' }
 				}),
 				url: new URL('http://kaivalo.test/'),
 				getClientAddress: () => '127.0.0.1'

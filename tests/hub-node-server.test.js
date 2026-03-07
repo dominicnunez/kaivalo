@@ -299,10 +299,10 @@ describe('node server proxy trust handling', () => {
 		assert.strictEqual(untrusted.ignoredForwardedProto, true);
 	});
 
-	it('uses the right-most trusted proxy proto hop from comma-separated values', () => {
+	it('uses the left-most trusted proxy proto hop from comma-separated values', () => {
 		const trustedHttpsHop = evaluateSecureRequest(
 			{
-				headers: { 'x-forwarded-proto': 'http, https' },
+				headers: { 'x-forwarded-proto': 'https, http' },
 				socket: { remoteAddress: '::ffff:127.0.0.1', encrypted: undefined }
 			},
 			true,
@@ -310,7 +310,7 @@ describe('node server proxy trust handling', () => {
 		);
 		const trustedHttpHop = evaluateSecureRequest(
 			{
-				headers: { 'x-forwarded-proto': 'https, http' },
+				headers: { 'x-forwarded-proto': 'http, https' },
 				socket: { remoteAddress: '::ffff:127.0.0.1', encrypted: undefined }
 			},
 			true,
@@ -594,5 +594,34 @@ describe('node server lifecycle', () => {
 		} finally {
 			await reservation.release();
 		}
+	});
+
+	it('logs both internal bind and public origin for proxied https deployments', async () => {
+		const reservation = await reserveLocalPort();
+		await reservation.release();
+		const logs = [];
+		const server = startHubServer({
+			handler: (_req, res) => res.end('ok'),
+			env: {
+				...baseEnv,
+				HOST: '127.0.0.1',
+				PORT: String(reservation.port),
+				ORIGIN: 'https://kaivalo.test',
+				WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback',
+				TRUST_X_FORWARDED_PROTO: 'true',
+				TRUSTED_PROXY_IPS: '127.0.0.1'
+			},
+			logger: {
+				log: /** @param {string} message */ (message) => logs.push(message),
+				warn: () => {},
+				error: () => {}
+			}
+		});
+		servers.push(server);
+
+		await waitForServerListening(server);
+		assert.deepStrictEqual(logs, [
+			`Listening on internal http://127.0.0.1:${reservation.port} (public https://kaivalo.test)`
+		]);
 	});
 });

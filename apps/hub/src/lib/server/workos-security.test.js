@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	getStaticAssetCacheControl,
 	getStaticAssetCacheControlForResponse,
+	getTrustedForwardedProto,
 	getValidatedWorkosEnv,
 	shouldApplyStaticAssetHeaders
 } from './workos-security.js';
@@ -107,5 +108,16 @@ describe('workos environment protocols', () => {
 				ORIGIN: 'ftp://localhost:3100'
 			})
 		).toThrow(/ORIGIN must use http or https/);
+	});
+});
+
+describe('trusted forwarded proto parsing', () => {
+	it('uses the left-most client-facing hop from comma-separated values', () => {
+		expect(getTrustedForwardedProto('https, http')).toBe('https');
+		expect(getTrustedForwardedProto('http, https')).toBe('http');
+	});
+
+	it('rejects unsupported client-facing proto values', () => {
+		expect(getTrustedForwardedProto('ws, https')).toBe('');
 	});
 });

@@ -92,6 +92,22 @@ function redactSensitiveText(value) {
 }
 
 /**
+ * @param {Record<string, string | undefined>} env
+ * @param {string} host
+ * @param {number} port
+ * @returns {string}
+ */
+function getListeningLogMessage(env, host, port) {
+	const internalOrigin = `http://${host}:${port}`;
+	const publicOrigin = getValidatedWorkosEnv(env).origin;
+	if (publicOrigin === internalOrigin) {
+		return `Listening on ${publicOrigin}`;
+	}
+
+	return `Listening on internal ${internalOrigin} (public ${publicOrigin})`;
+}
+
+/**
  * @param {unknown} error
  * @param {{ includeSensitiveDetails?: boolean }} [options]
  * @returns {{
@@ -687,7 +703,7 @@ export function startHubServer(options) {
 
 	const handleListening = () => {
 		server.off('error', handleStartupError);
-		logger.log(`Listening on http://${host}:${port}`);
+		logger.log(getListeningLogMessage(env, host, port));
 	};
 
 	server.once('error', handleStartupError);
