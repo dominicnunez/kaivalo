@@ -9,8 +9,9 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"pretest": "svelte-kit sync",
-		"test": "vitest run",
-		"test:build": "RUN_BUILD_TESTS=1 vitest run src/build.test.ts",
+		"test": "npm run test:unit && npm run test:build",
+		"test:unit": "vitest run --exclude src/build.test.ts",
+		"test:build": "vitest run src/build.test.ts",
 		"test:watch": "vitest"
 	},
 	"devDependencies": {
