@@ -11,19 +11,42 @@ const baseEnv = {
 	ORIGIN: 'http://127.0.0.1:3100'
 };
 
+/**
+ * @param {Record<string, string | undefined>} env
+ * @returns {{
+ *   server: import('node:http').Server | null;
+ *   logs: string[];
+ *   fatalEvents: Array<{
+ *     reason: 'startup-error' | 'shutdown-timeout';
+ *     exitCode: number;
+ *     host?: string;
+ *     port?: number;
+ *     error?: { message?: string };
+ *   }>;
+ * }}
+ */
+function startWithFatalCapture(env) {
+	const logs = [];
+	const fatalEvents = [];
+	const server = startHubServer({
+		handler: (_req, res) => res.end('ok'),
+		env,
+		logger: {
+			log: () => {},
+			warn: () => {},
+			error: /** @param {string} message */ (message) => logs.push(message)
+		},
+		onFatal: (details) => fatalEvents.push(details)
+	});
+
+	return { server, logs, fatalEvents };
+}
+
 describe('node server port validation', () => {
 	it('reports invalid out-of-range PORT values through startup fatal handling', () => {
-		const logs = [];
-		const fatalEvents = [];
-		const server = startHubServer({
-			handler: (_req, res) => res.end('ok'),
-			env: { ...baseEnv, PORT: '65536' },
-			logger: {
-				log: () => {},
-				warn: () => {},
-				error: /** @param {string} message */ (message) => logs.push(message)
-			},
-			onFatal: (details) => fatalEvents.push(details)
+		const { server, logs, fatalEvents } = startWithFatalCapture({
+			...baseEnv,
+			PORT: '65536'
 		});
 
 		assert.strictEqual(server, null);
@@ -40,12 +63,9 @@ describe('node server port validation', () => {
 	});
 
 	it('reports malformed PORT values through startup fatal handling', () => {
-		const fatalEvents = [];
-		const server = startHubServer({
-			handler: (_req, res) => res.end('ok'),
-			env: { ...baseEnv, PORT: '3000abc' },
-			logger: { log: () => {}, warn: () => {}, error: () => {} },
-			onFatal: (details) => fatalEvents.push(details)
+		const { server, fatalEvents } = startWithFatalCapture({
+			...baseEnv,
+			PORT: '3000abc'
 		});
 
 		assert.strictEqual(server, null);
@@ -59,12 +79,9 @@ describe('node server port validation', () => {
 	});
 
 	it('reports malformed shutdown timeout values through startup fatal handling', () => {
-		const fatalEvents = [];
-		const server = startHubServer({
-			handler: (_req, res) => res.end('ok'),
-			env: { ...baseEnv, SHUTDOWN_TIMEOUT_MS: '30000abc' },
-			logger: { log: () => {}, warn: () => {}, error: () => {} },
-			onFatal: (details) => fatalEvents.push(details)
+		const { server, fatalEvents } = startWithFatalCapture({
+			...baseEnv,
+			SHUTDOWN_TIMEOUT_MS: '30000abc'
 		});
 
 		assert.strictEqual(server, null);
@@ -75,5 +92,79 @@ describe('node server port validation', () => {
 			fatalEvents[0].error?.message,
 			'SHUTDOWN_TIMEOUT_MS must be a positive integer'
 		);
+	});
+
+	it('reports missing WorkOS environment variables through startup fatal handling', () => {
+		const { server, logs, fatalEvents } = startWithFatalCapture({
+			...baseEnv,
+			WORKOS_CLIENT_ID: ''
+		});
+
+		assert.strictEqual(server, null);
+		assert.deepStrictEqual(logs, ['Failed to start hub server']);
+		assert.strictEqual(fatalEvents.length, 1);
+		assert.strictEqual(fatalEvents[0].reason, 'startup-error');
+		assert.strictEqual(fatalEvents[0].exitCode, 1);
+		assert.strictEqual(
+			fatalEvents[0].error?.message,
+			'Missing required environment variable: WORKOS_CLIENT_ID'
+		);
+	});
+
+	it('reports missing trusted proxy ips when forwarded proto trust is enabled', () => {
+		const { server, logs, fatalEvents } = startWithFatalCapture({
+			...baseEnv,
+			NODE_ENV: 'production',
+			ORIGIN: 'https://kaivalo.test',
+			WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback',
+			TRUST_X_FORWARDED_PROTO: 'true',
+			TRUSTED_PROXY_IPS: ' '
+		});
+
+		assert.strictEqual(server, null);
+		assert.deepStrictEqual(logs, ['Failed to start hub server']);
+		assert.strictEqual(fatalEvents.length, 1);
+		assert.strictEqual(fatalEvents[0].reason, 'startup-error');
+		assert.strictEqual(fatalEvents[0].exitCode, 1);
+		assert.strictEqual(fatalEvents[0].error?.type, 'Error');
+		assert.strictEqual(fatalEvents[0].error?.message, undefined);
+	});
+
+	it('reports production https origins that skip trusted forwarded proto handling', () => {
+		const { server, logs, fatalEvents } = startWithFatalCapture({
+			...baseEnv,
+			NODE_ENV: 'production',
+			ORIGIN: 'https://kaivalo.test',
+			WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback',
+			TRUST_X_FORWARDED_PROTO: 'false',
+			TRUSTED_PROXY_IPS: ''
+		});
+
+		assert.strictEqual(server, null);
+		assert.deepStrictEqual(logs, ['Failed to start hub server']);
+		assert.strictEqual(fatalEvents.length, 1);
+		assert.strictEqual(fatalEvents[0].reason, 'startup-error');
+		assert.strictEqual(fatalEvents[0].exitCode, 1);
+		assert.strictEqual(fatalEvents[0].error?.type, 'Error');
+		assert.strictEqual(fatalEvents[0].error?.message, undefined);
+	});
+
+	it('reports loopback-only trusted proxies for production https origins', () => {
+		const { server, logs, fatalEvents } = startWithFatalCapture({
+			...baseEnv,
+			NODE_ENV: 'production',
+			ORIGIN: 'https://kaivalo.test',
+			WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback',
+			TRUST_X_FORWARDED_PROTO: 'true',
+			TRUSTED_PROXY_IPS: '127.0.0.1,::1'
+		});
+
+		assert.strictEqual(server, null);
+		assert.deepStrictEqual(logs, ['Failed to start hub server']);
+		assert.strictEqual(fatalEvents.length, 1);
+		assert.strictEqual(fatalEvents[0].reason, 'startup-error');
+		assert.strictEqual(fatalEvents[0].exitCode, 1);
+		assert.strictEqual(fatalEvents[0].error?.type, 'Error');
+		assert.strictEqual(fatalEvents[0].error?.message, undefined);
 	});
 });
