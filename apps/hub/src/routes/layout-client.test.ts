@@ -26,11 +26,11 @@ describe('layout client behavior', () => {
 	beforeEach(() => {
 		mockGoto.mockClear();
 		mockPage.url = new URL(
-			'https://kaivalo.test/dashboard?error=auth&incident=test-123&next=1#services'
+			'https://kaivalo.test/dashboard?error=auth&incident=test-123&sig=forged&next=1#services'
 		);
 	});
 
-	it('does not render spoofed incident identifiers from query string', () => {
+	it('does not render auth errors from untrusted query parameters', () => {
 		render(Layout, {
 			data: {
 				user: null,
@@ -40,19 +40,23 @@ describe('layout client behavior', () => {
 			children: snippet
 		});
 
-		expect(screen.queryByText(/\(ref /)).toBeNull();
+		expect(
+			screen.queryByText(
+				'Sign-in is temporarily unavailable. Please try again shortly.'
+			)
+		).toBeNull();
 	});
 
-	it('renders trusted auth incident identifiers from query string', () => {
-		mockPage.url = new URL(
-			'https://kaivalo.test/dashboard?error=auth&incident=authcb_123e4567-e89b-12d3-a456-426614174000'
-		);
-
+	it('renders trusted auth incident identifiers from server data', () => {
 		render(Layout, {
 			data: {
 				user: null,
 				signInUrl: '/auth/sign-in',
-				authError: null
+				authError: {
+					message:
+						'Sign-in is temporarily unavailable. Please try again shortly.',
+					incidentId: 'authcb_123e4567-e89b-12d3-a456-426614174000'
+				}
 			},
 			children: snippet
 		});
@@ -67,7 +71,11 @@ describe('layout client behavior', () => {
 			data: {
 				user: null,
 				signInUrl: '/auth/sign-in',
-				authError: null
+				authError: {
+					message:
+						'Sign-in is temporarily unavailable. Please try again shortly.',
+					incidentId: 'authcb_123e4567-e89b-12d3-a456-426614174000'
+				}
 			},
 			children: snippet
 		});

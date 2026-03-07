@@ -4,6 +4,10 @@ import { randomUUID } from 'node:crypto';
 import type { LayoutServerLoad } from './$types';
 import { getValidatedWorkosEnv } from '$lib/server/workos-security.js';
 import { getErrorName, normalizeRequestId } from '$lib/auth/log-context.js';
+import {
+	AUTH_ERROR_MESSAGE,
+	readVerifiedAuthError
+} from '$lib/auth/auth-error-query.js';
 import { TRUSTED_AVATAR_HOSTS } from '$lib/server/trusted-hosts.js';
 
 const TRUSTED_AVATAR_HOSTNAME_SET = new Set(TRUSTED_AVATAR_HOSTS);
@@ -141,6 +145,9 @@ export const load: LayoutServerLoad = async (event) => {
 			throw new Error('Forced auth failure for integration test');
 		}
 
+		const authErrorFromQuery = readVerifiedAuthError(event.url.searchParams, {
+			secret: env.WORKOS_COOKIE_PASSWORD ?? ''
+		});
 		const user = await authKit.getUser(event);
 		let signInUrl = null;
 		if (!user) {
@@ -152,13 +159,13 @@ export const load: LayoutServerLoad = async (event) => {
 			);
 		}
 		const authError =
-			user || signInUrl
+			authErrorFromQuery ??
+			(user || signInUrl
 				? null
 				: {
-						message:
-							'Sign-in is temporarily unavailable. Please try again shortly.',
+						message: AUTH_ERROR_MESSAGE,
 						incidentId: null
-					};
+					});
 		if (authError) {
 			markAuthFailureNoStore(event);
 		}
@@ -193,8 +200,7 @@ export const load: LayoutServerLoad = async (event) => {
 			user: null,
 			signInUrl: null,
 			authError: {
-				message:
-					'Sign-in is temporarily unavailable. Please try again shortly.',
+				message: AUTH_ERROR_MESSAGE,
 				incidentId
 			}
 		};

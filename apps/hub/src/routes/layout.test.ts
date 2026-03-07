@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { buildAuthErrorRedirectQuery } from '$lib/auth/auth-error-query.js';
 
 const { mockEnv } = vi.hoisted(() => ({
 	mockEnv: {
@@ -145,6 +146,47 @@ describe('layout server load', () => {
 					'Sign-in is temporarily unavailable. Please try again shortly.',
 				incidentId: null
 			}
+		});
+	});
+
+	it('accepts signed auth callback query errors and surfaces their incident id', async () => {
+		mockedAuthKit.getUser.mockResolvedValue(null as never);
+		mockedAuthKit.getSignInUrl.mockResolvedValue('/auth/sign-in' as never);
+		const event = createEvent(
+			`https://kaivalo.test/?${buildAuthErrorRedirectQuery({
+				incidentId: 'authcb_123e4567-e89b-12d3-a456-426614174000',
+				secret: mockEnv.WORKOS_COOKIE_PASSWORD,
+				now: Date.now()
+			})}`
+		);
+
+		const result = await load(event);
+
+		expect(result).toEqual({
+			user: null,
+			signInUrl: '/auth/sign-in',
+			authError: {
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
+				incidentId: 'authcb_123e4567-e89b-12d3-a456-426614174000'
+			}
+		});
+	});
+
+	it('ignores tampered auth callback query errors', async () => {
+		mockedAuthKit.getUser.mockResolvedValue(null as never);
+		mockedAuthKit.getSignInUrl.mockResolvedValue('/auth/sign-in' as never);
+
+		const result = await load(
+			createEvent(
+				'https://kaivalo.test/?error=auth&incident=authcb_123e4567-e89b-12d3-a456-426614174000&ts=1710000000000&sig=forged'
+			)
+		);
+
+		expect(result).toEqual({
+			user: null,
+			signInUrl: '/auth/sign-in',
+			authError: null
 		});
 	});
 

@@ -1,8 +1,18 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { createAuthCallbackGetHandler } from '../apps/hub/src/lib/auth/callback-handler.js';
+import {
+	AUTH_ERROR_INCIDENT_QUERY_NAME,
+	AUTH_ERROR_QUERY_NAME,
+	AUTH_ERROR_QUERY_VALUE,
+	AUTH_ERROR_SIGNATURE_QUERY_NAME,
+	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
+	readVerifiedAuthError
+} from '../apps/hub/src/lib/auth/auth-error-query.js';
 import { isHttpError, isRedirect } from '@sveltejs/kit';
 import { httpGet, startHubPreview } from './helpers/hub-preview.js';
+
+const cookiePassword = 'ab'.repeat(32);
 
 function createEvent(headers = {}) {
 	return {
@@ -57,7 +67,8 @@ describe('WorkOS Auth Callback Route', () => {
 			const handler = createAuthCallbackGetHandler({
 				handleCallback: () => async () => expectedResponse,
 				isRedirect: () => false,
-				isHttpError: () => false
+				isHttpError: () => false,
+				cookiePassword
 			});
 
 			const result = await handler(createEvent());
@@ -71,7 +82,8 @@ describe('WorkOS Auth Callback Route', () => {
 					throw redirectErr;
 				},
 				isRedirect: (value) => value === redirectErr,
-				isHttpError: () => false
+				isHttpError: () => false,
+				cookiePassword
 			});
 
 			try {
@@ -89,7 +101,8 @@ describe('WorkOS Auth Callback Route', () => {
 					throw httpErr;
 				},
 				isRedirect: () => false,
-				isHttpError: (value) => value === httpErr
+				isHttpError: (value) => value === httpErr,
+				cookiePassword
 			});
 
 			try {
@@ -108,6 +121,7 @@ describe('WorkOS Auth Callback Route', () => {
 				},
 				isRedirect: () => false,
 				isHttpError: () => false,
+				cookiePassword,
 				logError: (...args) => logs.push(args)
 			});
 
@@ -125,8 +139,33 @@ describe('WorkOS Auth Callback Route', () => {
 						'unexpected callback failures should throw redirect responses'
 					);
 					assert.strictEqual(caught.status, 303);
-					const location = caught.location;
-					assert.ok(location.startsWith('/?error=auth&incident=authcb_'));
+					const location = new URL(caught.location, 'https://kaivalo.test');
+					assert.strictEqual(
+						location.searchParams.get(AUTH_ERROR_QUERY_NAME),
+						AUTH_ERROR_QUERY_VALUE
+					);
+					assert.match(
+						location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME) ?? '',
+						/^authcb_[0-9a-f-]+$/
+					);
+					assert.ok(location.searchParams.has(AUTH_ERROR_TIMESTAMP_QUERY_NAME));
+					assert.ok(location.searchParams.has(AUTH_ERROR_SIGNATURE_QUERY_NAME));
+					assert.deepStrictEqual(
+						readVerifiedAuthError(location.searchParams, {
+							secret: cookiePassword,
+							now:
+								Number(
+									location.searchParams.get(AUTH_ERROR_TIMESTAMP_QUERY_NAME)
+								) + 1
+						}),
+						{
+							message:
+								'Sign-in is temporarily unavailable. Please try again shortly.',
+							incidentId: location.searchParams.get(
+								AUTH_ERROR_INCIDENT_QUERY_NAME
+							)
+						}
+					);
 					return true;
 				}
 			);
@@ -166,6 +205,7 @@ describe('WorkOS Auth Callback Route', () => {
 				},
 				isRedirect: () => false,
 				isHttpError: () => false,
+				cookiePassword,
 				logError: (...args) => logs.push(args)
 			});
 
@@ -191,6 +231,7 @@ describe('WorkOS Auth Callback Route', () => {
 				},
 				isRedirect: () => false,
 				isHttpError: () => false,
+				cookiePassword,
 				logError: (...args) => logs.push(args)
 			});
 
@@ -227,6 +268,7 @@ describe('WorkOS Auth Callback Route', () => {
 				},
 				isRedirect: () => false,
 				isHttpError: () => false,
+				cookiePassword,
 				logError: (...args) => logs.push(args)
 			});
 
@@ -252,11 +294,21 @@ describe('WorkOS Auth Callback Route', () => {
 				});
 
 				assert.strictEqual(browserResponse.statusCode, 303);
-				assert.match(
-					browserResponse.headers.location ?? '',
-					/^\/\?error=auth&incident=authcb_[0-9a-f-]+$/,
+				const location = new URL(
+					browserResponse.headers.location ?? '/',
+					preview.baseUrl
+				);
+				assert.strictEqual(
+					location.searchParams.get(AUTH_ERROR_QUERY_NAME),
+					AUTH_ERROR_QUERY_VALUE,
 					'route should surface callback incident redirects when upstream callback handling fails'
 				);
+				assert.match(
+					location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME) ?? '',
+					/^authcb_[0-9a-f-]+$/
+				);
+				assert.ok(location.searchParams.has(AUTH_ERROR_TIMESTAMP_QUERY_NAME));
+				assert.ok(location.searchParams.has(AUTH_ERROR_SIGNATURE_QUERY_NAME));
 				assert.strictEqual(
 					browserResponse.headers['cache-control'],
 					'private, no-store'

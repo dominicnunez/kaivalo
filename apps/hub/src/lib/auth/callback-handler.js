@@ -1,6 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import { getErrorName, normalizeRequestId } from './log-context.js';
+import { buildAuthErrorRedirectQuery } from './auth-error-query.js';
 
 /** @typedef {import('@sveltejs/kit').RequestEvent} RequestEvent */
 /**
@@ -20,6 +21,7 @@ import { getErrorName, normalizeRequestId } from './log-context.js';
  * @property {() => (event: RequestEvent) => Promise<Response>} handleCallback
  * @property {(error: unknown) => boolean} isRedirect
  * @property {(error: unknown) => boolean} isHttpError
+ * @property {string} cookiePassword
  * @property {(message: string, context: CallbackLogContext) => void} [logError]
  */
 
@@ -31,6 +33,7 @@ export function createAuthCallbackGetHandler({
 	handleCallback,
 	isRedirect,
 	isHttpError,
+	cookiePassword,
 	logError = console.error
 }) {
 	/**
@@ -125,7 +128,10 @@ export function createAuthCallbackGetHandler({
 
 			throw redirect(
 				303,
-				`/?error=auth&incident=${encodeURIComponent(incidentId)}`
+				`/?${buildAuthErrorRedirectQuery({
+					incidentId,
+					secret: cookiePassword
+				})}`
 			);
 		}
 	};

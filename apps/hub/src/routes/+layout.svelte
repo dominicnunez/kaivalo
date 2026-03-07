@@ -5,56 +5,38 @@
 	import type { Snippet } from 'svelte';
 	import type { LayoutData } from './$types';
 
-	const INCIDENT_ID_PATTERN =
-		/^(auth(?:cb|so|layout)|hook)_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-	function sanitizeIncidentId(value: string | null | undefined): string | null {
-		if (!value || !INCIDENT_ID_PATTERN.test(value)) {
+	function getAuthErrorSignature(
+		authError: LayoutData['authError']
+	): string | null {
+		if (!authError) {
 			return null;
 		}
 
-		return value;
-	}
-
-	function resolveAuthError(
-		source: LayoutData['authError'],
-		queryAuthError: boolean,
-		queryIncidentId: string | null
-	): LayoutData['authError'] {
-		const candidate =
-			source ??
-			(queryAuthError
-				? {
-						message: 'Sign-in failed. Please try again.',
-						incidentId: queryIncidentId
-					}
-				: null);
-
-		if (!candidate) {
-			return null;
-		}
-
-		return {
-			...candidate,
-			incidentId: sanitizeIncidentId(candidate.incidentId)
-		};
+		return `${authError.message}:${authError.incidentId ?? ''}`;
 	}
 
 	let { children, data }: { children: Snippet; data: LayoutData } = $props();
-
-	let queryAuthError = $derived(page.url.searchParams.get('error') === 'auth');
-	let queryIncidentId = $derived(
-		sanitizeIncidentId(page.url.searchParams.get('incident'))
-	);
+	let dismissedAuthErrorSignature = $state<string | null>(null);
+	let authErrorSignature = $derived(getAuthErrorSignature(data.authError));
 	let authError = $derived(
-		resolveAuthError(data.authError, queryAuthError, queryIncidentId)
+		authErrorSignature && dismissedAuthErrorSignature === authErrorSignature
+			? null
+			: data.authError
 	);
 
 	function dismissError() {
+		dismissedAuthErrorSignature = authErrorSignature;
 		const url = new URL(page.url);
 		url.searchParams.delete('error');
 		url.searchParams.delete('incident');
-		goto(url.pathname + url.search + url.hash, { replaceState: true });
+		url.searchParams.delete('ts');
+		url.searchParams.delete('sig');
+		const nextLocation = url.pathname + url.search + url.hash;
+		const currentLocation = page.url.pathname + page.url.search + page.url.hash;
+		if (nextLocation === currentLocation) {
+			return;
+		}
+		goto(nextLocation, { replaceState: true });
 	}
 </script>
 
