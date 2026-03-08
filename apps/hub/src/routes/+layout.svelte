@@ -2,6 +2,7 @@
 	import '../app.css';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
+	import { clearAuthErrorQuery } from '$lib/auth/auth-error-query.js';
 	import type { Snippet } from 'svelte';
 	import type { LayoutData } from './$types';
 
@@ -27,10 +28,7 @@
 	function dismissError() {
 		dismissedAuthErrorSignature = authErrorSignature;
 		const url = new URL(page.url);
-		url.searchParams.delete('error');
-		url.searchParams.delete('incident');
-		url.searchParams.delete('ts');
-		url.searchParams.delete('sig');
+		clearAuthErrorQuery(url.searchParams);
 		const nextLocation = url.pathname + url.search + url.hash;
 		const currentLocation = page.url.pathname + page.url.search + page.url.hash;
 		if (nextLocation === currentLocation) {

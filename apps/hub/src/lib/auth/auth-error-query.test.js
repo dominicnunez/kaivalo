@@ -8,6 +8,7 @@ import {
 	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
 	AUTH_ERROR_MESSAGE,
 	buildAuthErrorRedirectQuery,
+	clearAuthErrorQuery,
 	readVerifiedAuthError
 } from './auth-error-query.js';
 
@@ -172,5 +173,20 @@ describe('readVerifiedAuthError', () => {
 			incidentId
 		});
 		expect(AUTH_ERROR_QUERY_VALUE).toBe('auth');
+	});
+});
+
+describe('clearAuthErrorQuery', () => {
+	it('removes only the signed auth error query payload', () => {
+		const searchParams = buildSearchParams();
+		searchParams.set('next', '/dashboard');
+
+		clearAuthErrorQuery(searchParams);
+
+		expect(searchParams.has(AUTH_ERROR_QUERY_NAME)).toBe(false);
+		expect(searchParams.has(AUTH_ERROR_INCIDENT_QUERY_NAME)).toBe(false);
+		expect(searchParams.has(AUTH_ERROR_TIMESTAMP_QUERY_NAME)).toBe(false);
+		expect(searchParams.has(AUTH_ERROR_SIGNATURE_QUERY_NAME)).toBe(false);
+		expect(searchParams.get('next')).toBe('/dashboard');
 	});
 });
