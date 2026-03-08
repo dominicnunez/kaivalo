@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	createSecurityHeadersHandle,
 	getStaticAssetCacheControl,
 	getStaticAssetCacheControlForResponse,
 	getTrustedForwardedProto,
@@ -88,6 +89,34 @@ describe('static asset security policy', () => {
 				contentType: ''
 			})
 		).toBeNull();
+	});
+
+	it('keeps verified static assets cacheable even when auth cookies are present', async () => {
+		const handle = createSecurityHeadersHandle();
+		const response = await handle({
+			event: /** @type {never} */ ({
+				request: new Request(
+					'https://kaivalo.test/_app/immutable/entry/app.js',
+					{
+						headers: {
+							cookie: 'wos-session=fixture'
+						}
+					}
+				),
+				url: new URL('https://kaivalo.test/_app/immutable/entry/app.js')
+			}),
+			resolve: async () =>
+				new Response('console.log("fixture")', {
+					headers: {
+						'Content-Type': 'application/javascript; charset=utf-8'
+					}
+				})
+		});
+
+		expect(response.headers.get('cache-control')).toBe(
+			'public, max-age=31536000, immutable'
+		);
+		expect(response.headers.get('vary')).toBeNull();
 	});
 });
 

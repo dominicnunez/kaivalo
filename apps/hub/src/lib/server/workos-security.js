@@ -445,12 +445,23 @@ function hasSensitiveCookieHeader(event) {
  * @param {import('@sveltejs/kit').RequestEvent} event
  * @returns {boolean}
  */
-function isSensitiveRequest(event) {
-	return (
-		isAuthRouteRequest(event) ||
-		hasSensitiveCookieHeader(event) ||
-		hasAuthorizationHeader(event)
-	);
+function isAuthSensitiveRequest(event) {
+	return isAuthRouteRequest(event) || hasAuthorizationHeader(event);
+}
+
+/**
+ * @param {import('@sveltejs/kit').RequestEvent} event
+ * @param {Response} response
+ * @param {boolean} hasSetCookie
+ * @returns {string | null}
+ */
+function getVerifiedStaticAssetCacheControl(event, response, hasSetCookie) {
+	return getStaticAssetCacheControlForResponse({
+		pathname: event.url?.pathname,
+		statusCode: response.status,
+		contentType: response.headers.get('Content-Type'),
+		hasSetCookie
+	});
 }
 
 /**
@@ -837,6 +848,10 @@ export function createSecurityHeadersHandle(options = {}) {
 	return async ({ event, resolve }) => {
 		const response = await resolve(event);
 		const method = event.request?.method ?? 'GET';
+		const hasSetCookie = responseSetsCookies(response);
+		const staticCacheControl = response.headers.has('Cache-Control')
+			? null
+			: getVerifiedStaticAssetCacheControl(event, response, hasSetCookie);
 
 		applyBaselineSecurityHeaders(
 			response.headers,
@@ -844,7 +859,9 @@ export function createSecurityHeadersHandle(options = {}) {
 		);
 
 		const isSensitiveResponse =
-			isSensitiveRequest(event) || responseSetsCookies(response);
+			isAuthSensitiveRequest(event) ||
+			hasSetCookie ||
+			(hasSensitiveCookieHeader(event) && staticCacheControl === null);
 		if (isSensitiveResponse) {
 			response.headers.set('Cache-Control', SENSITIVE_DOCUMENT_CACHE_CONTROL);
 			appendVaryHeaders(
@@ -872,12 +889,6 @@ export function createSecurityHeadersHandle(options = {}) {
 		}
 
 		if (!response.headers.has('Cache-Control')) {
-			const staticCacheControl = getStaticAssetCacheControlForResponse({
-				pathname: event.url?.pathname,
-				statusCode: response.status,
-				contentType: response.headers.get('Content-Type'),
-				hasSetCookie: responseSetsCookies(response)
-			});
 			if (staticCacheControl) {
 				response.headers.set('Cache-Control', staticCacheControl);
 			}

@@ -121,6 +121,24 @@ describe('hooks server behavior', () => {
 		expect(response.headers.get('vary')).toBeNull();
 	});
 
+	it('preserves immutable asset caching for auth-cookie asset requests', async () => {
+		const { handle } = await import('./hooks.server');
+		const response = await handle({
+			event: createEvent('https://kaivalo.test/_app/immutable/chunks/app.js', {
+				cookie: 'wos-session=abc123'
+			}) as never,
+			resolve: async () =>
+				new Response('console.log("asset")', {
+					headers: { 'Content-Type': 'application/javascript; charset=utf-8' }
+				})
+		});
+
+		expect(response.headers.get('cache-control')).toBe(
+			'public, max-age=31536000, immutable'
+		);
+		expect(response.headers.get('vary')).toBeNull();
+	});
+
 	it('keeps non-success html responses private even without auth headers', async () => {
 		const { handle } = await import('./hooks.server');
 		const response = await handle({
