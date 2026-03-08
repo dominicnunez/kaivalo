@@ -37,6 +37,8 @@ For a development-oriented starting point, see `apps/hub/.env.example`.
 
 - `TRUSTED_PROXY_IPS`
   Comma-separated proxy IPs that are allowed to provide `x-forwarded-proto`.
+  When the header contains multiple comma-separated values, the app uses the
+  left-most original-client protocol.
   Required when `TRUST_X_FORWARDED_PROTO=true`.
 
 ## Server Binding Variables

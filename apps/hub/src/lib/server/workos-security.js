@@ -363,9 +363,12 @@ export function getTrustedForwardedProto(value) {
 		return '';
 	}
 
-	const trustedHop = hops.at(-1);
-	if (trustedHop === HTTPS_PROTO || trustedHop === HTTP_PROTO) {
-		return trustedHop;
+	const originalClientProto = hops[0];
+	if (
+		originalClientProto === HTTPS_PROTO ||
+		originalClientProto === HTTP_PROTO
+	) {
+		return originalClientProto;
 	}
 
 	return '';

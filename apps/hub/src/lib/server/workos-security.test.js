@@ -132,12 +132,12 @@ describe('workos environment protocols', () => {
 });
 
 describe('trusted forwarded proto parsing', () => {
-	it('uses the trusted proxy hop from the right side of comma-separated values', () => {
-		expect(getTrustedForwardedProto('https, http')).toBe('http');
-		expect(getTrustedForwardedProto('http, https')).toBe('https');
+	it('uses the original client proto from the left side of comma-separated values', () => {
+		expect(getTrustedForwardedProto('https, http')).toBe('https');
+		expect(getTrustedForwardedProto('http, https')).toBe('http');
 	});
 
 	it('rejects unsupported trusted proxy proto values', () => {
-		expect(getTrustedForwardedProto('https, ws')).toBe('');
+		expect(getTrustedForwardedProto('ws, https')).toBe('');
 	});
 });

@@ -174,7 +174,7 @@ describe('hub production adapter runtime', () => {
 	);
 
 	it(
-		'applies HSTS when a trusted proxy forwards an HTTPS public origin',
+		'applies HSTS when a trusted proxy forwards an HTTPS public origin through multiple proxy hops',
 		{ timeout: 30000 },
 		async () => {
 			const { server, baseUrl } = await startBuiltServer({
@@ -186,7 +186,7 @@ describe('hub production adapter runtime', () => {
 
 			try {
 				const homepage = await httpGet(baseUrl, {
-					'x-forwarded-proto': 'https'
+					'x-forwarded-proto': 'https, http'
 				});
 				assert.strictEqual(homepage.statusCode, 200);
 				assert.ok(homepage.data.includes('Kaivalo'));

@@ -357,7 +357,7 @@ describe('node server proxy trust handling', () => {
 		assert.strictEqual(untrusted.ignoredForwardedProto, true);
 	});
 
-	it('uses the trusted proxy proto hop from the right side of comma-separated values', () => {
+	it('uses the original client proto from the left side of comma-separated values', () => {
 		const trustedHttpsHop = evaluateSecureRequest(
 			{
 				headers: { 'x-forwarded-proto': 'https, http' },
@@ -375,8 +375,8 @@ describe('node server proxy trust handling', () => {
 			new Set(['127.0.0.1'])
 		);
 
-		assert.strictEqual(trustedHttpsHop.isSecure, false);
-		assert.strictEqual(trustedHttpHop.isSecure, true);
+		assert.strictEqual(trustedHttpsHop.isSecure, true);
+		assert.strictEqual(trustedHttpHop.isSecure, false);
 	});
 
 	it('fails fast when loopback-only trusted proxies are used for production https origins', () => {
