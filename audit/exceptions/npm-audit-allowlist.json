@@ -1,0 +1,8 @@
+[
+	{
+		"package": "cookie",
+		"source": 1103907,
+		"path": "node_modules/cookie",
+		"reason": "Tracked in audit/exceptions/risks.md until @sveltejs/kit stops depending on cookie < 0.7.0."
+	}
+]

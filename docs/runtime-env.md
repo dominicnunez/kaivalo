@@ -26,7 +26,7 @@ For a development-oriented starting point, see `apps/hub/.env.example`.
 ### Origin
 
 - `ORIGIN`
-  Absolute application origin, for example `https://kaivalo.com`.
+  Absolute application origin, for example `https://hub.kaivalo.com`.
   Must use `https` outside local development.
   Must match the origin used by `WORKOS_REDIRECT_URI`.
 
@@ -71,8 +71,8 @@ Do not treat these as real values, only as format examples:
 ```env
 PORT=3100
 HOST=0.0.0.0
-ORIGIN=https://kaivalo.com
-WORKOS_REDIRECT_URI=https://kaivalo.com/auth/callback
+ORIGIN=https://hub.kaivalo.com
+WORKOS_REDIRECT_URI=https://hub.kaivalo.com/auth/callback
 WORKOS_CLIENT_ID=client_...
 WORKOS_API_KEY=sk_...
 WORKOS_COOKIE_PASSWORD=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef

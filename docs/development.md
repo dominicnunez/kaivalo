@@ -24,6 +24,7 @@ npm install
 
 ```bash
 npm run check
+npm run audit:deps
 npm run lint
 npm run format
 npm run format:check
@@ -36,4 +37,5 @@ npm run test:ci
 `npm run test:core` is the faster local lane: app type checks, app Vitest coverage, and the pure Node-side test files.
 `npm test` runs the full verification flow: core, build, production, and integration coverage.
 `npm run test:integration` runs the slower preview-backed integration coverage after the app is built.
-`npm run test:ci` is currently an alias for `npm test`.
+`npm run audit:deps` runs `npm audit --omit=dev` through the repo allowlist so accepted upstream-only production advisories stay documented and new ones fail fast.
+`npm run test:ci` runs the full test suite and then enforces the production dependency audit gate.

@@ -14,7 +14,14 @@ const envExamplePath = resolve(
 	'hub',
 	'.env.example'
 );
+const runtimeEnvDocPath = resolve(
+	import.meta.dirname,
+	'..',
+	'docs',
+	'runtime-env.md'
+);
 const content = readFileSync(envExamplePath, 'utf-8');
+const runtimeEnvDoc = readFileSync(runtimeEnvDocPath, 'utf-8');
 
 function parseEnvTemplate(value) {
 	const parsed = {};
@@ -113,5 +120,16 @@ describe('apps/hub/.env.example behavior', () => {
 		assert.match(content, /64 hex chars/i);
 		assert.match(content, /mandatory for production https origins/i);
 		assert.match(content, /TRUST_X_FORWARDED_PROTO=true/i);
+	});
+
+	it('keeps the production origin example aligned with runtime documentation', () => {
+		assert.match(
+			runtimeEnvDoc,
+			/ORIGIN=https:\/\/hub\.kaivalo\.com/
+		);
+		assert.match(
+			runtimeEnvDoc,
+			/WORKOS_REDIRECT_URI=https:\/\/hub\.kaivalo\.com\/auth\/callback/
+		);
 	});
 });
