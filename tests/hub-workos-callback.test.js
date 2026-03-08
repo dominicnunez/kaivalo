@@ -75,6 +75,46 @@ describe('WorkOS Auth Callback Route', () => {
 			assert.strictEqual(result, expectedResponse);
 		});
 
+		it('normalizes same-origin callback redirects before returning them', async () => {
+			const handler = createAuthCallbackGetHandler({
+				handleCallback: () => async () =>
+					Response.redirect('https://kaivalo.test/account?from=auth#done', 303),
+				isRedirect,
+				isHttpError,
+				cookiePassword
+			});
+
+			const result = await handler(createEvent());
+			assert.strictEqual(result.status, 303);
+			assert.strictEqual(
+				result.headers.get('location'),
+				'/account?from=auth#done'
+			);
+		});
+
+		it('rejects callback responses with external redirect locations', async () => {
+			const logs = [];
+			const handler = createAuthCallbackGetHandler({
+				handleCallback: () => async () =>
+					Response.redirect('https://evil.test/phish', 303),
+				isRedirect,
+				isHttpError,
+				cookiePassword,
+				logError: (...args) => logs.push(args)
+			});
+
+			await assert.rejects(
+				() => handler(createEvent({ accept: 'application/json' })),
+				(caught) => {
+					assert.ok(isHttpError(caught));
+					assert.strictEqual(caught.status, 503);
+					return true;
+				}
+			);
+			assert.strictEqual(logs.length, 1);
+			assert.strictEqual(logs[0][0], 'Auth callback failed');
+		});
+
 		it('rethrows redirect responses from upstream handler', async () => {
 			const redirectErr = { kind: 'redirect' };
 			const handler = createAuthCallbackGetHandler({
@@ -92,6 +132,58 @@ describe('WorkOS Auth Callback Route', () => {
 			} catch (caught) {
 				assert.strictEqual(caught, redirectErr);
 			}
+		});
+
+		it('normalizes same-origin redirect throws before rethrowing them', async () => {
+			const redirectErr = {
+				status: 303,
+				location: 'https://kaivalo.test/dashboard?welcome=1'
+			};
+			const handler = createAuthCallbackGetHandler({
+				handleCallback: () => async () => {
+					throw redirectErr;
+				},
+				isRedirect: (value) => value === redirectErr,
+				isHttpError: () => false,
+				cookiePassword
+			});
+
+			await assert.rejects(
+				() => handler(createEvent()),
+				(caught) => {
+					assert.ok(isRedirect(caught));
+					assert.strictEqual(caught.status, 303);
+					assert.strictEqual(caught.location, '/dashboard?welcome=1');
+					return true;
+				}
+			);
+		});
+
+		it('rejects redirect throws with external locations', async () => {
+			const logs = [];
+			const redirectErr = {
+				status: 302,
+				location: 'https://evil.test/phish'
+			};
+			const handler = createAuthCallbackGetHandler({
+				handleCallback: () => async () => {
+					throw redirectErr;
+				},
+				isRedirect: (value) => value === redirectErr,
+				isHttpError: () => false,
+				cookiePassword,
+				logError: (...args) => logs.push(args)
+			});
+
+			await assert.rejects(
+				() => handler(createEvent({ accept: 'application/json' })),
+				(caught) => {
+					assert.ok(isHttpError(caught));
+					assert.strictEqual(caught.status, 503);
+					return true;
+				}
+			);
+			assert.strictEqual(logs.length, 1);
 		});
 
 		it('rethrows http errors from upstream handler', async () => {

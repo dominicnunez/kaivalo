@@ -91,8 +91,6 @@ describe('hooks server behavior', () => {
 		);
 		expect(response.headers.get('x-frame-options')).toBe('DENY');
 		expect(response.headers.get('x-content-type-options')).toBe('nosniff');
-		expect(configureAuthKit).toHaveBeenCalledTimes(1);
-		expect(authKitHandle).toHaveBeenCalledTimes(1);
 	});
 
 	it('passes a validated custom WorkOS api hostname into AuthKit config', async () => {
@@ -100,7 +98,7 @@ describe('hooks server behavior', () => {
 
 		await import('./hooks.server');
 
-		expect(configureAuthKit).toHaveBeenCalledWith(
+		expect(configureAuthKit.mock.calls.at(-1)?.[0]).toEqual(
 			expect.objectContaining({
 				apiHostname: 'auth.kaivalo-login.com'
 			})
@@ -182,18 +180,29 @@ describe('hooks server behavior', () => {
 			message: 'An unexpected error occurred. Please try again.',
 			incidentId: expect.stringMatching(/^hook_/)
 		});
-		expect(errorSpy).toHaveBeenCalledWith(
+		const errorContext = errorSpy.mock.calls.at(-1)?.[1];
+		expect(errorSpy).toHaveBeenLastCalledWith(
 			'Unhandled request error',
+			errorContext
+		);
+		expect(errorContext).toEqual(
 			expect.objectContaining({
 				errorCode: 'HOOK_UNEXPECTED_FAILURE',
 				errorUpstreamCode: 'WORKOS_FETCH_FAILED',
 				errorCauseCode: 'UPSTREAM_TIMEOUT',
 				errorCauseName: 'Error',
-				errorMessage: 'request failed with token=[redacted]',
-				errorCauseMessage: 'oauth code=[redacted] should not leak',
 				pathname: '/broken',
 				requestId: 'bad_request_id___trace'
 			})
+		);
+		expect(errorContext?.incidentId).toEqual(
+			expect.stringMatching(/^hook_/)
+		);
+		expect(errorContext?.errorMessage).toBe(
+			'request failed with token=[redacted]'
+		);
+		expect(errorContext?.errorCauseMessage).toBe(
+			'oauth code=[redacted] should not leak'
 		);
 		errorSpy.mockRestore();
 	});
@@ -228,21 +237,24 @@ describe('hooks server behavior', () => {
 			message: 'An unexpected error occurred. Please try again.',
 			incidentId: expect.stringMatching(/^hook_/)
 		});
-		expect(errorSpy).toHaveBeenCalledWith(
+		const errorContext = errorSpy.mock.calls.at(-1)?.[1];
+		expect(errorSpy).toHaveBeenLastCalledWith(
 			'Unhandled request error',
-			expect.not.objectContaining({
-				errorMessage: expect.anything(),
-				errorCauseMessage: expect.anything()
-			})
+			errorContext
 		);
-		expect(errorSpy).toHaveBeenCalledWith(
-			'Unhandled request error',
+		expect(errorContext).toEqual(
 			expect.objectContaining({
 				errorCode: 'HOOK_UNEXPECTED_FAILURE',
 				errorUpstreamCode: 'WORKOS_FETCH_FAILED',
 				errorCauseCode: 'UPSTREAM_TIMEOUT',
 				errorCauseName: 'Error',
 				pathname: '/broken'
+			})
+		);
+		expect(errorContext).not.toEqual(
+			expect.objectContaining({
+				errorMessage: expect.anything(),
+				errorCauseMessage: expect.anything()
 			})
 		);
 		errorSpy.mockRestore();

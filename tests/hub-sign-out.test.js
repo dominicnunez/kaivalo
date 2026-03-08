@@ -271,6 +271,34 @@ describe('sign-out handler unit behavior', () => {
 		);
 	});
 
+	it('rejects origin header values with credentials or a path', async () => {
+		const postHandler = createSignOutPostHandler({
+			signOut: async () => new Response(null, { status: 303 }),
+			expectedOrigin: 'https://kaivalo.com'
+		});
+
+		for (const origin of [
+			'https://user@kaivalo.com',
+			'https://kaivalo.com/path',
+			'https://user@kaivalo.com/path'
+		]) {
+			await assert.rejects(
+				() =>
+					postHandler({
+						request: new Request('https://kaivalo.test/auth/sign-out', {
+							method: 'POST',
+							headers: { origin }
+						}),
+						url: new URL('https://kaivalo.test/auth/sign-out')
+					}),
+				(caught) => {
+					assert.strictEqual(caught.status, 403);
+					return true;
+				}
+			);
+		}
+	});
+
 	it('rejects opaque null origin header values', async () => {
 		const postHandler = createSignOutPostHandler({
 			signOut: async () => new Response(null, { status: 303 }),
@@ -284,6 +312,58 @@ describe('sign-out handler unit behavior', () => {
 						method: 'POST',
 						headers: {
 							origin: 'null'
+						}
+					}),
+					url: new URL('https://kaivalo.test/auth/sign-out')
+				}),
+			(caught) => {
+				assert.strictEqual(caught.status, 403);
+				return true;
+			}
+		);
+	});
+
+	it('rejects referer fallback values with embedded credentials', async () => {
+		const postHandler = createSignOutPostHandler({
+			signOut: async () => new Response(null, { status: 303 }),
+			expectedOrigin: 'https://kaivalo.com'
+		});
+
+		for (const referer of [
+			'https://user@kaivalo.com/account',
+			'https://user:pass@kaivalo.com/account'
+		]) {
+			await assert.rejects(
+				() =>
+					postHandler({
+						request: new Request('https://kaivalo.test/auth/sign-out', {
+							method: 'POST',
+							headers: { referer }
+						}),
+						url: new URL('https://kaivalo.test/auth/sign-out')
+					}),
+				(caught) => {
+					assert.strictEqual(caught.status, 403);
+					return true;
+				}
+			);
+		}
+	});
+
+	it('rejects requests when origin and referer disagree', async () => {
+		const postHandler = createSignOutPostHandler({
+			signOut: async () => new Response(null, { status: 303 }),
+			expectedOrigin: 'https://kaivalo.com'
+		});
+
+		await assert.rejects(
+			() =>
+				postHandler({
+					request: new Request('https://kaivalo.test/auth/sign-out', {
+						method: 'POST',
+						headers: {
+							origin: 'https://kaivalo.com',
+							referer: 'https://evil.test/account'
 						}
 					}),
 					url: new URL('https://kaivalo.test/auth/sign-out')
@@ -514,6 +594,39 @@ describe('sign-out route integration behavior', () => {
 	it('rejects route-level POST requests with opaque null referer fallback values', async () => {
 		const response = await post(`${preview.baseUrl}/auth/sign-out`, {
 			referer: 'null',
+			'sec-fetch-site': 'same-origin'
+		});
+
+		assert.strictEqual(response.statusCode, 403);
+	});
+
+	it('rejects route-level POST requests with origin header credentials or a path', async () => {
+		for (const origin of [
+			`${preview.baseUrl}/account`,
+			preview.baseUrl.replace('://', '://user@')
+		]) {
+			const response = await post(`${preview.baseUrl}/auth/sign-out`, {
+				origin,
+				'sec-fetch-site': 'same-origin'
+			});
+
+			assert.strictEqual(response.statusCode, 403);
+		}
+	});
+
+	it('rejects route-level POST requests with credentialed referer fallback values', async () => {
+		const response = await post(`${preview.baseUrl}/auth/sign-out`, {
+			referer: `${preview.baseUrl.replace('://', '://user:pass@')}/account`,
+			'sec-fetch-site': 'same-origin'
+		});
+
+		assert.strictEqual(response.statusCode, 403);
+	});
+
+	it('rejects route-level POST requests when origin and referer disagree', async () => {
+		const response = await post(`${preview.baseUrl}/auth/sign-out`, {
+			origin: preview.baseUrl,
+			referer: 'https://evil.example/account',
 			'sec-fetch-site': 'same-origin'
 		});
 

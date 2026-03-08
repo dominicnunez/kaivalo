@@ -91,4 +91,60 @@ describe('getAuthRouteHandlers', () => {
 		await expect(getAuthUser(event)).resolves.toBeNull();
 		expect(getUser).not.toHaveBeenCalled();
 	});
+
+	it('ignores fixture headers outside the test environment', async () => {
+		privateEnv.NODE_ENV = 'production';
+		getUser.mockResolvedValue({
+			firstName: 'Prod',
+			email: 'user@example.com',
+			profilePictureUrl: null
+		});
+		const event = {
+			request: new Request('https://kaivalo.test', {
+				headers: {
+					'x-kaivalo-test-auth-user': Buffer.from(
+						JSON.stringify({
+							firstName: 'Kai',
+							email: 'kai@example.com'
+						})
+					).toString('base64url')
+				}
+			})
+		} as Parameters<typeof getAuthUser>[0];
+
+		await expect(getAuthUser(event)).resolves.toEqual({
+			firstName: 'Prod',
+			email: 'user@example.com',
+			profilePictureUrl: null
+		});
+		expect(getUser).toHaveBeenCalledWith(event);
+	});
+
+	it('ignores fixture headers when the feature flag is disabled', async () => {
+		privateEnv.KAIVALO_ENABLE_TEST_AUTH_FIXTURE = '0';
+		getUser.mockResolvedValue({
+			firstName: 'WorkOS',
+			email: 'user@example.com',
+			profilePictureUrl: null
+		});
+		const event = {
+			request: new Request('https://kaivalo.test', {
+				headers: {
+					'x-kaivalo-test-auth-user': Buffer.from(
+						JSON.stringify({
+							firstName: 'Kai',
+							email: 'kai@example.com'
+						})
+					).toString('base64url')
+				}
+			})
+		} as Parameters<typeof getAuthUser>[0];
+
+		await expect(getAuthUser(event)).resolves.toEqual({
+			firstName: 'WorkOS',
+			email: 'user@example.com',
+			profilePictureUrl: null
+		});
+		expect(getUser).toHaveBeenCalledWith(event);
+	});
 });

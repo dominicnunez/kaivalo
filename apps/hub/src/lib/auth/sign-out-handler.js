@@ -24,14 +24,47 @@ import { normalizeRequestId } from './log-context.js';
 
 /**
  * @param {string} value
- * @returns {string | null}
+ * @returns {URL | null}
  */
-function readOrigin(value) {
+function readUrl(value) {
 	try {
-		return new URL(value).origin;
+		return new URL(value);
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * @param {string} value
+ * @returns {string | null}
+ */
+function normalizeOriginHeader(value) {
+	const parsed = readUrl(value);
+	if (
+		!parsed ||
+		parsed.username ||
+		parsed.password ||
+		parsed.pathname !== '/' ||
+		parsed.search ||
+		parsed.hash
+	) {
+		return null;
+	}
+
+	return parsed.origin;
+}
+
+/**
+ * @param {string} value
+ * @returns {string | null}
+ */
+function normalizeRefererHeader(value) {
+	const parsed = readUrl(value);
+	if (!parsed || parsed.username || parsed.password) {
+		return null;
+	}
+
+	return parsed.origin;
 }
 
 /**
@@ -41,17 +74,16 @@ function readOrigin(value) {
  */
 function assertSameOriginRequest(event, expectedOrigin) {
 	const origin = event.request.headers.get('origin');
-	if (origin !== null) {
-		const normalizedOrigin = readOrigin(origin);
-		if (normalizedOrigin !== expectedOrigin) {
-			throw error(403, 'Invalid origin');
-		}
-		return;
+	if (origin !== null && normalizeOriginHeader(origin) !== expectedOrigin) {
+		throw error(403, 'Invalid origin');
 	}
 
 	const referer = event.request.headers.get('referer');
-	const refererOrigin = referer ? readOrigin(referer) : null;
-	if (!refererOrigin || refererOrigin !== expectedOrigin) {
+	if (referer !== null && normalizeRefererHeader(referer) !== expectedOrigin) {
+		throw error(403, 'Invalid origin');
+	}
+
+	if (origin === null && referer === null) {
 		throw error(403, 'Invalid origin');
 	}
 }
