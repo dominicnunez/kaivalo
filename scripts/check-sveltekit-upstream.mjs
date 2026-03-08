@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 
 export const REPO_ROOT = resolve(import.meta.dirname, '..');
@@ -107,6 +108,55 @@ function compareVersions(leftVersion, rightVersion) {
 
 function escapeMultilineValue(value) {
 	return String(value).replace(/\r/g, '');
+}
+
+export function createGithubOutputDelimiter(value, createToken = randomUUID) {
+	const normalizedValue = escapeMultilineValue(value);
+
+	for (;;) {
+		const delimiter = `kaivalo_output_${createToken()}`;
+		if (!normalizedValue.includes(delimiter)) {
+			return delimiter;
+		}
+	}
+}
+
+function formatGithubOutputValue(name, value, createToken) {
+	const normalizedValue = escapeMultilineValue(value);
+	if (!normalizedValue.includes('\n')) {
+		return `${name}=${normalizedValue}`;
+	}
+
+	const delimiter = createGithubOutputDelimiter(normalizedValue, createToken);
+	return `${name}<<${delimiter}\n${normalizedValue}\n${delimiter}`;
+}
+
+export function formatGithubOutputEntries(result, createToken = randomUUID) {
+	return [
+		formatGithubOutputValue(
+			'current_version',
+			result.currentVersion,
+			createToken
+		),
+		formatGithubOutputValue(
+			'latest_version',
+			result.latestVersion,
+			createToken
+		),
+		formatGithubOutputValue(
+			'latest_cookie_range',
+			result.latestCookieRange,
+			createToken
+		),
+		formatGithubOutputValue(
+			'has_newer_upstream',
+			String(result.hasNewerUpstream),
+			createToken
+		),
+		formatGithubOutputValue('issue_title', result.issueTitle, createToken),
+		formatGithubOutputValue('summary', buildSummary(result), createToken),
+		formatGithubOutputValue('issue_body', buildIssueBody(result), createToken)
+	];
 }
 
 export async function readCurrentVersion(lockfilePath = LOCKFILE_PATH) {
@@ -224,15 +274,7 @@ async function main() {
 		const { appendFile } = await import('node:fs/promises');
 		await appendFile(
 			githubOutputPath,
-			[
-				`current_version=${result.currentVersion}`,
-				`latest_version=${result.latestVersion}`,
-				`latest_cookie_range=${result.latestCookieRange}`,
-				`has_newer_upstream=${result.hasNewerUpstream}`,
-				`issue_title=${result.issueTitle}`,
-				`summary<<EOF\n${escapeMultilineValue(buildSummary(result))}\nEOF`,
-				`issue_body<<EOF\n${escapeMultilineValue(buildIssueBody(result))}\nEOF`
-			].join('\n') + '\n'
+			`${formatGithubOutputEntries(result).join('\n')}\n`
 		);
 	}
 

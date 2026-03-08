@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, mock } from 'node:test';
@@ -6,7 +6,9 @@ import assert from 'node:assert/strict';
 
 import {
 	FETCH_TIMEOUT_MS,
+	createGithubOutputDelimiter,
 	createFetchErrorMessage,
+	formatGithubOutputEntries,
 	readCurrentVersion,
 	readLatestMetadata
 } from '../scripts/check-sveltekit-upstream.mjs';
@@ -127,5 +129,47 @@ describe('check-sveltekit-upstream', () => {
 		} finally {
 			process.chdir(originalCwd);
 		}
+	});
+
+	it('formats github output with collision-safe delimiters for multiline values', async () => {
+		const githubOutputPath = join(
+			mkdtempSync(join(tmpdir(), 'kaivalo-upstream-output-')),
+			'github-output.txt'
+		);
+		const result = {
+			currentVersion: '2.20.0',
+			latestVersion: '2.20.1',
+			latestCookieRange: '^0.6.0',
+			hasNewerUpstream: true,
+			issueTitle: 'Track upstream @sveltejs/kit updates for cookie advisory'
+		};
+		const tokens = ['safe-summary', 'safe-body'];
+		let tokenIndex = 0;
+		const nextToken = () => tokens[tokenIndex++];
+		const entries = formatGithubOutputEntries(result, nextToken);
+		const { appendFile } = await import('node:fs/promises');
+
+		await appendFile(githubOutputPath, `${entries.join('\n')}\n`);
+
+		const serialized = readFileSync(githubOutputPath, 'utf8');
+		assert.match(serialized, /summary<<kaivalo_output_safe-summary/);
+		assert.match(serialized, /issue_body<<kaivalo_output_safe-body/);
+		assert.doesNotMatch(serialized, /<<EOF/);
+		assert.match(serialized, /Current resolved version: `2\.20\.0`/);
+		assert.match(
+			serialized,
+			/Cookie advisory exception: `audit\/exceptions\/risks\.md`/
+		);
+	});
+
+	it('regenerates github output delimiters when the candidate appears in the value', () => {
+		const tokens = ['EOF', 'safe'];
+		let tokenIndex = 0;
+		const delimiter = createGithubOutputDelimiter(
+			'first line\nkaivalo_output_EOF\nlast line',
+			() => tokens[tokenIndex++]
+		);
+
+		assert.strictEqual(delimiter, 'kaivalo_output_safe');
 	});
 });
