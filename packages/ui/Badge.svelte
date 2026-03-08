@@ -1,11 +1,5 @@
 <script>
-	/**
-	 * Badge component for status indicators (Live/Beta/Coming Soon)
-	 * @typedef {'live' | 'beta' | 'coming-soon' | 'default'} Status
-	 * @typedef {'sm' | 'md'} Size
-	 */
-
-	/** @type {{ status?: Status, size?: Size, class?: string, children?: import('svelte').Snippet }} */
+	/** @type {import('./props.ts').BadgeProps} */
 	let {
 		status = 'default',
 		size = 'md',

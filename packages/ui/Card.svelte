@@ -1,10 +1,5 @@
 <script>
-	/**
-	 * Card component with optional header, hover effect, and link variant
-	 * @typedef {'default' | 'link'} Variant
-	 */
-
-	/** @type {{ variant?: Variant, href?: string, header?: string, hover?: boolean, allowExternal?: boolean, allowedExternalHosts?: string[], class?: string, children?: import('svelte').Snippet }} */
+	/** @type {import('./props.ts').CardProps} */
 	let {
 		variant = 'default',
 		href = '',

@@ -1,11 +1,5 @@
 <script>
-	/**
-	 * Button component with variant, size, and disabled state support
-	 * @typedef {'primary' | 'secondary' | 'ghost'} Variant
-	 * @typedef {'sm' | 'md' | 'lg'} Size
-	 */
-
-	/** @type {{ type?: 'button' | 'submit' | 'reset', variant?: Variant, size?: Size, disabled?: boolean, onclick?: (e: MouseEvent) => void, class?: string, children?: import('svelte').Snippet }} */
+	/** @type {import('./props.ts').ButtonProps} */
 	let {
 		type = 'button',
 		variant = 'primary',

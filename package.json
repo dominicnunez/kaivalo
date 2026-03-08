@@ -12,7 +12,7 @@
 		"prepare": "husky",
 		"check": "npm --prefix packages/ui run check && npm --prefix apps/hub run check",
 		"audit:deps": "node scripts/check-npm-audit.ts",
-		"test:core": "npm run check && npm --prefix apps/hub run test:unit && node --test tests/check-sveltekit-upstream.test.ts tests/deployment-runtime-guardrails.test.ts tests/docker-build-context.test.ts tests/gitignore.test.ts tests/hub-build-freshness.test.ts tests/hub-env-example.test.ts tests/hub-node-server-port-validation.test.ts tests/hub-node-server-static-assets.test.ts tests/hub-node-server.test.ts tests/npm-audit-gate.test.ts",
+		"test:core": "npm run check && npm --prefix packages/ui run test && npm --prefix apps/hub run test:unit && node --test tests/check-sveltekit-upstream.test.ts tests/deployment-runtime-guardrails.test.ts tests/docker-build-context.test.ts tests/gitignore.test.ts tests/hub-build-freshness.test.ts tests/hub-env-example.test.ts tests/hub-node-server-port-validation.test.ts tests/hub-node-server-static-assets.test.ts tests/hub-node-server.test.ts tests/npm-audit-gate.test.ts",
 		"test:build:hub": "npm --prefix apps/hub run test:build",
 		"lint": "eslint . --ext .js,.mjs,.cjs,.ts,.svelte",
 		"format": "prettier --write .",

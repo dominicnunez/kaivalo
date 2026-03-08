@@ -1,10 +1,5 @@
 <script>
-	/**
-	 * Container component - max-width wrapper with responsive padding
-	 * @typedef {'sm' | 'md' | 'lg' | 'xl' | 'full'} Size
-	 */
-
-	/** @type {{ size?: Size, class?: string, children?: import('svelte').Snippet }} */
+	/** @type {import('./props.ts').ContainerProps} */
 	let { size = 'lg', class: className = '', children } = $props();
 
 	const baseClasses = 'w-full mx-auto px-4 sm:px-6 lg:px-8';
