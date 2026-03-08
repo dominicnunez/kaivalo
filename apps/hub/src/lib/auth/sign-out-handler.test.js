@@ -13,6 +13,49 @@ function createEvent({
 }
 
 describe('createSignOutPostHandler', () => {
+	it('rejects external redirect-like failures with a sanitized 503', async () => {
+		const logError = vi.fn();
+		const handler = createSignOutPostHandler({
+			expectedOrigin: 'https://kaivalo.test',
+			includeMessageInLogs: true,
+			signOut: async () => {
+				throw {
+					status: 303,
+					location: 'https://evil.test/phish'
+				};
+			},
+			logError
+		});
+
+		await expect(
+			handler(
+				/** @type {never} */ (
+					createEvent({
+						headers: {
+							origin: 'https://kaivalo.test',
+							'x-request-id': 'redirect test'
+						}
+					})
+				)
+			)
+		).rejects.toMatchObject({
+			status: 503,
+			body: expect.objectContaining({
+				message: expect.stringMatching(/^Sign-out failed\. Reference: authso_/)
+			})
+		});
+
+		expect(logError).toHaveBeenCalledWith(
+			'Sign-out failed',
+			expect.objectContaining({
+				errorCode: 'AUTH_SIGN_OUT_UNEXPECTED_FAILURE',
+				errorMessage: 'Sign-out produced an invalid redirect location',
+				pathname: '/auth/sign-out',
+				requestId: 'redirect_test'
+			})
+		);
+	});
+
 	it('logs upstream and cause codes for unexpected sign-out failures', async () => {
 		const logError = vi.fn();
 		const handler = createSignOutPostHandler({

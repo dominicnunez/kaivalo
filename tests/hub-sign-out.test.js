@@ -464,10 +464,10 @@ describe('sign-out handler unit behavior', () => {
 		assert.match(logs[0][1].incidentId, /^authso_/);
 	});
 
-	it('rethrows redirect-like responses from signOut handlers', async () => {
+	it('normalizes same-origin redirect-like responses from signOut handlers', async () => {
 		const redirectLike = {
 			status: 302,
-			location: '/'
+			location: 'https://kaivalo.test/account?from=sign-out#done'
 		};
 		const postHandler = createSignOutPostHandler({
 			signOut: async () => {
@@ -488,9 +488,46 @@ describe('sign-out handler unit behavior', () => {
 			(caught) => {
 				assert.ok(isRedirect(caught));
 				assert.strictEqual(caught.status, 302);
-				assert.strictEqual(caught.location, '/');
+				assert.strictEqual(caught.location, '/account?from=sign-out#done');
 				return true;
 			}
+		);
+	});
+
+	it('rejects external redirect-like responses from signOut handlers', async () => {
+		const redirectLike = {
+			status: 302,
+			location: 'https://evil.test/phish'
+		};
+		const logs = [];
+		const postHandler = createSignOutPostHandler({
+			signOut: async () => {
+				throw redirectLike;
+			},
+			expectedOrigin: 'https://kaivalo.com',
+			includeMessageInLogs: true,
+			logError: (...args) => logs.push(args)
+		});
+
+		await assert.rejects(
+			() =>
+				postHandler({
+					request: new Request('https://kaivalo.test/auth/sign-out', {
+						method: 'POST',
+						headers: { origin: 'https://kaivalo.com' }
+					}),
+					url: new URL('https://kaivalo.test/auth/sign-out')
+				}),
+			(caught) => {
+				assert.ok(isHttpError(caught));
+				assert.strictEqual(caught.status, 503);
+				return true;
+			}
+		);
+		assert.strictEqual(logs.length, 1);
+		assert.strictEqual(
+			logs[0][1].errorMessage,
+			'Sign-out produced an invalid redirect location'
 		);
 	});
 });

@@ -2,6 +2,10 @@ import { error, isHttpError, isRedirect, redirect } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import { getErrorLogContext } from '../server/error-diagnostics.js';
 import { normalizeRequestId } from './log-context.js';
+import {
+	isRedirectLikeObject,
+	normalizeSameOriginRedirectLocation
+} from './safe-redirect.js';
 
 /** @typedef {import('@sveltejs/kit').RequestEvent} RequestEvent */
 /**
@@ -135,14 +139,7 @@ function isRedirectLike(value) {
 		return true;
 	}
 
-	return Boolean(
-		value &&
-		typeof value === 'object' &&
-		'status' in value &&
-		'location' in value &&
-		typeof value.status === 'number' &&
-		typeof value.location === 'string'
-	);
+	return isRedirectLikeObject(value);
 }
 
 /**
@@ -164,11 +161,29 @@ export function createSignOutPostHandler({
 		try {
 			return await signOut(event);
 		} catch (err) {
-			if (isRedirect(err) || isHttpError(err)) {
-				throw err;
-			}
+			let normalizedError = err;
 			if (isRedirectLike(err)) {
-				throw redirect(err.status, err.location);
+				const redirectError =
+					/** @type {{ status: number; location: string }} */ (normalizedError);
+				const safeLocation = normalizeSameOriginRedirectLocation(
+					redirectError.location,
+					event.url.origin
+				);
+				if (safeLocation) {
+					if (
+						isRedirect(redirectError) &&
+						safeLocation === redirectError.location
+					) {
+						throw redirectError;
+					}
+					throw redirect(redirectError.status, safeLocation);
+				}
+				normalizedError = new Error(
+					'Sign-out produced an invalid redirect location'
+				);
+			}
+			if (isHttpError(normalizedError)) {
+				throw normalizedError;
 			}
 
 			const requestId = normalizeRequestId(
@@ -181,7 +196,7 @@ export function createSignOutPostHandler({
 				pathname: event.url.pathname,
 				incidentId,
 				errorCode: 'AUTH_SIGN_OUT_UNEXPECTED_FAILURE',
-				...getErrorLogContext(err, {
+				...getErrorLogContext(normalizedError, {
 					includeMessage: includeMessageInLogs
 				})
 			});
