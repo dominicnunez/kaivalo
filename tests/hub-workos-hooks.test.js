@@ -640,7 +640,7 @@ describe('Security header handle behavior', () => {
 			event: {
 				request: new Request('https://kaivalo.test/', {
 					method: 'GET',
-					headers: { cookie: 'wos-session=value' }
+					headers: { cookie: 'wos_session=value' }
 				}),
 				url: new URL('https://kaivalo.test/')
 			},
@@ -771,7 +771,7 @@ describe('Security header handle behavior', () => {
 			event: {
 				request: new Request('https://kaivalo.test/', {
 					method: 'GET',
-					headers: { cookie: 'wos-session=value' }
+					headers: { cookie: 'wos_session=value' }
 				}),
 				url: new URL('https://kaivalo.test/')
 			},
@@ -895,7 +895,7 @@ describe('Security header handle behavior', () => {
 			event: {
 				request: new Request('https://kaivalo.test/api/private', {
 					method: 'GET',
-					headers: { cookie: 'wos-session=value' }
+					headers: { cookie: 'wos_session=value' }
 				}),
 				url: new URL('https://kaivalo.test/api/private')
 			},

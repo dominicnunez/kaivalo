@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { AUTHKIT_COOKIE_NAME } from './authkit-config.js';
 import {
 	createSecurityHeadersHandle,
 	getStaticAssetCacheControl,
@@ -99,7 +100,7 @@ describe('static asset security policy', () => {
 					'https://kaivalo.test/_app/immutable/entry/app.js',
 					{
 						headers: {
-							cookie: 'wos-session=fixture'
+							cookie: `${AUTHKIT_COOKIE_NAME}=fixture`
 						}
 					}
 				),

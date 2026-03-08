@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { AUTHKIT_COOKIE_NAME } from '$lib/server/authkit-config.js';
 
 type HookInput = {
 	event: unknown;
@@ -100,7 +101,8 @@ describe('hooks server behavior', () => {
 
 		expect(configureAuthKit.mock.calls.at(-1)?.[0]).toEqual(
 			expect.objectContaining({
-				apiHostname: 'auth.kaivalo-login.com'
+				apiHostname: 'auth.kaivalo-login.com',
+				cookieName: AUTHKIT_COOKIE_NAME
 			})
 		);
 	});
@@ -125,7 +127,7 @@ describe('hooks server behavior', () => {
 		const { handle } = await import('./hooks.server');
 		const response = await handle({
 			event: createEvent('https://kaivalo.test/_app/immutable/chunks/app.js', {
-				cookie: 'wos-session=abc123'
+				cookie: `${AUTHKIT_COOKIE_NAME}=abc123`
 			}) as never,
 			resolve: async () =>
 				new Response('console.log("asset")', {

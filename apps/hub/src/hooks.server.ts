@@ -8,6 +8,7 @@ import {
 	getProxyTrustConfiguration,
 	getValidatedWorkosEnv
 } from '$lib/server/workos-security.js';
+import { AUTHKIT_COOKIE_NAME } from '$lib/server/authkit-config.js';
 import {
 	getErrorLogContext,
 	shouldIncludeErrorMessage
@@ -24,7 +25,8 @@ configureAuthKit({
 	apiKey: workosEnv.apiKey,
 	redirectUri: workosEnv.redirectUri,
 	cookiePassword: workosEnv.cookiePassword,
-	apiHostname: workosEnv.apiHostname
+	apiHostname: workosEnv.apiHostname,
+	cookieName: AUTHKIT_COOKIE_NAME
 });
 const configuredHandle = sequence(
 	createSecurityHeadersHandle({ trustForwardedProto, trustedProxyIps }),

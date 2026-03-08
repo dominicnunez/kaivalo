@@ -691,7 +691,7 @@ describe('sign-out route integration behavior', () => {
 		const response = await post(`${preview.baseUrl}/auth/sign-out`, {
 			origin: 'https://evil.example',
 			'sec-fetch-site': 'cross-site',
-			cookie: 'wos-session=test-fixture'
+			cookie: 'wos_session=test-fixture'
 		});
 
 		assert.strictEqual(response.statusCode, 403);
@@ -755,7 +755,7 @@ describe('sign-out route integration behavior', () => {
 		const response = await post(`${preview.baseUrl}/auth/sign-out`, {
 			origin: 'null',
 			'sec-fetch-site': 'same-origin',
-			cookie: 'wos-session=test-fixture'
+			cookie: 'wos_session=test-fixture'
 		});
 
 		assert.strictEqual(response.statusCode, 403);

@@ -14,6 +14,7 @@ export function getHubBuildInputPaths() {
 		join(ROOT, 'package-lock.json'),
 		join(ROOT, 'packages', 'ui'),
 		join(HUB_DIR, 'src'),
+		join(HUB_DIR, 'scripts'),
 		join(HUB_DIR, 'static'),
 		join(HUB_DIR, 'package.json'),
 		join(HUB_DIR, 'svelte.config.js'),
