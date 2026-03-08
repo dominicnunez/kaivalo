@@ -127,7 +127,7 @@ export const load: LayoutServerLoad = async (event) => {
 			const workosEnv = getValidatedWorkosEnv(env);
 			const trustedSignInOrigins = getTrustedSignInOriginSet();
 			signInUrl = sanitizeSignInUrl(
-				await authKit.getSignInUrl(),
+				await authKit.getSignInUrl({ returnTo: '/app' }),
 				workosEnv.origin,
 				trustedSignInOrigins
 			);

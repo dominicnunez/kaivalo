@@ -7,6 +7,8 @@ vi.mock('lucide-svelte', async () => {
 
 	return {
 		Calendar: IconStub,
+		ArrowRight: IconStub,
+		LayoutDashboard: IconStub,
 		Mail: IconStub,
 		Mic: IconStub,
 		LogIn: IconStub,
@@ -84,6 +86,39 @@ function createPageData(overrides: Partial<PageData> = {}): PageData {
 		user: null,
 		signInUrl: null,
 		authError: null,
+		marketingServices: [
+			{
+				id: 'sweep',
+				name: 'Sweep',
+				tagline: 'Stay on schedule',
+				description: 'Smart scheduling for chimney professionals.',
+				icon: 'calendar',
+				category: 'operations',
+				lifecycle: 'active',
+				marketingVisible: true,
+				launcherVisible: true,
+				requiresAuth: true,
+				enabled: true,
+				publicUrl: 'https://sweep.kaivalo.com',
+				appUrl: 'https://sweep.kaivalo.com'
+			},
+			{
+				id: 'podstudio',
+				name: 'PodStudio',
+				tagline: 'Podcast management',
+				description:
+					'Equipment tracking and session scheduling for podcast studios.',
+				icon: 'mic',
+				category: 'media',
+				lifecycle: 'planned',
+				marketingVisible: true,
+				launcherVisible: true,
+				requiresAuth: true,
+				enabled: false,
+				publicUrl: 'https://podcast.kaivalo.com',
+				appUrl: 'https://podcast.kaivalo.com'
+			}
+		],
 		...overrides
 	};
 }
@@ -120,13 +155,20 @@ describe('home page content', () => {
 			})
 		).toBeTruthy();
 		expect(
+			within(servicesSection as HTMLElement).getByText('Active')
+		).toBeTruthy();
+		expect(
 			within(servicesSection as HTMLElement).getByRole('heading', {
 				name: 'PodStudio'
 			})
 		).toBeTruthy();
 		expect(
-			within(servicesSection as HTMLElement).queryAllByRole('link')
-		).toHaveLength(0);
+			within(servicesSection as HTMLElement)
+				.getByRole('link', {
+					name: /open from your dashboard/i
+				})
+				.getAttribute('href')
+		).toBe('/app');
 
 		const aboutSection = container.querySelector('#about');
 		expect(aboutSection).not.toBeNull();
@@ -177,6 +219,13 @@ describe('home page content', () => {
 			within(controls as HTMLElement).getByRole('img', { name: 'Kai' })
 		).toBeTruthy();
 		expect(within(controls as HTMLElement).getByText('Kai')).toBeTruthy();
+		expect(
+			within(controls as HTMLElement)
+				.getByRole('link', {
+					name: /open dashboard/i
+				})
+				.getAttribute('href')
+		).toBe('/app');
 		expect(
 			within(signOutForm as HTMLFormElement).getByRole('button', {
 				name: /sign out/i

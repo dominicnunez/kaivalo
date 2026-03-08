@@ -142,6 +142,9 @@ describe('layout server load', () => {
 
 		const result = await load(baseEvent);
 
+		expect(mockedAuthKit.getSignInUrl).toHaveBeenCalledWith({
+			returnTo: '/app'
+		});
 		expect(mockedAuthKit.getSignInUrl).toHaveBeenCalledTimes(1);
 		expect(result).toEqual({
 			user: null,
@@ -159,6 +162,9 @@ describe('layout server load', () => {
 
 		const result = await load(baseEvent);
 
+		expect(mockedAuthKit.getSignInUrl).toHaveBeenCalledWith({
+			returnTo: '/app'
+		});
 		expect(result).toEqual({
 			user: null,
 			signInUrl:
@@ -236,6 +242,9 @@ describe('layout server load', () => {
 
 		const result = await load(event);
 
+		expect(mockedAuthKit.getSignInUrl).toHaveBeenCalledWith({
+			returnTo: '/app'
+		});
 		expect(result).toEqual({
 			user: null,
 			signInUrl: '/auth/sign-in',

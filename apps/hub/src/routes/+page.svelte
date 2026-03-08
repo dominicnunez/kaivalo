@@ -1,33 +1,23 @@
 <script lang="ts">
 	import { Container } from '@kaivalo/ui';
-	import { Calendar, Mail, Mic, LogIn, LogOut } from 'lucide-svelte';
+	import {
+		ArrowRight,
+		Calendar,
+		LayoutDashboard,
+		LogIn,
+		LogOut,
+		Mail,
+		Mic
+	} from 'lucide-svelte';
 	import type { PageData } from './$types';
+	import type { ServiceIconKey } from '$lib/services/registry.ts';
 	import { onMount } from 'svelte';
 
 	let { data }: { data: PageData } = $props();
-
-	type Service = {
-		icon: typeof Calendar;
-		title: string;
-		tagline: string;
-		description: string;
+	const serviceIcons: Record<ServiceIconKey, typeof Calendar> = {
+		calendar: Calendar,
+		mic: Mic
 	};
-
-	const services: Service[] = [
-		{
-			icon: Calendar,
-			title: 'Sweep',
-			tagline: 'Stay on schedule',
-			description: 'Smart scheduling for chimney professionals.'
-		},
-		{
-			icon: Mic,
-			title: 'PodStudio',
-			tagline: 'Podcast management',
-			description:
-				'Equipment tracking and session scheduling for podcast studios.'
-		}
-	];
 
 	const phrases = ['chimney cleaning', 'podcast equipment rentals'];
 	const TYPEWRITER_TYPING_DELAY_MS = 100;
@@ -199,6 +189,13 @@
 				<span class="text-secondary text-xs hidden sm:inline">
 					{data.user.firstName ?? data.user.email}
 				</span>
+				<a
+					href="/app"
+					class="chasing-border signin-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium"
+				>
+					<LayoutDashboard class="w-3.5 h-3.5" />
+					Open dashboard
+				</a>
 				<form method="POST" action="/auth/sign-out">
 					<button
 						type="submit"
@@ -267,8 +264,8 @@
 
 		<!-- Service cards -->
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-			{#each services as service}
-				{@const Icon = service.icon}
+			{#each data.marketingServices as service}
+				{@const Icon = serviceIcons[service.icon]}
 				<div
 					class="service-card-shell group rounded-xl border p-6 sm:p-8 service-card"
 				>
@@ -280,15 +277,23 @@
 								class="text-muted w-5 h-5 transition-colors duration-300 icon-muted"
 							/>
 						</div>
-						<span
-							class="badge-soon inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium transition-colors duration-300 soon-badge"
-						>
-							Soon
-						</span>
+						{#if service.lifecycle === 'active'}
+							<span
+								class="badge-soon inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium transition-colors duration-300 soon-badge"
+							>
+								Active
+							</span>
+						{:else}
+							<span
+								class="badge-soon inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium transition-colors duration-300 soon-badge"
+							>
+								Soon
+							</span>
+						{/if}
 					</div>
 
 					<h3 class="font-display text-lg sm:text-xl font-semibold mb-1">
-						{service.title}
+						{service.name}
 					</h3>
 					<p class="text-muted font-mono text-xs mb-3 sm:mb-4">
 						{service.tagline}
@@ -296,6 +301,17 @@
 					<p class="text-muted text-sm leading-relaxed">
 						{service.description}
 					</p>
+					{#if service.lifecycle === 'active'}
+						<div class="mt-5">
+							<a
+								href="/app"
+								class="text-secondary hover-text inline-flex items-center gap-1.5 text-xs font-medium"
+							>
+								Open from your dashboard
+								<ArrowRight class="w-3.5 h-3.5" />
+							</a>
+						</div>
+					{/if}
 				</div>
 			{/each}
 		</div>

@@ -92,6 +92,34 @@ describe('WorkOS Auth Callback Route', () => {
 			);
 		});
 
+		it('normalizes successful shell launcher redirects to /app', async () => {
+			const handler = createAuthCallbackGetHandler({
+				handleCallback: () => async () =>
+					Response.redirect('https://kaivalo.test/app', 303),
+				isRedirect,
+				isHttpError,
+				cookiePassword
+			});
+
+			const result = await handler(createEvent());
+			assert.strictEqual(result.status, 303);
+			assert.strictEqual(result.headers.get('location'), '/app');
+		});
+
+		it('preserves launcher query parameters on successful shell redirects', async () => {
+			const handler = createAuthCallbackGetHandler({
+				handleCallback: () => async () =>
+					Response.redirect('https://kaivalo.test/app?welcome=1', 303),
+				isRedirect,
+				isHttpError,
+				cookiePassword
+			});
+
+			const result = await handler(createEvent());
+			assert.strictEqual(result.status, 303);
+			assert.strictEqual(result.headers.get('location'), '/app?welcome=1');
+		});
+
 		it('rejects callback responses with external redirect locations', async () => {
 			const logs = [];
 			const handler = createAuthCallbackGetHandler({

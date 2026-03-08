@@ -30,7 +30,40 @@ describe('home page load', () => {
 				imageAlt: 'Kaivalo — tools that cut through complexity',
 				twitterCard: 'summary_large_image'
 			},
-			currentYear: new Date().getFullYear()
+			currentYear: new Date().getFullYear(),
+			marketingServices: [
+				{
+					id: 'sweep',
+					name: 'Sweep',
+					tagline: 'Stay on schedule',
+					description: 'Smart scheduling for chimney professionals.',
+					icon: 'calendar',
+					category: 'operations',
+					lifecycle: 'active',
+					marketingVisible: true,
+					launcherVisible: true,
+					requiresAuth: true,
+					enabled: true,
+					publicUrl: 'https://sweep.kaivalo.com',
+					appUrl: 'https://sweep.kaivalo.com'
+				},
+				{
+					id: 'podstudio',
+					name: 'PodStudio',
+					tagline: 'Podcast management',
+					description:
+						'Equipment tracking and session scheduling for podcast studios.',
+					icon: 'mic',
+					category: 'media',
+					lifecycle: 'planned',
+					marketingVisible: true,
+					launcherVisible: true,
+					requiresAuth: true,
+					enabled: false,
+					publicUrl: 'https://podcast.kaivalo.com',
+					appUrl: 'https://podcast.kaivalo.com'
+				}
+			]
 		});
 	});
 });

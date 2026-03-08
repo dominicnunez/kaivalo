@@ -56,6 +56,32 @@ describe('auth callback route', () => {
 		expect(mockHandleCallback).toHaveBeenCalledOnce();
 	});
 
+	it('normalizes successful shell callback redirects to the launcher route', async () => {
+		mockHandleCallback.mockReturnValue(async () =>
+			Response.redirect('https://kaivalo.test/app', 303)
+		);
+
+		const { GET } = await import('./+server');
+		const response = await GET(createEvent());
+
+		expect(response.status).toBe(303);
+		expect(response.headers.get('location')).toBe('/app');
+		expect(mockHandleCallback).toHaveBeenCalledOnce();
+	});
+
+	it('preserves launcher query parameters on successful shell callback redirects', async () => {
+		mockHandleCallback.mockReturnValue(async () =>
+			Response.redirect('https://kaivalo.test/app?welcome=1', 303)
+		);
+
+		const { GET } = await import('./+server');
+		const response = await GET(createEvent());
+
+		expect(response.status).toBe(303);
+		expect(response.headers.get('location')).toBe('/app?welcome=1');
+		expect(mockHandleCallback).toHaveBeenCalledOnce();
+	});
+
 	it('redirects browser callback failures with a verified signed auth error', async () => {
 		mockHandleCallback.mockReturnValue(async () => {
 			throw new Error('upstream unavailable');
