@@ -1,9 +1,13 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
 	FETCH_TIMEOUT_MS,
 	createFetchErrorMessage,
+	readCurrentVersion,
 	readLatestMetadata
 } from '../scripts/check-sveltekit-upstream.mjs';
 
@@ -59,5 +63,18 @@ describe('check-sveltekit-upstream', () => {
 			createFetchErrorMessage(networkError),
 			'Failed to fetch latest @sveltejs/kit metadata: socket hang up'
 		);
+	});
+
+	it('reads the resolved version from the repository lockfile outside the cwd', async () => {
+		const originalCwd = process.cwd();
+		const tempCwd = mkdtempSync(join(tmpdir(), 'kaivalo-upstream-check-'));
+
+		try {
+			process.chdir(tempCwd);
+			const version = await readCurrentVersion();
+			assert.match(version, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
+		} finally {
+			process.chdir(originalCwd);
+		}
 	});
 });

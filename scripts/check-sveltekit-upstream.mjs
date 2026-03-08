@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+export const REPO_ROOT = resolve(import.meta.dirname, '..');
+const LOCKFILE_PATH = resolve(REPO_ROOT, 'package-lock.json');
 const ISSUE_TITLE = 'Track upstream @sveltejs/kit updates for cookie advisory';
 const REGISTRY_LATEST_URL = 'https://registry.npmjs.org/@sveltejs%2fkit/latest';
 export const FETCH_TIMEOUT_MS = 10_000;
@@ -107,8 +109,7 @@ function escapeMultilineValue(value) {
 	return String(value).replace(/\r/g, '');
 }
 
-async function readCurrentVersion() {
-	const lockfilePath = resolve(process.cwd(), 'package-lock.json');
+export async function readCurrentVersion(lockfilePath = LOCKFILE_PATH) {
 	const raw = await readFile(lockfilePath, 'utf8');
 	const lockfile = JSON.parse(raw);
 	const currentVersion =
