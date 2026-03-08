@@ -9,39 +9,44 @@ import {
 	AUTH_ERROR_MESSAGE,
 	readVerifiedAuthError
 } from '$lib/auth/auth-error-query.js';
-import { TRUSTED_AVATAR_HOSTS } from '$lib/server/trusted-hosts.js';
+import { isTrustedAvatarHost } from '$lib/server/trusted-hosts.js';
 
-const TRUSTED_AVATAR_HOSTNAME_SET = new Set(TRUSTED_AVATAR_HOSTS);
-const TRUSTED_SIGN_IN_ORIGINS = new Set(['https://api.workos.com']);
 const TRUSTED_SIGN_IN_PATH_PREFIXES = [
 	'/auth/sign-in',
 	'/user_management/authorize'
 ];
 let trustedSignInOriginSetCache: Set<string> | null = null;
+let trustedSignInOriginCacheKey: string | null = null;
 
 function getTrustedSignInOriginSet(): Set<string> {
-	if (trustedSignInOriginSetCache) {
-		return trustedSignInOriginSetCache;
-	}
-
-	const trustedOrigins = new Set(TRUSTED_SIGN_IN_ORIGINS);
 	try {
 		const workosEnv = getValidatedWorkosEnv(env);
+		const cacheKey = [
+			workosEnv.apiHostname,
+			workosEnv.origin,
+			workosEnv.redirectUri
+		].join('|');
+		if (
+			trustedSignInOriginSetCache &&
+			trustedSignInOriginCacheKey === cacheKey
+		) {
+			return trustedSignInOriginSetCache;
+		}
+
+		const trustedOrigins = new Set<string>();
+		trustedOrigins.add(`https://${workosEnv.apiHostname}`);
 		trustedOrigins.add(workosEnv.origin);
 		trustedOrigins.add(new URL(workosEnv.redirectUri).origin);
 		trustedSignInOriginSetCache = trustedOrigins;
+		trustedSignInOriginCacheKey = cacheKey;
+		return trustedOrigins;
 	} catch {
 		// Build-time route analysis can evaluate this module before runtime env is injected.
 		// Do not cache failures so later requests can recover once runtime env is available.
 	}
 
-	return trustedOrigins;
+	return new Set();
 }
-
-function isTrustedAvatarHost(hostname: string): boolean {
-	return TRUSTED_AVATAR_HOSTNAME_SET.has(hostname);
-}
-
 function sanitizeAvatarUrl(
 	candidate: string | null | undefined
 ): string | null {

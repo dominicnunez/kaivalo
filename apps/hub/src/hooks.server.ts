@@ -20,7 +20,8 @@ configureAuthKit({
 	clientId: workosEnv.clientId,
 	apiKey: workosEnv.apiKey,
 	redirectUri: workosEnv.redirectUri,
-	cookiePassword: workosEnv.cookiePassword
+	cookiePassword: workosEnv.cookiePassword,
+	apiHostname: workosEnv.apiHostname
 });
 const configuredHandle = sequence(
 	createSecurityHeadersHandle({ trustForwardedProto, trustedProxyIps }),

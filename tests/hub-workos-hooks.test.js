@@ -222,6 +222,25 @@ describe('WorkOS env validation', () => {
 		assert.strictEqual(parsed.origin, 'https://kaivalo.test');
 	});
 
+	it('accepts a custom WorkOS api hostname', () => {
+		const parsed = getValidatedWorkosEnv({
+			...validEnv,
+			WORKOS_API_HOSTNAME: 'auth.kaivalo-login.com'
+		});
+		assert.strictEqual(parsed.apiHostname, 'auth.kaivalo-login.com');
+	});
+
+	it('rejects malformed WorkOS api hostnames', () => {
+		assert.throws(
+			() =>
+				getValidatedWorkosEnv({
+					...validEnv,
+					WORKOS_API_HOSTNAME: 'https://auth.kaivalo-login.com/login'
+				}),
+			/WORKOS_API_HOSTNAME must be a hostname without protocol, path, credentials, or port/
+		);
+	});
+
 	it('requires ORIGIN for local deployments outside test environment', () => {
 		assert.throws(
 			() =>
@@ -998,7 +1017,7 @@ describe('Security headers on preview responses', () => {
 			contentSecurityPolicy.includes('https://avatars.githubusercontent.com')
 		);
 		assert.ok(
-			contentSecurityPolicy.includes('https://lh3.googleusercontent.com')
+			contentSecurityPolicy.includes('https://*.googleusercontent.com')
 		);
 		assert.ok(contentSecurityPolicy.includes("object-src 'none'"));
 		assert.ok(contentSecurityPolicy.includes("frame-ancestors 'none'"));

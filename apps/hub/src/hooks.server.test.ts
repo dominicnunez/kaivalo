@@ -95,6 +95,18 @@ describe('hooks server behavior', () => {
 		expect(authKitHandle).toHaveBeenCalledTimes(1);
 	});
 
+	it('passes a validated custom WorkOS api hostname into AuthKit config', async () => {
+		privateEnv.WORKOS_API_HOSTNAME = 'auth.kaivalo-login.com';
+
+		await import('./hooks.server');
+
+		expect(configureAuthKit).toHaveBeenCalledWith(
+			expect.objectContaining({
+				apiHostname: 'auth.kaivalo-login.com'
+			})
+		);
+	});
+
 	it('applies reusable caching for public html responses without auth context', async () => {
 		const { handle } = await import('./hooks.server');
 		const response = await handle({

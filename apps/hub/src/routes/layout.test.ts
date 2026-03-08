@@ -10,7 +10,7 @@ const { mockEnv } = vi.hoisted(() => ({
 		WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback',
 		WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
 		ORIGIN: 'https://kaivalo.test'
-	}
+	} as Record<string, string>
 }));
 
 vi.mock('@workos/authkit-sveltekit', () => ({
@@ -42,6 +42,7 @@ describe('layout server load', () => {
 		vi.clearAllMocks();
 		mockEnv.NODE_ENV = 'test';
 		mockEnv.KAIVALO_ENABLE_TEST_AUTH_FAILURE = '0';
+		delete mockEnv.WORKOS_API_HOSTNAME;
 	});
 
 	it('returns normalized user data for authenticated requests', async () => {
@@ -115,6 +116,28 @@ describe('layout server load', () => {
 		});
 	});
 
+	it('keeps trusted Google profile photos from alternate lh hosts', async () => {
+		mockedAuthKit.getUser.mockResolvedValue({
+			firstName: 'Kai',
+			email: 'kai@example.com',
+			profilePictureUrl:
+				'https://lh5.googleusercontent.com/a/example-avatar=s96-c'
+		} as never);
+
+		const result = await load(baseEvent);
+
+		expect(result).toEqual({
+			user: {
+				firstName: 'Kai',
+				email: 'kai@example.com',
+				profilePictureUrl:
+					'https://lh5.googleusercontent.com/a/example-avatar=s96-c'
+			},
+			signInUrl: null,
+			authError: null
+		});
+	});
+
 	it('returns trusted sign-in URL for unauthenticated requests', async () => {
 		mockedAuthKit.getUser.mockResolvedValue(null as never);
 		mockedAuthKit.getSignInUrl.mockResolvedValue(
@@ -127,6 +150,23 @@ describe('layout server load', () => {
 		expect(result).toEqual({
 			user: null,
 			signInUrl: 'https://api.workos.com/user_management/authorize',
+			authError: null
+		});
+	});
+
+	it('accepts a sign-in URL on the configured WorkOS auth hostname', async () => {
+		mockEnv.WORKOS_API_HOSTNAME = 'auth.kaivalo-login.com';
+		mockedAuthKit.getUser.mockResolvedValue(null as never);
+		mockedAuthKit.getSignInUrl.mockResolvedValue(
+			'https://auth.kaivalo-login.com/user_management/authorize?screen_hint=sign-up' as never
+		);
+
+		const result = await load(baseEvent);
+
+		expect(result).toEqual({
+			user: null,
+			signInUrl:
+				'https://auth.kaivalo-login.com/user_management/authorize?screen_hint=sign-up',
 			authError: null
 		});
 	});

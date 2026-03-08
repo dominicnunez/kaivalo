@@ -9,6 +9,7 @@ const REQUIRED_ENV_VARS = [
 const HEX_64_PATTERN = /^[a-f0-9]{64}$/i;
 const HSTS_MAX_AGE_SECONDS = 63_072_000;
 const LOCAL_REDIRECT_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+const DEFAULT_WORKOS_API_HOSTNAME = 'api.workos.com';
 const AUTH_ROUTE_PATH_PREFIX = '/auth/';
 const PUBLIC_DOCUMENT_CACHE_CONTROL =
 	'public, max-age=300, stale-while-revalidate=60';
@@ -119,6 +120,42 @@ function parseOriginUrl(value) {
 function assertHttpOrHttpsProtocol(url, envVarName) {
 	if (url.protocol !== 'http:' && url.protocol !== 'https:') {
 		throw new Error(`${envVarName} must use http or https`);
+	}
+}
+
+/**
+ * @param {string | undefined} value
+ * @returns {string}
+ */
+function parseWorkosApiHostname(value) {
+	const trimmed = value?.trim();
+	if (!trimmed) {
+		return DEFAULT_WORKOS_API_HOSTNAME;
+	}
+
+	if (
+		trimmed.includes('://') ||
+		trimmed.includes('/') ||
+		trimmed.includes('?') ||
+		trimmed.includes('#') ||
+		trimmed.includes('@')
+	) {
+		throw new Error(
+			'WORKOS_API_HOSTNAME must be a hostname without protocol, path, credentials, or port'
+		);
+	}
+
+	try {
+		const parsed = new URL(`https://${trimmed}`);
+		if (!parsed.hostname || parsed.port || parsed.pathname !== '/') {
+			throw new Error();
+		}
+
+		return parsed.hostname;
+	} catch {
+		throw new Error(
+			'WORKOS_API_HOSTNAME must be a hostname without protocol, path, credentials, or port'
+		);
 	}
 }
 
@@ -665,6 +702,7 @@ function readRequiredTrimmedEnvValue(env, name) {
  * redirectUri: string
  * cookiePassword: string
  * origin: string
+ * apiHostname: string
  * }}
  */
 export function getValidatedWorkosEnv(env) {
@@ -684,6 +722,7 @@ export function getValidatedWorkosEnv(env) {
 		env,
 		'WORKOS_COOKIE_PASSWORD'
 	);
+	const apiHostname = parseWorkosApiHostname(env.WORKOS_API_HOSTNAME);
 
 	if (!HEX_64_PATTERN.test(cookiePassword)) {
 		throw new Error(
@@ -711,7 +750,8 @@ export function getValidatedWorkosEnv(env) {
 			apiKey,
 			redirectUri: redirectUrl.toString(),
 			cookiePassword,
-			origin: localOrigin
+			origin: localOrigin,
+			apiHostname
 		};
 	}
 
@@ -729,7 +769,8 @@ export function getValidatedWorkosEnv(env) {
 		apiKey,
 		redirectUri: redirectUrl.toString(),
 		cookiePassword,
-		origin: originUrl.origin
+		origin: originUrl.origin,
+		apiHostname
 	};
 }
 

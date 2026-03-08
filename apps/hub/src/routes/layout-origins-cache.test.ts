@@ -4,7 +4,8 @@ const { mockGetValidatedWorkosEnv, mockGetUser, mockGetSignInUrl } = vi.hoisted(
 	() => ({
 		mockGetValidatedWorkosEnv: vi.fn(() => ({
 			origin: 'https://kaivalo.test',
-			redirectUri: 'https://kaivalo.test/auth/callback'
+			redirectUri: 'https://kaivalo.test/auth/callback',
+			apiHostname: 'api.workos.com'
 		})),
 		mockGetUser: vi.fn(),
 		mockGetSignInUrl: vi.fn()
@@ -49,7 +50,8 @@ describe('layout trusted origin initialization', () => {
 		mockGetValidatedWorkosEnv.mockReset();
 		mockGetValidatedWorkosEnv.mockReturnValue({
 			origin: 'https://kaivalo.test',
-			redirectUri: 'https://kaivalo.test/auth/callback'
+			redirectUri: 'https://kaivalo.test/auth/callback',
+			apiHostname: 'api.workos.com'
 		} as never);
 		mockGetUser.mockResolvedValue(null as never);
 		mockGetSignInUrl.mockResolvedValue('/auth/sign-in' as never);
@@ -78,7 +80,8 @@ describe('layout trusted origin initialization', () => {
 			})
 			.mockReturnValue({
 				origin: 'https://tenant.kaivalo.test',
-				redirectUri: 'https://tenant.kaivalo.test/auth/callback'
+				redirectUri: 'https://tenant.kaivalo.test/auth/callback',
+				apiHostname: 'api.workos.com'
 			} as never);
 		mockGetSignInUrl.mockResolvedValue(
 			'https://tenant.kaivalo.test/auth/sign-in' as never

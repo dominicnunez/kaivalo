@@ -109,6 +109,26 @@ describe('workos environment protocols', () => {
 			})
 		).toThrow(/ORIGIN must use http or https/);
 	});
+
+	it('accepts an optional WorkOS api hostname', () => {
+		expect(
+			getValidatedWorkosEnv({
+				...validLocalEnv,
+				WORKOS_API_HOSTNAME: 'auth.kaivalo-login.test'
+			}).apiHostname
+		).toBe('auth.kaivalo-login.test');
+	});
+
+	it('rejects malformed WorkOS api hostnames', () => {
+		expect(() =>
+			getValidatedWorkosEnv({
+				...validLocalEnv,
+				WORKOS_API_HOSTNAME: 'https://auth.kaivalo-login.test/path'
+			})
+		).toThrow(
+			/WORKOS_API_HOSTNAME must be a hostname without protocol, path, credentials, or port/
+		);
+	});
 });
 
 describe('trusted forwarded proto parsing', () => {
