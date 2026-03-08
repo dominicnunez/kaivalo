@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-const { mockEnv, mockSignOut, mockShouldIncludeErrorMessage } = vi.hoisted(
+const { mockEnv, mockShouldIncludeErrorMessage, mockAuthKit } = vi.hoisted(
 	() => ({
 		mockEnv: {
 			WORKOS_CLIENT_ID: 'client_123',
@@ -10,8 +10,10 @@ const { mockEnv, mockSignOut, mockShouldIncludeErrorMessage } = vi.hoisted(
 			WORKOS_API_HOSTNAME: 'auth.kaivalo-login.com',
 			ORIGIN: 'https://kaivalo.test'
 		} as Record<string, string>,
-		mockSignOut: vi.fn(),
-		mockShouldIncludeErrorMessage: vi.fn(() => false)
+		mockShouldIncludeErrorMessage: vi.fn(() => false),
+		mockAuthKit: {
+			signOut: vi.fn()
+		}
 	})
 );
 
@@ -19,10 +21,8 @@ vi.mock('$env/dynamic/private', () => ({
 	env: mockEnv
 }));
 
-vi.mock('$lib/server/authkit-runtime.js', () => ({
-	getAuthRouteHandlers: () => ({
-		signOut: mockSignOut
-	})
+vi.mock('@workos/authkit-sveltekit', () => ({
+	authKit: mockAuthKit
 }));
 
 vi.mock('$lib/server/error-diagnostics.js', async (importOriginal) => {
@@ -36,7 +36,7 @@ vi.mock('$lib/server/error-diagnostics.js', async (importOriginal) => {
 describe('auth sign-out route', () => {
 	it('preserves authenticated WorkOS logout redirects on the configured auth host', async () => {
 		vi.resetModules();
-		mockSignOut.mockResolvedValueOnce(
+		mockAuthKit.signOut.mockResolvedValueOnce(
 			Response.redirect(
 				'https://auth.kaivalo-login.com/user_management/sessions/logout?session_id=session_123&return_to=https%3A%2F%2Fkaivalo.test',
 				302
@@ -55,6 +55,7 @@ describe('auth sign-out route', () => {
 		} as never);
 
 		expect(response.status).toBe(302);
+		expect(mockAuthKit.signOut).toHaveBeenCalledOnce();
 		expect(response.headers.get('location')).toBe(
 			'https://auth.kaivalo-login.com/user_management/sessions/logout?session_id=session_123&return_to=https%3A%2F%2Fkaivalo.test'
 		);
