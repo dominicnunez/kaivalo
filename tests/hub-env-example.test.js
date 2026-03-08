@@ -70,6 +70,11 @@ describe('apps/hub/.env.example behavior', () => {
 		);
 	});
 
+	it('documents the default development port used by the runtime examples', () => {
+		assert.strictEqual(envValues.PORT, '3100');
+		assert.match(runtimeEnvDoc, /PORT=3100/);
+	});
+
 	it('keeps local development proxy trust disabled by default', () => {
 		const validated = getValidatedWorkosEnv({
 			...envValues,
