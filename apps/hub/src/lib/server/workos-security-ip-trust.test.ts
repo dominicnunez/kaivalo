@@ -25,7 +25,7 @@ describe('proxy ip trust canonicalization', () => {
 		);
 	});
 
-	it('uses the trusted proxy proto hop from the left side of comma-separated values', async () => {
+	it('uses the trusted proxy proto hop from the right side of comma-separated values', async () => {
 		const handle = createSecurityHeadersHandle({
 			trustForwardedProto: true,
 			trustedProxyIps: ['127.0.0.1']
@@ -43,9 +43,9 @@ describe('proxy ip trust canonicalization', () => {
 			resolve: async () => new Response('ok', { status: 200 })
 		});
 
-		expect(httpsFromTrustedProxy.headers.get('Strict-Transport-Security')).toBe(
-			'max-age=63072000; includeSubDomains'
-		);
+		expect(
+			httpsFromTrustedProxy.headers.get('Strict-Transport-Security')
+		).toBeNull();
 
 		const httpFromTrustedProxy = await handle({
 			event: {
@@ -59,9 +59,9 @@ describe('proxy ip trust canonicalization', () => {
 			resolve: async () => new Response('ok', { status: 200 })
 		});
 
-		expect(
-			httpFromTrustedProxy.headers.get('Strict-Transport-Security')
-		).toBeNull();
+		expect(httpFromTrustedProxy.headers.get('Strict-Transport-Security')).toBe(
+			'max-age=63072000; includeSubDomains'
+		);
 	});
 
 	it('rejects malformed client addresses at the trust boundary', async () => {
