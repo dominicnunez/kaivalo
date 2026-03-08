@@ -1,5 +1,9 @@
 import { authKit } from '@workos/authkit-sveltekit';
 import { env } from '$env/dynamic/private';
+import {
+	decodeSignedTestAuthSession,
+	encodeSignedTestAuthSession
+} from './test-auth-session.js';
 
 const TEST_AUTH_USER_HEADER = 'x-kaivalo-test-auth-user';
 const TEST_AUTH_FIXTURE_FLAG = 'KAIVALO_ENABLE_TEST_AUTH_FIXTURE';
@@ -24,6 +28,15 @@ function normalizeOptionalString(value: unknown): string | null {
 
 function isTestAuthFixtureEnabled(): boolean {
 	return env.NODE_ENV === 'test' && env[TEST_AUTH_FIXTURE_FLAG] === '1';
+}
+
+function getTestAuthFixtureSecret(): string {
+	const secret = normalizeOptionalString(env.WORKOS_COOKIE_PASSWORD);
+	if (secret === null) {
+		throw new Error('Test auth fixtures require WORKOS_COOKIE_PASSWORD');
+	}
+
+	return secret;
 }
 
 function parseFixtureUserPayload(
@@ -55,7 +68,7 @@ function parseFixtureUserPayload(
 }
 
 function serializeFixtureUser(user: AuthUser): string {
-	return Buffer.from(JSON.stringify(user)).toString('base64url');
+	return encodeSignedTestAuthSession(user, getTestAuthFixtureSecret());
 }
 
 function buildFixtureSessionCookie(user: AuthUser): string {
@@ -109,7 +122,24 @@ function readTestAuthUserFromSessionCookie(
 	}
 
 	try {
-		return parseFixtureUserPayload(decodeURIComponent(encodedUser));
+		const parsed = decodeSignedTestAuthSession(
+			decodeURIComponent(encodedUser),
+			getTestAuthFixtureSecret()
+		);
+		if (!parsed || typeof parsed !== 'object') {
+			return null;
+		}
+		const parsedUser = parsed as {
+			firstName?: unknown;
+			email?: unknown;
+			profilePictureUrl?: unknown;
+		};
+
+		return {
+			firstName: normalizeOptionalString(parsedUser.firstName),
+			email: normalizeOptionalString(parsedUser.email),
+			profilePictureUrl: normalizeOptionalString(parsedUser.profilePictureUrl)
+		} as AuthUser;
 	} catch {
 		return null;
 	}
@@ -177,13 +207,6 @@ export async function getAuthUser(
 	);
 	if (testSessionUser !== undefined) {
 		return testSessionUser;
-	}
-
-	const testUser = parseFixtureUserPayload(
-		event.request.headers.get(TEST_AUTH_USER_HEADER)
-	);
-	if (testUser !== undefined) {
-		return testUser;
 	}
 
 	return authKit.getUser(event);

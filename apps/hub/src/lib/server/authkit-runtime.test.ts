@@ -6,7 +6,8 @@ const { handleCallback, signOut, getUser, privateEnv } = vi.hoisted(() => ({
 	getUser: vi.fn(),
 	privateEnv: {
 		NODE_ENV: 'test',
-		KAIVALO_ENABLE_TEST_AUTH_FIXTURE: '1'
+		KAIVALO_ENABLE_TEST_AUTH_FIXTURE: '1',
+		WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32)
 	} as Record<string, string>
 }));
 
@@ -23,12 +24,14 @@ vi.mock('$env/dynamic/private', () => ({
 }));
 
 import { getAuthRouteHandlers, getAuthUser } from './authkit-runtime';
+import { encodeSignedTestAuthSession } from './test-auth-session.js';
 
 describe('getAuthRouteHandlers', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		privateEnv.NODE_ENV = 'test';
 		privateEnv.KAIVALO_ENABLE_TEST_AUTH_FIXTURE = '1';
+		privateEnv.WORKOS_COOKIE_PASSWORD = 'ab'.repeat(32);
 	});
 
 	it('falls back to the shipped WorkOS handlers when no test fixtures are present', async () => {
@@ -88,6 +91,9 @@ describe('getAuthRouteHandlers', () => {
 		expect(response.headers.get('set-cookie')).toContain(
 			'kaivalo_test_auth_session='
 		);
+		expect(response.headers.get('set-cookie')).toMatch(
+			/kaivalo_test_auth_session=[^;]+\.[^;]+;/
+		);
 		expect(handleCallback).not.toHaveBeenCalled();
 	});
 
@@ -98,12 +104,13 @@ describe('getAuthRouteHandlers', () => {
 				method: 'POST',
 				headers: {
 					cookie: `kaivalo_test_auth_session=${encodeURIComponent(
-						Buffer.from(
-							JSON.stringify({
+						encodeSignedTestAuthSession(
+							{
 								firstName: 'Kai',
 								email: 'kai@example.com'
-							})
-						).toString('base64url')
+							},
+							privateEnv.WORKOS_COOKIE_PASSWORD
+						)
 					)}`,
 					'x-kaivalo-test-auth-sign-out-return-to':
 						'https://kaivalo.test/goodbye?from=sign-out#done'
@@ -123,7 +130,12 @@ describe('getAuthRouteHandlers', () => {
 		expect(signOut).not.toHaveBeenCalled();
 	});
 
-	it('returns a deterministic test fixture user when the preview header is present', async () => {
+	it('does not trust preview headers outside the callback fixture flow', async () => {
+		getUser.mockResolvedValue({
+			firstName: 'WorkOS',
+			email: 'user@example.com',
+			profilePictureUrl: null
+		});
 		const event = {
 			request: new Request('https://kaivalo.test', {
 				headers: {
@@ -139,11 +151,11 @@ describe('getAuthRouteHandlers', () => {
 		} as Parameters<typeof getAuthUser>[0];
 
 		await expect(getAuthUser(event)).resolves.toEqual({
-			firstName: 'Kai',
-			email: 'kai@example.com',
-			profilePictureUrl: 'https://avatars.githubusercontent.com/u/1'
+			firstName: 'WorkOS',
+			email: 'user@example.com',
+			profilePictureUrl: null
 		});
-		expect(getUser).not.toHaveBeenCalled();
+		expect(getUser).toHaveBeenCalledWith(event);
 	});
 
 	it('falls back to WorkOS user lookup when the test fixture header is absent', async () => {
@@ -164,17 +176,20 @@ describe('getAuthRouteHandlers', () => {
 		expect(getUser).toHaveBeenCalledWith(event);
 	});
 
-	it('treats malformed fixture headers as unauthenticated test requests', async () => {
-		const event = {
-			request: new Request('https://kaivalo.test', {
-				headers: {
-					'x-kaivalo-test-auth-user': 'not-base64url-json'
-				}
-			})
-		} as Parameters<typeof getAuthUser>[0];
+	it('rejects malformed callback fixture headers', async () => {
+		const handlers = getAuthRouteHandlers();
+		const callbackHandler = handlers.handleCallback();
 
-		await expect(getAuthUser(event)).resolves.toBeNull();
-		expect(getUser).not.toHaveBeenCalled();
+		await expect(
+			callbackHandler({
+				request: new Request('https://kaivalo.test/auth/callback', {
+					headers: {
+						'x-kaivalo-test-auth-user': 'not-base64url-json'
+					}
+				}),
+				url: new URL('https://kaivalo.test/auth/callback')
+			} as Parameters<ReturnType<typeof handlers.handleCallback>>[0])
+		).rejects.toThrowError('Invalid test auth user fixture');
 	});
 
 	it('reads deterministic session fixtures from cookies before consulting WorkOS', async () => {
@@ -182,12 +197,13 @@ describe('getAuthRouteHandlers', () => {
 			request: new Request('https://kaivalo.test', {
 				headers: {
 					cookie: `kaivalo_test_auth_session=${encodeURIComponent(
-						Buffer.from(
-							JSON.stringify({
+						encodeSignedTestAuthSession(
+							{
 								firstName: 'Kai',
 								email: 'kai@example.com'
-							})
-						).toString('base64url')
+							},
+							privateEnv.WORKOS_COOKIE_PASSWORD
+						)
 					)}`
 				}
 			})
@@ -198,6 +214,26 @@ describe('getAuthRouteHandlers', () => {
 			email: 'kai@example.com',
 			profilePictureUrl: null
 		});
+		expect(getUser).not.toHaveBeenCalled();
+	});
+
+	it('treats tampered session cookies as unauthenticated test requests', async () => {
+		const signedSession = encodeSignedTestAuthSession(
+			{
+				firstName: 'Kai',
+				email: 'kai@example.com'
+			},
+			privateEnv.WORKOS_COOKIE_PASSWORD
+		);
+		const event = {
+			request: new Request('https://kaivalo.test', {
+				headers: {
+					cookie: `kaivalo_test_auth_session=${encodeURIComponent(`${signedSession}tampered`)}`
+				}
+			})
+		} as Parameters<typeof getAuthUser>[0];
+
+		await expect(getAuthUser(event)).resolves.toBeNull();
 		expect(getUser).not.toHaveBeenCalled();
 	});
 

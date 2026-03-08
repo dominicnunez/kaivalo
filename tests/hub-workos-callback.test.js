@@ -13,7 +13,7 @@ import { isHttpError, isRedirect } from '@sveltejs/kit';
 import {
 	httpGet,
 	startHubPreview,
-	createAuthenticatedPreviewHeaders
+	createCallbackFixtureUserHeaders
 } from './helpers/hub-preview.js';
 
 const cookiePassword = 'ab'.repeat(32);
@@ -66,7 +66,7 @@ function assertHardenedCookies(setCookieHeaders) {
 
 function createCallbackFixtureHeaders(baseUrl, user, returnTo) {
 	return {
-		...createAuthenticatedPreviewHeaders(user),
+		...createCallbackFixtureUserHeaders(user),
 		'x-kaivalo-test-auth-return-to': `${baseUrl}${returnTo}`
 	};
 }

@@ -2,6 +2,7 @@ import http from 'node:http';
 import https from 'node:https';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { encodeSignedTestAuthSession } from '../../apps/hub/src/lib/server/test-auth-session.js';
 import { ensureHubBuild } from './hub-build.js';
 import { reserveLocalPort } from './network.js';
 
@@ -13,6 +14,8 @@ const PREVIEW_PORT_RETRY_COUNT = 5;
 const PREVIEW_SHUTDOWN_TIMEOUT_MS = 5000;
 const PREVIEW_FORCE_KILL_TIMEOUT_MS = 2000;
 const TEST_AUTH_USER_HEADER = 'x-kaivalo-test-auth-user';
+const TEST_AUTH_COOKIE_NAME = 'kaivalo_test_auth_session';
+const TEST_AUTH_FIXTURE_SECRET = 'ab'.repeat(32);
 
 function delay(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -38,6 +41,14 @@ function createPreviewEnv(previewPort) {
 }
 
 export function createAuthenticatedPreviewHeaders(user) {
+	return {
+		cookie: `${TEST_AUTH_COOKIE_NAME}=${encodeURIComponent(
+			encodeSignedTestAuthSession(user, TEST_AUTH_FIXTURE_SECRET)
+		)}`
+	};
+}
+
+export function createCallbackFixtureUserHeaders(user) {
 	return {
 		[TEST_AUTH_USER_HEADER]: Buffer.from(JSON.stringify(user)).toString(
 			'base64url'

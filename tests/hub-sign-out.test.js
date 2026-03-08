@@ -6,7 +6,7 @@ import { isHttpError, isRedirect } from '@sveltejs/kit';
 import {
 	startHubPreview,
 	httpGet,
-	createAuthenticatedPreviewHeaders
+	createCallbackFixtureUserHeaders
 } from './helpers/hub-preview.js';
 
 /**
@@ -54,7 +54,7 @@ function getSetCookieHeaders(headers) {
 
 function createCallbackFixtureHeaders(baseUrl, user, returnTo) {
 	return {
-		...createAuthenticatedPreviewHeaders(user),
+		...createCallbackFixtureUserHeaders(user),
 		'x-kaivalo-test-auth-return-to': `${baseUrl}${returnTo}`
 	};
 }
