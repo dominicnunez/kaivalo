@@ -1,5 +1,5 @@
 import { handler } from './build/handler.js';
-import { startHubServer } from './src/lib/server/node-server.js';
+import { startHubServer } from './build/runtime/server/node-server.js';
 
 await startHubServer({
 	handler,

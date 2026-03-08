@@ -6,6 +6,13 @@ import path from 'node:path';
 const hubDir = process.cwd();
 const nodeEntrypoint = path.join(hubDir, 'server.js');
 const clientBuildDir = path.join(hubDir, 'build', 'client');
+const runtimeServerEntrypoint = path.join(
+	hubDir,
+	'build',
+	'runtime',
+	'server',
+	'node-server.js'
+);
 
 type ExecErrorWithOutput = Error & {
 	stdout?: string | Buffer;
@@ -60,6 +67,11 @@ describe('Production build', () => {
 			}
 			if (!existsSync(clientBuildDir)) {
 				throw new Error('build/client was not generated');
+			}
+			if (!existsSync(runtimeServerEntrypoint)) {
+				throw new Error(
+					'build/runtime/server/node-server.js was not generated'
+				);
 			}
 		}
 	);

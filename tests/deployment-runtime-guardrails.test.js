@@ -39,7 +39,7 @@ describe('deployment runtime guardrails', () => {
 			dockerfile,
 			/COPY --from=build --chown=node:node \/app\/apps\/hub\/server\.js \.\/apps\/hub\/server\.js/
 		);
-		assert.match(
+		assert.doesNotMatch(
 			dockerfile,
 			/COPY --from=build --chown=node:node \/app\/apps\/hub\/src\/lib\/server \.\/apps\/hub\/src\/lib\/server/
 		);
