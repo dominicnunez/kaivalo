@@ -23,11 +23,18 @@ const buildInputs = [
 	packageJson
 ];
 
-describe('Production build', () => {
-	it('should build successfully with zero errors', { timeout: 60000 }, () => {
+type ExecErrorWithOutput = Error & {
+	stdout?: string | Buffer;
+	stderr?: string | Buffer;
+};
+
+function runBuildWithDiagnostics() {
+	try {
 		execSync('npm run build', {
 			cwd: hubDir,
-			stdio: 'ignore',
+			stdio: 'pipe',
+			encoding: 'utf8',
+			maxBuffer: 10 * 1024 * 1024,
 			env: {
 				...process.env,
 				WORKOS_CLIENT_ID: process.env.WORKOS_CLIENT_ID ?? 'client_test_fixture',
@@ -40,6 +47,27 @@ describe('Production build', () => {
 				ORIGIN: process.env.ORIGIN ?? 'http://localhost:3100'
 			}
 		});
+	} catch (error) {
+		const execError = error as ExecErrorWithOutput;
+		const stdout =
+			typeof execError.stdout === 'string' ? execError.stdout.trim() : '';
+		const stderr =
+			typeof execError.stderr === 'string' ? execError.stderr.trim() : '';
+		const diagnostics = [stdout, stderr].filter(Boolean).join('\n\n');
+		throw new Error(
+			diagnostics
+				? `npm run build failed\n\n${diagnostics}`
+				: `npm run build failed: ${error instanceof Error ? error.message : String(error)}`,
+			{
+				cause: error
+			}
+		);
+	}
+}
+
+describe('Production build', () => {
+	it('should build successfully with zero errors', { timeout: 60000 }, () => {
+		runBuildWithDiagnostics();
 		if (!existsSync(buildEntry)) {
 			throw new Error('build/index.js was not generated');
 		}

@@ -11,13 +11,15 @@
 	"scripts": {
 		"prepare": "husky",
 		"check": "npm --prefix apps/hub run check",
+		"test:core": "npm run check && npm --prefix apps/hub run test:unit && node --test tests/gitignore.test.js tests/hub-env-example.test.js tests/hub-node-server-port-validation.test.js tests/hub-node-server-static-assets.test.js tests/hub-node-server.test.js",
+		"test:build:hub": "npm --prefix apps/hub run test:build",
 		"lint": "eslint . --ext .js,.mjs,.cjs,.ts,.svelte",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
-		"test": "npm run check && npm --prefix apps/hub run test:unit && node --test tests/gitignore.test.js tests/hub-env-example.test.js tests/hub-node-server-port-validation.test.js tests/hub-node-server-static-assets.test.js tests/hub-node-server.test.js && npm run test:production",
-		"test:production": "npm --prefix apps/hub run test:build && node --test --test-concurrency=1 tests/hub-adapter-node.test.js",
-		"test:integration": "npm --prefix apps/hub run test:build && node --test --test-concurrency=1 tests/hub-about-section.test.js tests/hub-auth-landing.test.js tests/hub-favicon.test.js tests/hub-footer.test.js tests/hub-links.test.js tests/hub-lucide-icons.test.js tests/hub-og-image.test.js tests/hub-seo-meta.test.js tests/hub-services-grid.test.js tests/hub-sign-out.test.js tests/hub-tailwind.test.js tests/hub-workos-callback.test.js tests/hub-workos-hooks.test.js tests/hub-workos-install.test.js tests/ui-runtime-rendering.test.js",
-		"test:ci": "npm test && npm run test:integration"
+		"test": "npm run test:core && npm run test:build:hub && npm run test:production",
+		"test:production": "node --test --test-concurrency=1 tests/hub-adapter-node.test.js",
+		"test:integration": "node --test --test-concurrency=1 tests/hub-about-section.test.js tests/hub-auth-landing.test.js tests/hub-favicon.test.js tests/hub-footer.test.js tests/hub-links.test.js tests/hub-lucide-icons.test.js tests/hub-og-image.test.js tests/hub-seo-meta.test.js tests/hub-services-grid.test.js tests/hub-sign-out.test.js tests/hub-tailwind.test.js tests/hub-workos-callback.test.js tests/hub-workos-hooks.test.js tests/hub-workos-install.test.js tests/ui-runtime-rendering.test.js",
+		"test:ci": "npm run test:core && npm run test:build:hub && npm run test:production && npm run test:integration"
 	},
 	"engines": {
 		"node": ">=24.0.0"
