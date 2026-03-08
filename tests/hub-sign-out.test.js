@@ -3,7 +3,11 @@ import assert from 'node:assert';
 import http from 'node:http';
 import { createSignOutPostHandler } from '../apps/hub/src/lib/auth/sign-out-handler.js';
 import { isHttpError, isRedirect } from '@sveltejs/kit';
-import { startHubPreview } from './helpers/hub-preview.js';
+import {
+	startHubPreview,
+	httpGet,
+	createAuthenticatedPreviewHeaders
+} from './helpers/hub-preview.js';
 
 /**
  * @param {string} url
@@ -46,6 +50,17 @@ function getSetCookieHeaders(headers) {
 		return [];
 	}
 	return Array.isArray(values) ? values : [values];
+}
+
+function createCallbackFixtureHeaders(baseUrl, user, returnTo) {
+	return {
+		...createAuthenticatedPreviewHeaders(user),
+		'x-kaivalo-test-auth-return-to': `${baseUrl}${returnTo}`
+	};
+}
+
+function toCookieRequestHeader(setCookieHeaders) {
+	return setCookieHeaders.map((cookie) => cookie.split(';', 1)[0]).join('; ');
 }
 
 describe('sign-out handler unit behavior', () => {
@@ -465,6 +480,31 @@ describe('sign-out handler unit behavior', () => {
 	});
 
 	it('normalizes same-origin redirect-like responses from signOut handlers', async () => {
+		const postHandler = createSignOutPostHandler({
+			signOut: async () =>
+				Response.redirect(
+					'https://kaivalo.test/account?from=sign-out#done',
+					302
+				),
+			expectedOrigin: 'https://kaivalo.com'
+		});
+
+		const result = await postHandler({
+			request: new Request('https://kaivalo.test/auth/sign-out', {
+				method: 'POST',
+				headers: { origin: 'https://kaivalo.com' }
+			}),
+			url: new URL('https://kaivalo.test/auth/sign-out')
+		});
+
+		assert.strictEqual(result.status, 302);
+		assert.strictEqual(
+			result.headers.get('location'),
+			'/account?from=sign-out#done'
+		);
+	});
+
+	it('normalizes same-origin redirect-like throws from signOut handlers', async () => {
 		const redirectLike = {
 			status: 302,
 			location: 'https://kaivalo.test/account?from=sign-out#done'
@@ -578,6 +618,55 @@ describe('sign-out route integration behavior', () => {
 			[],
 			'sign-out without a valid AuthKit session should not fabricate logout cookies'
 		);
+	});
+
+	it('invalidates authenticated test sessions and preserves safe logout redirects', async () => {
+		const callbackResponse = await httpGet(
+			`${preview.baseUrl}/auth/callback?code=fixture-code&state=fixture-state`,
+			{
+				accept: 'text/html',
+				...createCallbackFixtureHeaders(
+					preview.baseUrl,
+					{
+						firstName: 'Kai',
+						email: 'kai@example.com',
+						profilePictureUrl: 'https://avatars.githubusercontent.com/u/1'
+					},
+					'/account'
+				)
+			}
+		);
+		const sessionCookies = getSetCookieHeaders(callbackResponse.headers);
+		assert.strictEqual(sessionCookies.length, 1);
+
+		const response = await post(`${preview.baseUrl}/auth/sign-out`, {
+			origin: preview.baseUrl,
+			'sec-fetch-site': 'same-origin',
+			cookie: toCookieRequestHeader(sessionCookies),
+			'x-kaivalo-test-auth-sign-out-return-to': `${preview.baseUrl}/goodbye?from=sign-out#done`
+		});
+
+		assert.strictEqual(
+			response.statusCode,
+			302,
+			`expected 302 redirect, received ${response.statusCode}`
+		);
+		assert.strictEqual(
+			response.headers.location,
+			'/goodbye?from=sign-out#done'
+		);
+		assert.strictEqual(response.headers['cache-control'], 'private, no-store');
+		const varyHeader = (response.headers['vary'] ?? '').toLowerCase();
+		assert.ok(varyHeader.includes('cookie'));
+		assert.ok(varyHeader.includes('authorization'));
+
+		const clearedCookies = getSetCookieHeaders(response.headers);
+		assert.strictEqual(clearedCookies.length, 1);
+		assert.match(clearedCookies[0], /^kaivalo_test_auth_session=/);
+		assert.match(clearedCookies[0], /\bMax-Age=0\b/);
+		assert.match(clearedCookies[0], /\bHttpOnly\b/);
+		assert.match(clearedCookies[0], /\bSecure\b/);
+		assert.match(clearedCookies[0], /\bSameSite=Lax\b/);
 	});
 
 	it('accepts route-level POST requests without origin when same-origin referer is present', async () => {

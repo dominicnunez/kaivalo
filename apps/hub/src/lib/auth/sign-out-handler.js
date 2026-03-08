@@ -4,7 +4,8 @@ import { getErrorLogContext } from '../server/error-diagnostics.js';
 import { normalizeRequestId } from './log-context.js';
 import {
 	isRedirectLikeObject,
-	normalizeSameOriginRedirectLocation
+	normalizeSameOriginRedirectLocation,
+	REDIRECT_RESPONSE_STATUSES
 } from './safe-redirect.js';
 
 /** @typedef {import('@sveltejs/kit').RequestEvent} RequestEvent */
@@ -143,6 +144,49 @@ function isRedirectLike(value) {
 }
 
 /**
+ * @param {Response} response
+ * @param {string} location
+ * @returns {Response}
+ */
+function cloneRedirectResponse(response, location) {
+	const headers = new Headers(response.headers);
+	headers.set('location', location);
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers
+	});
+}
+
+/**
+ * @param {Response} response
+ * @param {RequestEvent} event
+ * @returns {Response}
+ */
+function normalizeSignOutResponse(response, event) {
+	if (!REDIRECT_RESPONSE_STATUSES.has(response.status)) {
+		return response;
+	}
+
+	const location = response.headers.get('location');
+	if (location === null) {
+		return response;
+	}
+
+	const safeLocation = normalizeSameOriginRedirectLocation(
+		location,
+		event.url.origin
+	);
+	if (!safeLocation) {
+		throw new Error('Sign-out produced an invalid redirect location');
+	}
+
+	return safeLocation === location
+		? response
+		: cloneRedirectResponse(response, safeLocation);
+}
+
+/**
  * @param {CreateSignOutPostHandlerOptions} options
  * @returns {(event: RequestEvent) => Promise<Response>}
  */
@@ -159,7 +203,7 @@ export function createSignOutPostHandler({
 		assertPostMethod(event);
 		assertSameOriginRequest(event, trustedOrigin);
 		try {
-			return await signOut(event);
+			return normalizeSignOutResponse(await signOut(event), event);
 		} catch (err) {
 			let normalizedError = err;
 			if (isRedirectLike(err)) {

@@ -10,7 +10,11 @@ import {
 	readVerifiedAuthError
 } from '../apps/hub/src/lib/auth/auth-error-query.js';
 import { isHttpError, isRedirect } from '@sveltejs/kit';
-import { httpGet, startHubPreview } from './helpers/hub-preview.js';
+import {
+	httpGet,
+	startHubPreview,
+	createAuthenticatedPreviewHeaders
+} from './helpers/hub-preview.js';
 
 const cookiePassword = 'ab'.repeat(32);
 
@@ -58,6 +62,13 @@ function assertHardenedCookies(setCookieHeaders) {
 			`set-cookie must include SameSite: ${cookie}`
 		);
 	}
+}
+
+function createCallbackFixtureHeaders(baseUrl, user, returnTo) {
+	return {
+		...createAuthenticatedPreviewHeaders(user),
+		'x-kaivalo-test-auth-return-to': `${baseUrl}${returnTo}`
+	};
 }
 
 describe('WorkOS Auth Callback Route', () => {
@@ -537,6 +548,49 @@ describe('WorkOS Auth Callback Route', () => {
 					[],
 					'failed upstream exchanges must not mint synthetic session cookies'
 				);
+			} finally {
+				await preview.stop();
+			}
+		});
+
+		it('establishes a test session and preserves the post-login redirect on success', async () => {
+			const preview = await startHubPreview();
+			try {
+				const response = await httpGet(
+					`${preview.baseUrl}/auth/callback?code=fixture-code&state=fixture-state`,
+					{
+						accept: 'text/html',
+						...createCallbackFixtureHeaders(
+							preview.baseUrl,
+							{
+								firstName: 'Kai',
+								email: 'kai@example.com',
+								profilePictureUrl: 'https://avatars.githubusercontent.com/u/1'
+							},
+							'/account?from=auth#done'
+						)
+					}
+				);
+
+				assert.strictEqual(response.statusCode, 302);
+				assert.strictEqual(
+					response.headers.location,
+					'/account?from=auth#done'
+				);
+				assert.strictEqual(
+					response.headers['cache-control'],
+					'private, no-store'
+				);
+				const varyHeader = (response.headers['vary'] ?? '').toLowerCase();
+				assert.ok(varyHeader.includes('cookie'));
+				assert.ok(varyHeader.includes('authorization'));
+
+				const cookies = getSetCookieHeaders(response.headers);
+				assert.strictEqual(cookies.length, 1);
+				assert.match(cookies[0], /^kaivalo_test_auth_session=/);
+				assert.match(cookies[0], /\bPath=\//);
+				assert.match(cookies[0], /\bMax-Age=3600\b/);
+				assertHardenedCookies(cookies);
 			} finally {
 				await preview.stop();
 			}
