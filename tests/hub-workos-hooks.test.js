@@ -1,4 +1,4 @@
-import { describe, it, after } from 'node:test';
+import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import { error as httpError, redirect } from '@sveltejs/kit';
 import {
@@ -955,12 +955,15 @@ describe('Security header handle behavior', () => {
 describe('Security headers on preview responses', () => {
 	let preview;
 
+	before(async () => {
+		preview = await startHubPreview();
+	});
+
 	after(async () => {
 		await preview?.stop();
 	});
 
 	it('serves security headers from hooks on real responses', async () => {
-		preview = await startHubPreview();
 		const homepage = await httpGet(preview.baseUrl);
 		const contentSecurityPolicy =
 			homepage.headers['content-security-policy'] ?? '';
@@ -1003,5 +1006,33 @@ describe('Security headers on preview responses', () => {
 		assert.ok(!contentSecurityPolicy.includes('api.fontshare.com'));
 		assert.ok(!contentSecurityPolicy.includes('cdn.fontshare.com'));
 		assert.ok(!contentSecurityPolicy.includes('img-src https:'));
+	});
+
+	it('keeps security and no-store headers on framework-generated 500 pages', async () => {
+		const failureResponse = await httpGet(
+			`${preview.baseUrl}/__tests__/unexpected-error`,
+			{
+				'x-kaivalo-test-unhandled-error': '1'
+			}
+		);
+		const contentSecurityPolicy =
+			failureResponse.headers['content-security-policy'] ?? '';
+
+		assert.strictEqual(failureResponse.statusCode, 500);
+		assert.strictEqual(
+			failureResponse.headers['cache-control'],
+			'private, no-store'
+		);
+		assert.strictEqual(failureResponse.headers['x-frame-options'], 'DENY');
+		assert.strictEqual(
+			failureResponse.headers['x-content-type-options'],
+			'nosniff'
+		);
+		assert.strictEqual(
+			failureResponse.headers['referrer-policy'],
+			'strict-origin-when-cross-origin'
+		);
+		assert.ok(contentSecurityPolicy.includes("default-src 'self'"));
+		assert.ok(contentSecurityPolicy.includes("frame-ancestors 'none'"));
 	});
 });

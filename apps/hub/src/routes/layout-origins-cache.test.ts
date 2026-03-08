@@ -56,12 +56,26 @@ describe('layout trusted origin initialization', () => {
 	});
 
 	it('validates WorkOS env once and reuses trusted origins across requests', async () => {
+		mockGetValidatedWorkosEnv.mockReturnValueOnce({
+			origin: 'https://kaivalo.test',
+			redirectUri: 'https://kaivalo.test/auth/callback'
+		} as never);
+		mockGetValidatedWorkosEnv.mockImplementation(() => {
+			throw new Error('trusted origins should stay cached after success');
+		});
+		mockGetSignInUrl.mockResolvedValue(
+			'https://kaivalo.test/auth/sign-in?screen_hint=sign-up' as never
+		);
 		const load = await loadWithFreshModule();
-		await load(createEvent('https://kaivalo.test/'));
-		await load(createEvent('https://kaivalo.test/'));
+		const firstResult = await load(createEvent('https://kaivalo.test/'));
+		const secondResult = await load(createEvent('https://kaivalo.test/'));
 
-		expect(mockGetValidatedWorkosEnv).toHaveBeenCalledTimes(1);
-		expect(mockGetSignInUrl).toHaveBeenCalledTimes(2);
+		expect(firstResult).toEqual({
+			user: null,
+			signInUrl: '/auth/sign-in?screen_hint=sign-up',
+			authError: null
+		});
+		expect(secondResult).toEqual(firstResult);
 	});
 
 	it('retries trusted origin initialization after an initial validation failure', async () => {
@@ -97,10 +111,12 @@ describe('layout trusted origin initialization', () => {
 			signInUrl: '/auth/sign-in',
 			authError: null
 		});
-		expect(mockGetValidatedWorkosEnv).toHaveBeenCalledTimes(2);
 	});
 
 	it('skips trusted origin initialization for authenticated requests', async () => {
+		mockGetValidatedWorkosEnv.mockImplementation(() => {
+			throw new Error('authenticated requests should not need trusted origins');
+		});
 		mockGetUser.mockResolvedValue({
 			firstName: 'Kai',
 			email: 'kai@example.com',
@@ -119,7 +135,5 @@ describe('layout trusted origin initialization', () => {
 			signInUrl: null,
 			authError: null
 		});
-		expect(mockGetSignInUrl).not.toHaveBeenCalled();
-		expect(mockGetValidatedWorkosEnv).not.toHaveBeenCalled();
 	});
 });
