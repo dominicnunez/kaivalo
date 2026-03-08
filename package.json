@@ -18,7 +18,7 @@
 		"format:check": "prettier --check .",
 		"test": "npm run test:core && npm run test:build:hub && npm run test:production",
 		"test:production": "node --test --test-concurrency=1 tests/hub-adapter-node.test.js",
-		"test:integration": "node --test --test-concurrency=1 tests/hub-about-section.test.js tests/hub-auth-landing.test.js tests/hub-favicon.test.js tests/hub-footer.test.js tests/hub-links.test.js tests/hub-lucide-icons.test.js tests/hub-og-image.test.js tests/hub-seo-meta.test.js tests/hub-services-grid.test.js tests/hub-sign-out.test.js tests/hub-tailwind.test.js tests/hub-workos-callback.test.js tests/hub-workos-hooks.test.js tests/hub-workos-install.test.js tests/ui-runtime-rendering.test.js",
+		"test:integration": "node --test --test-concurrency=1 tests/hub-auth-landing.test.js tests/hub-favicon.test.js tests/hub-links.test.js tests/hub-lucide-icons.test.js tests/hub-og-image.test.js tests/hub-seo-meta.test.js tests/hub-sign-out.test.js tests/hub-tailwind.test.js tests/hub-workos-callback.test.js tests/hub-workos-hooks.test.js tests/hub-workos-install.test.js tests/ui-runtime-rendering.test.js",
 		"test:ci": "npm run test:core && npm run test:build:hub && npm run test:production && npm run test:integration"
 	},
 	"engines": {

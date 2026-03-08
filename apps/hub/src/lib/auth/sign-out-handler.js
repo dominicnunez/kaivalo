@@ -1,6 +1,6 @@
 import { error, isHttpError, isRedirect } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
-import { getErrorLogContext } from '$lib/server/error-diagnostics.js';
+import { getErrorLogContext } from '../server/error-diagnostics.js';
 import { normalizeRequestId } from './log-context.js';
 
 /** @typedef {import('@sveltejs/kit').RequestEvent} RequestEvent */

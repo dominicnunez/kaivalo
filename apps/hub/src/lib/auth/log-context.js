@@ -27,15 +27,3 @@ export function normalizeRequestId(requestId) {
 		.slice(0, REQUEST_ID_MAX_LENGTH);
 	return normalized || 'invalid';
 }
-
-/**
- * @param {unknown} err
- * @returns {string}
- */
-export function getErrorName(err) {
-	if (err instanceof Error) {
-		return err.name;
-	}
-
-	return 'UnknownError';
-}

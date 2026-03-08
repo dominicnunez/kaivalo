@@ -352,7 +352,10 @@ describe('sign-out handler unit behavior', () => {
 			!serializedLog.includes('secret should not leak'),
 			'log context should not contain upstream secret-bearing error content'
 		);
-		assert.strictEqual(logs[0][1].errorCauseName, 'UnknownError');
+		assert.ok(
+			!('errorCauseName' in logs[0][1]),
+			'cause details should only be logged when an upstream cause exists'
+		);
 		assert.match(logs[0][1].incidentId, /^authso_/);
 	});
 });
