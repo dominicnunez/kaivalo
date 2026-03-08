@@ -152,13 +152,18 @@ describe('layout server load', () => {
 	it('accepts signed auth callback query errors and surfaces their incident id', async () => {
 		mockedAuthKit.getUser.mockResolvedValue(null as never);
 		mockedAuthKit.getSignInUrl.mockResolvedValue('/auth/sign-in' as never);
-		const event = createEvent(
-			`https://kaivalo.test/?${buildAuthErrorRedirectQuery({
-				incidentId: 'authcb_123e4567-e89b-12d3-a456-426614174000',
-				secret: mockEnv.WORKOS_COOKIE_PASSWORD,
-				now: Date.now()
-			})}`
-		);
+		const setHeaders = vi.fn();
+		const event = {
+			url: new URL(
+				`https://kaivalo.test/?${buildAuthErrorRedirectQuery({
+					incidentId: 'authcb_123e4567-e89b-12d3-a456-426614174000',
+					secret: mockEnv.WORKOS_COOKIE_PASSWORD,
+					now: Date.now()
+				})}`
+			),
+			request: new Request('https://kaivalo.test/'),
+			setHeaders
+		} as never;
 
 		const result = await load(event);
 
@@ -170,6 +175,10 @@ describe('layout server load', () => {
 					'Sign-in is temporarily unavailable. Please try again shortly.',
 				incidentId: 'authcb_123e4567-e89b-12d3-a456-426614174000'
 			}
+		});
+		expect(setHeaders).toHaveBeenCalledWith({
+			'cache-control': 'private, no-store',
+			vary: 'Cookie, Authorization'
 		});
 	});
 
@@ -311,11 +320,15 @@ describe('layout server load', () => {
 			new Error('upstream failed') as never
 		);
 
-		const result = await load(
-			createEvent('https://kaivalo.test/', {
-				'x-request-id': 'bad value + trace'
-			})
-		);
+		const setHeaders = vi.fn();
+		const event = {
+			url: new URL('https://kaivalo.test/'),
+			request: new Request('https://kaivalo.test/', {
+				headers: { 'x-request-id': 'bad value + trace' }
+			}),
+			setHeaders
+		} as never;
+		const result = await load(event);
 		expect(result).toEqual({
 			user: null,
 			signInUrl: null,
@@ -324,6 +337,10 @@ describe('layout server load', () => {
 					'Sign-in is temporarily unavailable. Please try again shortly.',
 				incidentId: expect.stringMatching(/^authlayout_/)
 			}
+		});
+		expect(setHeaders).toHaveBeenCalledWith({
+			'cache-control': 'private, no-store',
+			vary: 'Cookie, Authorization'
 		});
 		expect(errorSpy).toHaveBeenCalledWith(
 			'Auth layout load failed',
