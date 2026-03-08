@@ -75,11 +75,14 @@ describe('layout trusted origin initialization', () => {
 			.mockImplementationOnce(() => {
 				throw new Error('env unavailable during first request');
 			})
-			.mockReturnValue({
-				origin: 'https://tenant.kaivalo.test',
-				redirectUri: 'https://tenant.kaivalo.test/auth/callback',
-				apiHostname: 'api.workos.com'
-			} as never);
+			.mockImplementation(
+				() =>
+					({
+						origin: 'https://tenant.kaivalo.test',
+						redirectUri: 'https://tenant.kaivalo.test/auth/callback',
+						apiHostname: 'api.workos.com'
+					}) as never
+			);
 		mockGetSignInUrl.mockResolvedValue(
 			'https://tenant.kaivalo.test/auth/sign-in' as never
 		);
@@ -96,7 +99,7 @@ describe('layout trusted origin initialization', () => {
 			authError: {
 				message:
 					'Sign-in is temporarily unavailable. Please try again shortly.',
-				incidentId: null
+				incidentId: expect.stringMatching(/^authlayout_/)
 			}
 		});
 		expect(secondResult).toEqual({
