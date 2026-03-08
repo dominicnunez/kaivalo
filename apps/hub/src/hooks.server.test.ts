@@ -142,9 +142,21 @@ describe('hooks server behavior', () => {
 			.spyOn(console, 'error')
 			.mockImplementation(() => undefined);
 		const { handleError } = await import('./hooks.server');
+		const cause = Object.assign(
+			new Error('oauth code=secret-code should not leak'),
+			{
+				code: 'UPSTREAM_TIMEOUT'
+			}
+		);
 
 		const result = handleError({
-			error: new Error('sensitive downstream detail'),
+			error: Object.assign(
+				new Error('request failed with token=super-secret'),
+				{
+					code: 'WORKOS_FETCH_FAILED',
+					cause
+				}
+			),
 			status: 500,
 			message: 'ignored',
 			event: createEvent('https://kaivalo.test/broken', {
@@ -160,6 +172,11 @@ describe('hooks server behavior', () => {
 			'Unhandled request error',
 			expect.objectContaining({
 				errorCode: 'HOOK_UNEXPECTED_FAILURE',
+				errorUpstreamCode: 'WORKOS_FETCH_FAILED',
+				errorCauseCode: 'UPSTREAM_TIMEOUT',
+				errorCauseName: 'Error',
+				errorMessage: 'request failed with token=[redacted]',
+				errorCauseMessage: 'oauth code=[redacted] should not leak',
 				pathname: '/broken',
 				requestId: 'bad_request_id___trace'
 			})

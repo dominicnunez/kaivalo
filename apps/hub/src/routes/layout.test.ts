@@ -316,8 +316,14 @@ describe('layout server load', () => {
 		const errorSpy = vi
 			.spyOn(console, 'error')
 			.mockImplementation(() => undefined);
+		const cause = Object.assign(new Error('upstream detail'), {
+			code: 'cause_timeout'
+		});
 		mockedAuthKit.getUser.mockRejectedValue(
-			new Error('upstream failed') as never
+			Object.assign(new Error('upstream failed'), {
+				code: 'workos_fetch_failed',
+				cause
+			}) as never
 		);
 
 		const setHeaders = vi.fn();
@@ -346,6 +352,9 @@ describe('layout server load', () => {
 			'Auth layout load failed',
 			expect.objectContaining({
 				errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
+				errorUpstreamCode: 'workos_fetch_failed',
+				errorCauseCode: 'cause_timeout',
+				errorCauseName: 'Error',
 				errorName: 'Error',
 				pathname: '/',
 				requestId: 'bad_value___trace'

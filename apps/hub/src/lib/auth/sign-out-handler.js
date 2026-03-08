@@ -1,6 +1,7 @@
 import { error, isHttpError, isRedirect } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
-import { getErrorName, normalizeRequestId } from './log-context.js';
+import { getErrorLogContext } from '$lib/server/error-diagnostics.js';
+import { normalizeRequestId } from './log-context.js';
 
 /** @typedef {import('@sveltejs/kit').RequestEvent} RequestEvent */
 /**
@@ -13,8 +14,10 @@ import { getErrorName, normalizeRequestId } from './log-context.js';
  * pathname: string
  * incidentId: string
  * errorName: string
- * errorCauseName: string
+ * errorCauseName?: string
  * errorCode: string
+ * errorUpstreamCode?: string
+ * errorCauseCode?: string
  * }) => void} [logError]
  */
 
@@ -28,18 +31,6 @@ function readOrigin(value) {
 	} catch {
 		return null;
 	}
-}
-
-/**
- * @param {unknown} err
- * @returns {unknown}
- */
-function getErrorCause(err) {
-	if (err instanceof Error && 'cause' in err) {
-		return err.cause;
-	}
-
-	return undefined;
 }
 
 /**
@@ -130,9 +121,8 @@ export function createSignOutPostHandler({
 				method: event.request.method,
 				pathname: event.url.pathname,
 				incidentId,
-				errorName: getErrorName(err),
-				errorCauseName: getErrorName(getErrorCause(err)),
-				errorCode: 'AUTH_SIGN_OUT_UNEXPECTED_FAILURE'
+				errorCode: 'AUTH_SIGN_OUT_UNEXPECTED_FAILURE',
+				...getErrorLogContext(err)
 			});
 
 			throw error(503, `Sign-out failed. Reference: ${incidentId}`);

@@ -3,7 +3,8 @@ import { env } from '$env/dynamic/private';
 import { randomUUID } from 'node:crypto';
 import type { LayoutServerLoad } from './$types';
 import { getValidatedWorkosEnv } from '$lib/server/workos-security.js';
-import { getErrorName, normalizeRequestId } from '$lib/auth/log-context.js';
+import { getErrorLogContext } from '$lib/server/error-diagnostics.js';
+import { normalizeRequestId } from '$lib/auth/log-context.js';
 import {
 	AUTH_ERROR_MESSAGE,
 	readVerifiedAuthError
@@ -191,8 +192,8 @@ export const load: LayoutServerLoad = async (event) => {
 			incidentId,
 			pathname: event.url.pathname,
 			method: event.request.method,
-			errorName: getErrorName(err),
-			errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE'
+			errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
+			...getErrorLogContext(err)
 		});
 		markAuthFailureNoStore(event);
 

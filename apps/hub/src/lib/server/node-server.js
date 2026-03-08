@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { canonicalizeIpAddress } from './ip-address.js';
+import { getErrorDiagnostics } from './error-diagnostics.js';
 import {
 	applyBaselineSecurityHeaders,
 	applyStaticAssetHeaders,
@@ -21,14 +22,10 @@ const FORWARDED_PROTO_WARNING_TTL_MS = 10 * 60 * 1000;
 const MAX_FORWARDED_PROTO_WARNING_KEYS = 512;
 const PRIVATE_NO_STORE_CACHE_CONTROL = 'private, no-store';
 const PRODUCTION_NODE_ENV = 'production';
-const REDACTED_VALUE = '[redacted]';
 const MIN_PORT = 1;
 const MAX_PORT = 65_535;
-const SENSITIVE_ASSIGNMENT_PATTERN =
-	/\b((?:access[_-]?token|refresh[_-]?token|id[_-]?token|token|api[_-]?key|client[_-]?secret|secret|password|oauth\s+code)\s*[=:]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi;
-const BEARER_TOKEN_PATTERN = /\b(bearer\s+)[^\s,;]+/gi;
-const SENSITIVE_QUERY_PARAM_PATTERN =
-	/([?&](?:access_token|refresh_token|id_token|token|api_key|client_secret|code|password)=)[^&#\s]*/gi;
+
+export { getErrorDiagnostics } from './error-diagnostics.js';
 
 /**
  * @param {Record<string, string | undefined>} env
@@ -81,17 +78,6 @@ function parsePositiveIntegerEnvValue(rawValue, envName, defaultValue) {
 }
 
 /**
- * @param {string} value
- * @returns {string}
- */
-function redactSensitiveText(value) {
-	return value
-		.replace(SENSITIVE_QUERY_PARAM_PATTERN, `$1${REDACTED_VALUE}`)
-		.replace(SENSITIVE_ASSIGNMENT_PATTERN, `$1${REDACTED_VALUE}`)
-		.replace(BEARER_TOKEN_PATTERN, `$1${REDACTED_VALUE}`);
-}
-
-/**
  * @param {Record<string, string | undefined>} env
  * @param {string} host
  * @param {number} port
@@ -105,76 +91,6 @@ function getListeningLogMessage(env, host, port) {
 	}
 
 	return `Listening on internal ${internalOrigin} (public ${publicOrigin})`;
-}
-
-/**
- * @param {unknown} error
- * @param {{ includeSensitiveDetails?: boolean; includeMessage?: boolean }} [options]
- * @returns {{
- *   type: string;
- *   code?: string;
- *   message?: string;
- *   stack?: string;
- *   causeType?: string;
- *   causeMessage?: string;
- * }}
- */
-export function getErrorDiagnostics(error, options = {}) {
-	const includeSensitiveDetails = options.includeSensitiveDetails === true;
-	const includeMessage =
-		includeSensitiveDetails || options.includeMessage === true;
-
-	if (error instanceof Error) {
-		/** @type {{
-		 *   type: string;
-		 *   code?: string;
-		 *   message?: string;
-		 *   stack?: string;
-		 *   causeType?: string;
-		 *   causeMessage?: string;
-		 * }} */
-		const details = {
-			type: error.name
-		};
-
-		const errorCode = /** @type {{ code?: unknown }} */ (error).code;
-		if (typeof errorCode === 'string' && errorCode.trim()) {
-			details.code = errorCode;
-		}
-
-		if (includeMessage) {
-			details.message = redactSensitiveText(error.message);
-		}
-
-		if (includeSensitiveDetails) {
-			if (typeof error.stack === 'string' && error.stack.trim()) {
-				details.stack = redactSensitiveText(error.stack);
-			}
-
-			const cause = /** @type {{ cause?: unknown }} */ (error).cause;
-			if (cause instanceof Error) {
-				details.causeType = cause.name;
-				details.causeMessage = redactSensitiveText(cause.message);
-			} else if (cause !== undefined) {
-				details.causeType = typeof cause;
-				details.causeMessage = redactSensitiveText(String(cause));
-			}
-		}
-
-		return details;
-	}
-
-	/** @type {{
-	 *   type: string;
-	 *   message?: string;
-	 * }} */
-	const details = {
-		type: 'NonErrorThrown'
-	};
-	if (includeMessage) {
-		details.message = redactSensitiveText(String(error));
-	}
-	return details;
 }
 
 /**

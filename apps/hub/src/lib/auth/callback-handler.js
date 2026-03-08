@@ -1,6 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
-import { getErrorName, normalizeRequestId } from './log-context.js';
+import { getErrorLogContext } from '$lib/server/error-diagnostics.js';
+import { normalizeRequestId } from './log-context.js';
 import { buildAuthErrorRedirectQuery } from './auth-error-query.js';
 
 /** @typedef {import('@sveltejs/kit').RequestEvent} RequestEvent */
@@ -37,39 +38,6 @@ export function createAuthCallbackGetHandler({
 	logError = console.error
 }) {
 	/**
-	 * @param {unknown} err
-	 * @returns {unknown}
-	 */
-	function getErrorCause(err) {
-		if (err instanceof Error && 'cause' in err) {
-			return err.cause;
-		}
-
-		return undefined;
-	}
-
-	/**
-	 * @param {unknown} err
-	 * @returns {string | null}
-	 */
-	function getErrorCode(err) {
-		if (!err || typeof err !== 'object' || !('code' in err)) {
-			return null;
-		}
-
-		const candidateCode = err.code;
-		if (
-			typeof candidateCode !== 'string' &&
-			typeof candidateCode !== 'number'
-		) {
-			return null;
-		}
-
-		const normalizedCode = String(candidateCode).trim().slice(0, 64);
-		return normalizedCode || null;
-	}
-
-	/**
 	 * @param {RequestEvent} event
 	 * @returns {boolean}
 	 */
@@ -98,27 +66,15 @@ export function createAuthCallbackGetHandler({
 				event.request.headers.get('x-request-id')
 			);
 			const incidentId = `authcb_${randomUUID()}`;
-			const errorCause = getErrorCause(err);
 			/** @type {CallbackLogContext} */
 			const callbackLogContext = {
 				requestId,
 				method: event.request.method,
 				pathname: event.url.pathname,
 				incidentId,
-				errorName: getErrorName(err),
-				errorCode: 'AUTH_CALLBACK_UNEXPECTED_FAILURE'
+				errorCode: 'AUTH_CALLBACK_UNEXPECTED_FAILURE',
+				...getErrorLogContext(err)
 			};
-			const upstreamErrorCode = getErrorCode(err);
-			if (upstreamErrorCode) {
-				callbackLogContext.errorUpstreamCode = upstreamErrorCode;
-			}
-			if (errorCause !== undefined) {
-				callbackLogContext.errorCauseName = getErrorName(errorCause);
-				const errorCauseCode = getErrorCode(errorCause);
-				if (errorCauseCode) {
-					callbackLogContext.errorCauseCode = errorCauseCode;
-				}
-			}
 
 			logError('Auth callback failed', callbackLogContext);
 
