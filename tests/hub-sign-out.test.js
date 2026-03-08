@@ -464,6 +464,62 @@ describe('sign-out handler unit behavior', () => {
 		assert.match(logs[0][1].incidentId, /^authso_/);
 	});
 
+	it('logs upstream and cause codes for unexpected sign-out failures', async () => {
+		const logs = [];
+		const postHandler = createSignOutPostHandler({
+			signOut: async () => {
+				const cause = Object.assign(new Error('upstream detail'), {
+					code: 'SESSION_DELETE_TIMEOUT'
+				});
+				throw Object.assign(new Error('sign-out failed'), {
+					code: 'WORKOS_SIGNOUT_FAILED',
+					cause
+				});
+			},
+			expectedOrigin: 'https://kaivalo.com',
+			includeMessageInLogs: true,
+			logError: (...args) => logs.push(args)
+		});
+
+		await assert.rejects(
+			() =>
+				postHandler({
+					request: new Request('https://kaivalo.test/auth/sign-out', {
+						method: 'POST',
+						headers: {
+							origin: 'https://kaivalo.com',
+							'x-request-id': 'bad request + trace'
+						}
+					}),
+					url: new URL('https://kaivalo.test/auth/sign-out')
+				}),
+			(caught) => {
+				assert.ok(isHttpError(caught));
+				assert.strictEqual(caught.status, 503);
+				assert.match(
+					caught.body.message,
+					/^Sign-out failed\. Reference: authso_/
+				);
+				return true;
+			}
+		);
+
+		assert.strictEqual(logs.length, 1);
+		assert.strictEqual(logs[0][0], 'Sign-out failed');
+		assert.strictEqual(
+			logs[0][1].errorCode,
+			'AUTH_SIGN_OUT_UNEXPECTED_FAILURE'
+		);
+		assert.strictEqual(logs[0][1].errorMessage, 'sign-out failed');
+		assert.strictEqual(logs[0][1].errorCauseMessage, 'upstream detail');
+		assert.strictEqual(logs[0][1].errorUpstreamCode, 'WORKOS_SIGNOUT_FAILED');
+		assert.strictEqual(logs[0][1].errorCauseCode, 'SESSION_DELETE_TIMEOUT');
+		assert.strictEqual(logs[0][1].errorCauseName, 'Error');
+		assert.strictEqual(logs[0][1].errorName, 'Error');
+		assert.strictEqual(logs[0][1].pathname, '/auth/sign-out');
+		assert.strictEqual(logs[0][1].requestId, 'bad_request___trace');
+	});
+
 	it('normalizes same-origin redirect-like responses from signOut handlers', async () => {
 		const postHandler = createSignOutPostHandler({
 			signOut: async () =>
