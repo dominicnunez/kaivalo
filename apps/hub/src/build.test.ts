@@ -13,6 +13,13 @@ const runtimeServerEntrypoint = path.join(
 	'server',
 	'node-server.js'
 );
+const runtimeAuthCookieNamesModule = path.join(
+	hubDir,
+	'build',
+	'runtime',
+	'server',
+	'auth-cookie-names.js'
+);
 
 type ExecErrorWithOutput = Error & {
 	stdout?: string | Buffer;
@@ -71,6 +78,11 @@ describe('Production build', () => {
 			if (!existsSync(runtimeServerEntrypoint)) {
 				throw new Error(
 					'build/runtime/server/node-server.js was not generated'
+				);
+			}
+			if (!existsSync(runtimeAuthCookieNamesModule)) {
+				throw new Error(
+					'build/runtime/server/auth-cookie-names.js was not generated'
 				);
 			}
 		}

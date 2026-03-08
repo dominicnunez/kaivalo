@@ -126,6 +126,10 @@ describe('auth landing page behavior', () => {
 
 		try {
 			assert.strictEqual(signedInResponse.statusCode, 200);
+			assert.strictEqual(
+				signedInResponse.headers['cache-control'],
+				'private, no-store'
+			);
 			const signOutForm = signedInDocument.querySelector(
 				'form[action="/auth/sign-out"]'
 			);

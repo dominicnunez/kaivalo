@@ -5,6 +5,7 @@ const HUB_ROOT = path.resolve(import.meta.dirname, '..');
 const RUNTIME_SOURCE_DIR = path.join(HUB_ROOT, 'src', 'lib', 'server');
 const RUNTIME_BUILD_DIR = path.join(HUB_ROOT, 'build', 'runtime', 'server');
 const RUNTIME_SERVER_FILES = [
+	'auth-cookie-names.js',
 	'error-diagnostics.js',
 	'ip-address.js',
 	'node-server.js',

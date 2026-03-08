@@ -4,13 +4,13 @@ import {
 	decodeSignedTestAuthSession,
 	encodeSignedTestAuthSession
 } from './test-auth-session.js';
+import { TEST_AUTH_SESSION_COOKIE_NAME } from './auth-cookie-names.js';
 
 const TEST_AUTH_USER_HEADER = 'x-kaivalo-test-auth-user';
 const TEST_AUTH_FIXTURE_FLAG = 'KAIVALO_ENABLE_TEST_AUTH_FIXTURE';
 const TEST_AUTH_RETURN_TO_HEADER = 'x-kaivalo-test-auth-return-to';
 const TEST_AUTH_SIGN_OUT_RETURN_TO_HEADER =
 	'x-kaivalo-test-auth-sign-out-return-to';
-const TEST_AUTH_SESSION_COOKIE_NAME = 'kaivalo_test_auth_session';
 const TEST_AUTH_SESSION_COOKIE_PATH = 'Path=/';
 const TEST_AUTH_SESSION_COOKIE_SECURITY = 'HttpOnly; Secure; SameSite=Lax';
 const TEST_AUTH_SESSION_MAX_AGE_SECONDS = 60 * 60;

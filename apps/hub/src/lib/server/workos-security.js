@@ -1,4 +1,5 @@
 import { canonicalizeIpAddress } from './ip-address.js';
+import { SENSITIVE_AUTH_COOKIE_NAMES } from './auth-cookie-names.js';
 
 const REQUIRED_ENV_VARS = [
 	'WORKOS_CLIENT_ID',
@@ -21,11 +22,6 @@ const STATIC_FONT_ASSET_CACHE_CONTROL =
 	'public, max-age=604800, stale-while-revalidate=86400';
 const CACHE_VARY_COOKIE_HEADER = 'Cookie';
 const CACHE_VARY_AUTHORIZATION_HEADER = 'Authorization';
-const SENSITIVE_COOKIE_NAMES = new Set([
-	'wos-session',
-	'__secure-wos-session',
-	'__host-wos-session'
-]);
 const WORKOS_REDIRECT_PATHNAME = '/auth/callback';
 const FORWARDED_PROTO_HEADER = 'x-forwarded-proto';
 const HTTPS_PROTO = 'https';
@@ -441,7 +437,7 @@ function hasSensitiveCookieHeader(event) {
 
 	const cookieNames = extractCookieNames(cookieHeader);
 	return cookieNames.some((cookieName) =>
-		SENSITIVE_COOKIE_NAMES.has(cookieName)
+		SENSITIVE_AUTH_COOKIE_NAMES.has(cookieName)
 	);
 }
 

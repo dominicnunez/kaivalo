@@ -667,6 +667,31 @@ describe('Security header handle behavior', () => {
 		assertVaryOmits(cookieResponse.headers.get('Vary'), ['Authorization']);
 	});
 
+	it('treats runtime test auth fixture cookies as sensitive document requests', async () => {
+		const handle = createSecurityHeadersHandle();
+		const response = await handle({
+			event: {
+				request: new Request('https://kaivalo.test/', {
+					method: 'GET',
+					headers: { cookie: 'kaivalo_test_auth_session=value' }
+				}),
+				url: new URL('https://kaivalo.test/')
+			},
+			resolve: async () =>
+				new Response('<!doctype html>', {
+					status: 200,
+					headers: { 'Content-Type': 'text/html; charset=utf-8' }
+				})
+		});
+
+		assert.strictEqual(
+			response.headers.get('Cache-Control'),
+			'private, no-store'
+		);
+		assertVaryIncludes(response.headers.get('Vary'), ['Cookie']);
+		assertVaryOmits(response.headers.get('Vary'), ['Authorization']);
+	});
+
 	it('does not force no-store caching for non-auth cookie-bearing html responses', async () => {
 		const handle = createSecurityHeadersHandle();
 		const response = await handle({
