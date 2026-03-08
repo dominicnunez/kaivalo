@@ -1,4 +1,5 @@
 /**
+ * @param {string} origin
  * @returns {{
  *  title: string;
  *  description: string;
@@ -8,13 +9,16 @@
  *  twitterCard: string;
  * }}
  */
-export function getHomeMeta() {
+export function getHomeMeta(origin) {
+	const siteOrigin = new URL(origin).origin;
+	const imageUrl = new URL('/og-image.png', siteOrigin).toString();
+
 	return {
 		title: 'Kaivalo | Tools That Solve Things',
 		description:
 			'Tools that cut through complexity. One account, all tools — sign up once and everything just works.',
-		url: 'https://kaivalo.com',
-		image: 'https://kaivalo.com/og-image.png',
+		url: siteOrigin,
+		image: imageUrl,
 		imageAlt: 'Kaivalo — tools that cut through complexity',
 		twitterCard: 'summary_large_image'
 	};

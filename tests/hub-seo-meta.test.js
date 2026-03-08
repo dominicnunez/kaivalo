@@ -47,6 +47,7 @@ describe('hub seo metadata behavior', () => {
 			const homepage = await httpGet(preview.baseUrl);
 			const dom = new JSDOM(homepage.data);
 			const { document } = dom.window;
+			const deployedOrigin = new URL(preview.baseUrl).origin;
 
 			const ogUrl = new URL(
 				document
@@ -64,12 +65,10 @@ describe('hub seo metadata behavior', () => {
 					?.getAttribute('content') ?? ''
 			);
 
-			assert.strictEqual(ogUrl.protocol, 'https:');
-			assert.strictEqual(ogImage.protocol, 'https:');
-			assert.strictEqual(twitterImage.protocol, 'https:');
-			assert.strictEqual(ogUrl.hostname, 'kaivalo.com');
-			assert.strictEqual(ogImage.hostname, 'kaivalo.com');
-			assert.strictEqual(twitterImage.hostname, 'kaivalo.com');
+			assert.strictEqual(ogUrl.origin, deployedOrigin);
+			assert.strictEqual(ogImage.origin, deployedOrigin);
+			assert.strictEqual(twitterImage.origin, deployedOrigin);
+			assert.strictEqual(ogUrl.pathname, '/');
 			assert.strictEqual(ogImage.pathname, '/og-image.png');
 			assert.strictEqual(twitterImage.pathname, '/og-image.png');
 
