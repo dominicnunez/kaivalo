@@ -1,27 +1,13 @@
 import { describe, it } from 'vitest';
 import { execSync } from 'node:child_process';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { getNewestMtimeMs } from '../../../tests/helpers/build-freshness.js';
+import { pathToFileURL } from 'node:url';
 
 const hubDir = process.cwd();
 const buildEntry = path.join(hubDir, 'build', 'index.js');
-const srcDir = path.join(hubDir, 'src');
-const staticDir = path.join(hubDir, 'static');
-const appHtml = path.join(hubDir, 'src', 'app.html');
-const svelteConfig = path.join(hubDir, 'svelte.config.js');
-const viteConfig = path.join(hubDir, 'vite.config.ts');
-const tsConfig = path.join(hubDir, 'tsconfig.json');
-const packageJson = path.join(hubDir, 'package.json');
-const buildInputs = [
-	srcDir,
-	staticDir,
-	appHtml,
-	svelteConfig,
-	viteConfig,
-	tsConfig,
-	packageJson
-];
+const buildHandler = path.join(hubDir, 'build', 'handler.js');
+const buildServer = path.join(hubDir, 'build', 'server', 'index.js');
 
 type ExecErrorWithOutput = Error & {
 	stdout?: string | Buffer;
@@ -66,18 +52,36 @@ function runBuildWithDiagnostics() {
 }
 
 describe('Production build', () => {
-	it('should build successfully with zero errors', { timeout: 60000 }, () => {
-		runBuildWithDiagnostics();
-		if (!existsSync(buildEntry)) {
-			throw new Error('build/index.js was not generated');
-		}
+	it(
+		'builds loadable adapter output for the production server',
+		{ timeout: 60000 },
+		async () => {
+			runBuildWithDiagnostics();
+			if (!existsSync(buildEntry)) {
+				throw new Error('build/index.js was not generated');
+			}
+			if (!existsSync(buildHandler)) {
+				throw new Error('build/handler.js was not generated');
+			}
+			if (!existsSync(buildServer)) {
+				throw new Error('build/server/index.js was not generated');
+			}
 
-		const buildMtime = statSync(buildEntry).mtimeMs;
-		const newestInputMtime = Math.max(
-			...buildInputs.map((entry) => getNewestMtimeMs(entry))
-		);
-		if (buildMtime < newestInputMtime) {
-			throw new Error('build output is older than source inputs');
+			const handlerModule = await import(
+				`${pathToFileURL(buildHandler).href}?t=${Date.now()}`
+			);
+			if (typeof handlerModule.handler !== 'function') {
+				throw new Error('build/handler.js did not export a request handler');
+			}
+
+			const serverModule = await import(
+				`${pathToFileURL(buildServer).href}?t=${Date.now()}`
+			);
+			if (typeof serverModule.Server !== 'function') {
+				throw new Error(
+					'build/server/index.js did not export the server entry'
+				);
+			}
 		}
-	});
+	);
 });
