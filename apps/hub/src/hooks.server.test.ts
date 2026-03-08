@@ -195,9 +195,7 @@ describe('hooks server behavior', () => {
 				requestId: 'bad_request_id___trace'
 			})
 		);
-		expect(errorContext?.incidentId).toEqual(
-			expect.stringMatching(/^hook_/)
-		);
+		expect(errorContext?.incidentId).toEqual(expect.stringMatching(/^hook_/));
 		expect(errorContext?.errorMessage).toBe(
 			'request failed with token=[redacted]'
 		);
