@@ -20,14 +20,17 @@ Those host and infrastructure details intentionally live in a private infra repo
 
 ## Workflow
 
-The deployment workflow is defined in `.github/workflows/deploy.yml`.
+Repository verification runs in `.github/workflows/ci.yml` on `push` and
+`pull_request`.
 
-At a high level it:
+Production deployment remains in `.github/workflows/deploy.yml`.
 
-- runs the test suite
-- builds and pushes the production image to GHCR
-- deploys to the `production` GitHub Environment
-- calls the host-side deploy contract with `deploy-app kaivalo <image@sha256:...>`
+At a high level the two workflows do this:
+
+- CI runs linting, the full test suite, and the dependency audit gate
+- deploy builds and pushes the production image to GHCR
+- deploy targets the `production` GitHub Environment
+- deploy calls the host-side deploy contract with `deploy-app kaivalo <image@sha256:...>`
 
 ## GitHub Environment
 
@@ -56,45 +59,17 @@ This repo does not document private server-local file locations; that belongs to
 
 ## Triggering A Deploy
 
-The current workflow supports:
+The current workflows support:
 
-- manual dispatch from GitHub Actions
+- automatic CI on `push`
+- automatic CI on `pull_request`
+- manual deploy dispatch from GitHub Actions
 
-### Making Deploys Automatic
-
-If you want automatic deploys from this repo, update the `on:` block in `.github/workflows/deploy.yml` to include the branch or tags you want to release from.
-
-Typical example:
-
-```yaml
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
-```
-
-You can also add tag-based deploys, for example:
-
-```yaml
-on:
-  push:
-    branches:
-      - main
-    tags:
-      - 'v*'
-  workflow_dispatch:
-```
-
-Recommended:
-
-- use the `production` GitHub Environment so deploy secrets stay gated
-- restrict automatic production deploys to reviewed branches or release tags
-- keep required reviewers enabled if you want human approval before production deploys
+Deploy stays manual so production release approval remains separate from routine repository verification.
 
 When triggered successfully, the workflow should:
 
-1. pass tests
+1. pass CI
 2. publish an image
 3. deploy that image digest to production
 

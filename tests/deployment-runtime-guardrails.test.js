@@ -10,6 +10,7 @@ const DEPLOY_WORKFLOW_PATH = path.join(
 	'workflows',
 	'deploy.yml'
 );
+const CI_WORKFLOW_PATH = path.join(ROOT, '.github', 'workflows', 'ci.yml');
 const DOCKERFILE_PATH = path.join(ROOT, 'Dockerfile');
 const DEPLOYABLE_REF_CONDITION =
 	"github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')";
@@ -46,6 +47,22 @@ function getWorkflowJobCondition(workflow, jobName) {
 	}
 
 	throw new Error(`job ${jobName} is missing an if condition`);
+}
+
+function getWorkflowTriggerBlock(workflow) {
+	const lines = workflow.split('\n');
+	const startIndex = lines.findIndex((line) => line.trim() === 'on:');
+	assert.notStrictEqual(startIndex, -1, 'workflow should declare triggers');
+
+	const block = [];
+	for (const line of lines.slice(startIndex + 1)) {
+		if (/^[^\s]/.test(line)) {
+			break;
+		}
+		block.push(line);
+	}
+
+	return block.join('\n');
 }
 
 function getRuntimeStageBuildCopies(dockerfile) {
@@ -105,6 +122,18 @@ function getRuntimeStageBuildCopies(dockerfile) {
 }
 
 describe('deployment runtime guardrails', () => {
+	it('runs repository verification on push and pull requests before deployment', () => {
+		const workflow = readFileSync(CI_WORKFLOW_PATH, 'utf8');
+		const triggerBlock = getWorkflowTriggerBlock(workflow);
+
+		assert.match(triggerBlock, /^\s{2}push:\s*$/m);
+		assert.match(triggerBlock, /^\s{2}pull_request:\s*$/m);
+		assert.match(workflow, /^\s{6}- name: Run linter$/m);
+		assert.match(workflow, /^\s{8}run: npm run lint$/m);
+		assert.match(workflow, /^\s{6}- name: Run CI test suite$/m);
+		assert.match(workflow, /^\s{8}run: npm run test:ci$/m);
+	});
+
 	it('only builds and deploys from deployable refs', () => {
 		const workflow = readFileSync(DEPLOY_WORKFLOW_PATH, 'utf8');
 
