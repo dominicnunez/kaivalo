@@ -123,10 +123,7 @@ describe('apps/hub/.env.example behavior', () => {
 	});
 
 	it('keeps the production origin example aligned with runtime documentation', () => {
-		assert.match(
-			runtimeEnvDoc,
-			/ORIGIN=https:\/\/hub\.kaivalo\.com/
-		);
+		assert.match(runtimeEnvDoc, /ORIGIN=https:\/\/hub\.kaivalo\.com/);
 		assert.match(
 			runtimeEnvDoc,
 			/WORKOS_REDIRECT_URI=https:\/\/hub\.kaivalo\.com\/auth\/callback/
