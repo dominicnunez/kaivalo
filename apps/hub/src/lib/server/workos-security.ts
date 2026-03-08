@@ -1,5 +1,7 @@
-import { canonicalizeIpAddress } from './ip-address.js';
-import { SENSITIVE_AUTH_COOKIE_NAMES } from './auth-cookie-names.js';
+import { canonicalizeIpAddress } from './ip-address.ts';
+import { SENSITIVE_AUTH_COOKIE_NAMES } from './auth-cookie-names.ts';
+import type { Handle, RequestEvent } from '@sveltejs/kit';
+import type http from 'node:http';
 
 const REQUIRED_ENV_VARS = [
 	'WORKOS_CLIENT_ID',
@@ -60,11 +62,32 @@ export const PROXY_HSTS_CONFIGURATION_ERROR_MESSAGE =
 export const LOOPBACK_PROXY_TRUST_ERROR_MESSAGE =
 	'Production HTTPS origin is configured to trust forwarded proto headers from loopback-only proxy IPs. This commonly indicates misconfigured TRUSTED_PROXY_IPS and can suppress HSTS for real client traffic.';
 
-/**
- * @param {string} value
- * @returns {URL}
- */
-function parseRedirectUrl(value) {
+type Env = Record<string, string | undefined>;
+
+type WorkosEnv = {
+	clientId: string;
+	apiKey: string;
+	redirectUri: string;
+	cookiePassword: string;
+	origin: string;
+	apiHostname: string;
+};
+
+type StaticAssetCacheControlOptions = {
+	pathname: string | undefined | null;
+	statusCode?: number;
+	contentType?: string | null;
+	hasSetCookie?: boolean;
+};
+
+type SecurityHeadersTarget = Headers | http.ServerResponse;
+
+type SecurityHeadersOptions = {
+	trustForwardedProto?: boolean;
+	trustedProxyIps?: Iterable<string>;
+};
+
+function parseRedirectUrl(value: string): URL {
 	try {
 		const parsed = new URL(value);
 		if (parsed.username || parsed.password) {
@@ -86,11 +109,7 @@ function parseRedirectUrl(value) {
 	}
 }
 
-/**
- * @param {string} value
- * @returns {URL}
- */
-function parseOriginUrl(value) {
+function parseOriginUrl(value: string): URL {
 	try {
 		const parsed = new URL(value);
 		if (parsed.username || parsed.password) {
@@ -109,21 +128,13 @@ function parseOriginUrl(value) {
 	}
 }
 
-/**
- * @param {URL} url
- * @param {string} envVarName
- */
-function assertHttpOrHttpsProtocol(url, envVarName) {
+function assertHttpOrHttpsProtocol(url: URL, envVarName: string): void {
 	if (url.protocol !== 'http:' && url.protocol !== 'https:') {
 		throw new Error(`${envVarName} must use http or https`);
 	}
 }
 
-/**
- * @param {string | undefined} value
- * @returns {string}
- */
-function parseWorkosApiHostname(value) {
+function parseWorkosApiHostname(value: string | undefined): string {
 	const trimmed = value?.trim();
 	if (!trimmed) {
 		return DEFAULT_WORKOS_API_HOSTNAME;
@@ -155,11 +166,7 @@ function parseWorkosApiHostname(value) {
 	}
 }
 
-/**
- * @param {URL} redirectUrl
- * @returns {boolean}
- */
-function isLocalRedirectUrl(redirectUrl) {
+function isLocalRedirectUrl(redirectUrl: URL): boolean {
 	const hostname =
 		redirectUrl.hostname.startsWith('[') && redirectUrl.hostname.endsWith(']')
 			? redirectUrl.hostname.slice(1, -1)
@@ -167,11 +174,7 @@ function isLocalRedirectUrl(redirectUrl) {
 	return LOCAL_REDIRECT_HOSTS.has(hostname);
 }
 
-/**
- * @param {URL} url
- * @returns {string}
- */
-function getEffectivePort(url) {
+function getEffectivePort(url: URL): string {
 	if (url.port) {
 		return url.port;
 	}
@@ -186,12 +189,7 @@ function getEffectivePort(url) {
 	return '';
 }
 
-/**
- * @param {URL} left
- * @param {URL} right
- * @returns {boolean}
- */
-function hasEquivalentOrigin(left, right) {
+function hasEquivalentOrigin(left: URL, right: URL): boolean {
 	if (left.origin === right.origin) {
 		return true;
 	}
@@ -206,27 +204,15 @@ function hasEquivalentOrigin(left, right) {
 	);
 }
 
-/**
- * @param {string | undefined} nodeEnv
- * @returns {boolean}
- */
-function isTestEnvironment(nodeEnv) {
+function isTestEnvironment(nodeEnv: string | undefined): boolean {
 	return nodeEnv?.trim() === 'test';
 }
 
-/**
- * @param {string | null | undefined} contentType
- * @returns {string}
- */
-function getResponseMediaType(contentType) {
+function getResponseMediaType(contentType: string | null | undefined): string {
 	return contentType?.split(';', 1)[0]?.trim().toLowerCase() ?? '';
 }
 
-/**
- * @param {Response} response
- * @returns {boolean}
- */
-function isDocumentResponse(response) {
+function isDocumentResponse(response: Response): boolean {
 	const contentType = getResponseMediaType(
 		response.headers.get('Content-Type')
 	);
@@ -236,11 +222,7 @@ function isDocumentResponse(response) {
 	);
 }
 
-/**
- * @param {string} mediaType
- * @returns {boolean}
- */
-function isStaticAssetMediaType(mediaType) {
+function isStaticAssetMediaType(mediaType: string): boolean {
 	if (!mediaType) {
 		return false;
 	}
@@ -254,12 +236,10 @@ function isStaticAssetMediaType(mediaType) {
 	);
 }
 
-/**
- * @param {Iterable<string> | undefined} trustedProxyIps
- * @returns {Set<string>}
- */
-function buildTrustedProxyIpSet(trustedProxyIps) {
-	const trustedProxyIpSet = new Set();
+function buildTrustedProxyIpSet(
+	trustedProxyIps: Iterable<string> | undefined
+): Set<string> {
+	const trustedProxyIpSet = new Set<string>();
 	for (const ip of trustedProxyIps ?? []) {
 		const normalized = canonicalizeIpAddress(ip);
 		if (!normalized) {
@@ -270,18 +250,14 @@ function buildTrustedProxyIpSet(trustedProxyIps) {
 	return trustedProxyIpSet;
 }
 
-/**
- * @param {string | undefined} trustedProxyIpsValue
- * @returns {string[]}
- */
-function parseTrustedProxyIps(trustedProxyIpsValue) {
+function parseTrustedProxyIps(trustedProxyIpsValue: string | undefined): string[] {
 	const entries =
 		trustedProxyIpsValue
 			?.split(',')
-			.map((value) => value.trim())
-			.filter((value) => value.length > 0) ?? [];
+			.map((value: string) => value.trim())
+			.filter((value: string) => value.length > 0) ?? [];
 
-	return entries.map((entry) => {
+	return entries.map((entry: string) => {
 		const canonical = canonicalizeIpAddress(entry);
 		if (!canonical) {
 			throw new Error(
@@ -292,20 +268,12 @@ function parseTrustedProxyIps(trustedProxyIpsValue) {
 	});
 }
 
-/**
- * @param {string} ipAddress
- * @returns {boolean}
- */
-function isLoopbackIpAddress(ipAddress) {
+function isLoopbackIpAddress(ipAddress: string): boolean {
 	const canonical = canonicalizeIpAddress(ipAddress);
 	return canonical === '127.0.0.1' || canonical === '::1';
 }
 
-/**
- * @param {string} origin
- * @returns {boolean}
- */
-function isLocalOrigin(origin) {
+function isLocalOrigin(origin: string): boolean {
 	try {
 		return isLocalRedirectUrl(new URL(origin));
 	} catch {
@@ -313,12 +281,10 @@ function isLocalOrigin(origin) {
 	}
 }
 
-/**
- * @param {import('@sveltejs/kit').RequestEvent} event
- * @param {Set<string>} trustedProxyIps
- * @returns {boolean}
- */
-function isTrustedProxyHop(event, trustedProxyIps) {
+function isTrustedProxyHop(
+	event: RequestEvent,
+	trustedProxyIps: Set<string>
+): boolean {
 	if (
 		trustedProxyIps.size === 0 ||
 		typeof event.getClientAddress !== 'function'
@@ -333,19 +299,13 @@ function isTrustedProxyHop(event, trustedProxyIps) {
 	}
 }
 
-/**
- * @param {import('@sveltejs/kit').RequestEvent} event
- * @returns {boolean}
- */
-function hasAuthorizationHeader(event) {
+function hasAuthorizationHeader(event: RequestEvent): boolean {
 	return Boolean(event.request?.headers.get('authorization')?.trim());
 }
 
-/**
- * @param {string | string[] | undefined | null} value
- * @returns {string}
- */
-export function getTrustedForwardedProto(value) {
+export function getTrustedForwardedProto(
+	value: string | readonly string[] | undefined | null
+): string {
 	const rawValue = Array.isArray(value) ? value.join(',') : value;
 	if (typeof rawValue !== 'string') {
 		return '';
@@ -370,22 +330,16 @@ export function getTrustedForwardedProto(value) {
 	return '';
 }
 
-/**
- * @param {import('@sveltejs/kit').RequestEvent} event
- * @returns {boolean}
- */
-function isAuthRouteRequest(event) {
+function isAuthRouteRequest(event: RequestEvent): boolean {
 	const pathname = event.url?.pathname ?? '/';
 	return pathname === '/auth' || pathname.startsWith(AUTH_ROUTE_PATH_PREFIX);
 }
 
-/**
- * @param {import('@sveltejs/kit').RequestEvent} event
- * @param {boolean} trustForwardedProto
- * @param {Set<string>} trustedProxyIps
- * @returns {boolean}
- */
-function isSecureRequest(event, trustForwardedProto, trustedProxyIps) {
+function isSecureRequest(
+	event: RequestEvent,
+	trustForwardedProto: boolean,
+	trustedProxyIps: Set<string>
+): boolean {
 	if (trustForwardedProto && isTrustedProxyHop(event, trustedProxyIps)) {
 		const forwardedProto = getTrustedForwardedProto(
 			event.request?.headers.get(FORWARDED_PROTO_HEADER)
@@ -410,26 +364,18 @@ function isSecureRequest(event, trustForwardedProto, trustedProxyIps) {
 	}
 }
 
-/**
- * @param {string | null} cookieHeader
- * @returns {string[]}
- */
-function extractCookieNames(cookieHeader) {
+function extractCookieNames(cookieHeader: string | null): string[] {
 	if (!cookieHeader) {
 		return [];
 	}
 
 	return cookieHeader
 		.split(';')
-		.map((entry) => entry.split('=')[0]?.trim().toLowerCase() ?? '')
+		.map((entry: string) => entry.split('=')[0]?.trim().toLowerCase() ?? '')
 		.filter(Boolean);
 }
 
-/**
- * @param {import('@sveltejs/kit').RequestEvent} event
- * @returns {boolean}
- */
-function hasSensitiveCookieHeader(event) {
+function hasSensitiveCookieHeader(event: RequestEvent): boolean {
 	const cookieHeader = event.request?.headers.get('cookie') ?? null;
 	if (!cookieHeader) {
 		return false;
@@ -441,21 +387,15 @@ function hasSensitiveCookieHeader(event) {
 	);
 }
 
-/**
- * @param {import('@sveltejs/kit').RequestEvent} event
- * @returns {boolean}
- */
-function isAuthSensitiveRequest(event) {
+function isAuthSensitiveRequest(event: RequestEvent): boolean {
 	return isAuthRouteRequest(event) || hasAuthorizationHeader(event);
 }
 
-/**
- * @param {import('@sveltejs/kit').RequestEvent} event
- * @param {Response} response
- * @param {boolean} hasSetCookie
- * @returns {string | null}
- */
-function getVerifiedStaticAssetCacheControl(event, response, hasSetCookie) {
+function getVerifiedStaticAssetCacheControl(
+	event: RequestEvent,
+	response: Response,
+	hasSetCookie: boolean
+): string | null {
 	return getStaticAssetCacheControlForResponse({
 		pathname: event.url?.pathname,
 		statusCode: response.status,
@@ -464,13 +404,11 @@ function getVerifiedStaticAssetCacheControl(event, response, hasSetCookie) {
 	});
 }
 
-/**
- * @param {import('@sveltejs/kit').RequestEvent} event
- * @param {Response} response
- * @returns {string[]}
- */
-function getVaryHeadersForRequest(event, response) {
-	const varyHeaders = [];
+function getVaryHeadersForRequest(
+	event: RequestEvent,
+	response: Response
+): string[] {
+	const varyHeaders: string[] = [];
 	if (
 		isAuthRouteRequest(event) ||
 		hasSensitiveCookieHeader(event) ||
@@ -484,11 +422,7 @@ function getVaryHeadersForRequest(event, response) {
 	return varyHeaders;
 }
 
-/**
- * @param {Response} response
- * @returns {boolean}
- */
-function responseSetsCookies(response) {
+function responseSetsCookies(response: Response): boolean {
 	const getSetCookie = response.headers?.getSetCookie;
 	if (typeof getSetCookie === 'function') {
 		return getSetCookie.call(response.headers).length > 0;
@@ -496,11 +430,7 @@ function responseSetsCookies(response) {
 	return response.headers.has('Set-Cookie');
 }
 
-/**
- * @param {Headers} headers
- * @param {string[]} values
- */
-function appendVaryHeaders(headers, values) {
+function appendVaryHeaders(headers: Headers, values: string[]): void {
 	const existing = headers.get('Vary');
 	if (existing === '*') {
 		return;
@@ -509,7 +439,7 @@ function appendVaryHeaders(headers, values) {
 	const merged = new Set(
 		(existing ?? '')
 			.split(',')
-			.map((value) => value.trim())
+			.map((value: string) => value.trim())
 			.filter(Boolean)
 	);
 	for (const value of values) {
@@ -521,11 +451,7 @@ function appendVaryHeaders(headers, values) {
 	}
 }
 
-/**
- * @param {Response} response
- * @returns {string}
- */
-function getDocumentCacheControl(response) {
+function getDocumentCacheControl(response: Response): string {
 	if (response.status < 200 || response.status >= 300) {
 		return SENSITIVE_DOCUMENT_CACHE_CONTROL;
 	}
@@ -533,19 +459,11 @@ function getDocumentCacheControl(response) {
 	return PUBLIC_DOCUMENT_CACHE_CONTROL;
 }
 
-/**
- * @param {string | undefined | null} pathname
- * @returns {boolean}
- */
-function isImmutableAssetPath(pathname) {
+function isImmutableAssetPath(pathname: string | undefined | null): boolean {
 	return Boolean(pathname && pathname.startsWith('/_app/immutable/'));
 }
 
-/**
- * @param {string | undefined | null} pathname
- * @returns {boolean}
- */
-function isRootStaticAssetPath(pathname) {
+function isRootStaticAssetPath(pathname: string | undefined | null): boolean {
 	if (!pathname || pathname === '/') {
 		return false;
 	}
@@ -555,19 +473,13 @@ function isRootStaticAssetPath(pathname) {
 	return ROOT_STATIC_ASSET_PATHS.has(pathname.toLowerCase());
 }
 
-/**
- * @param {string | undefined | null} pathname
- * @returns {boolean}
- */
-function isFontAssetPath(pathname) {
+function isFontAssetPath(pathname: string | undefined | null): boolean {
 	return Boolean(pathname && pathname.startsWith(FONT_ASSET_PATH_PREFIX));
 }
 
-/**
- * @param {string | undefined | null} pathname
- * @returns {string | null}
- */
-export function getStaticAssetCacheControl(pathname) {
+export function getStaticAssetCacheControl(
+	pathname: string | undefined | null
+): string | null {
 	if (isImmutableAssetPath(pathname)) {
 		return STATIC_IMMUTABLE_CACHE_CONTROL;
 	}
@@ -580,21 +492,12 @@ export function getStaticAssetCacheControl(pathname) {
 	return null;
 }
 
-/**
- * @param {{
- *   pathname: string | undefined | null
- *   statusCode?: number | undefined
- *   contentType?: string | null | undefined
- *   hasSetCookie?: boolean | undefined
- * }} options
- * @returns {string | null}
- */
 export function getStaticAssetCacheControlForResponse({
 	pathname,
 	statusCode = 200,
 	contentType,
 	hasSetCookie = false
-}) {
+}: StaticAssetCacheControlOptions): string | null {
 	const cacheControl = getStaticAssetCacheControl(pathname);
 	if (!cacheControl) {
 		return null;
@@ -611,40 +514,28 @@ export function getStaticAssetCacheControlForResponse({
 	return isRootStaticAssetPath(pathname) ? cacheControl : null;
 }
 
-/**
- * @param {string | undefined | null} pathname
- * @returns {boolean}
- */
-export function shouldApplyStaticAssetHeaders(pathname) {
+export function shouldApplyStaticAssetHeaders(
+	pathname: string | undefined | null
+): boolean {
 	return getStaticAssetCacheControl(pathname) !== null;
 }
 
-/**
- * @param {Headers | import('node:http').ServerResponse} headers
- * @returns {headers is Headers}
- */
-function isWebHeaders(headers) {
+function isWebHeaders(headers: SecurityHeadersTarget): headers is Headers {
 	return headers instanceof Headers;
 }
 
-/**
- * @param {Headers | import('node:http').ServerResponse} headers
- * @param {string} name
- * @returns {boolean}
- */
-function hasHeader(headers, name) {
+function hasHeader(headers: SecurityHeadersTarget, name: string): boolean {
 	if (isWebHeaders(headers)) {
 		return headers.has(name);
 	}
 	return headers.getHeader(name) !== undefined;
 }
 
-/**
- * @param {Headers | import('node:http').ServerResponse} headers
- * @param {string} name
- * @param {string} value
- */
-function setHeader(headers, name, value) {
+function setHeader(
+	headers: SecurityHeadersTarget,
+	name: string,
+	value: string
+): void {
 	if (isWebHeaders(headers)) {
 		headers.set(name, value);
 		return;
@@ -652,11 +543,10 @@ function setHeader(headers, name, value) {
 	headers.setHeader(name, value);
 }
 
-/**
- * @param {Headers | import('node:http').ServerResponse} headers
- * @param {boolean} isSecure
- */
-export function applyBaselineSecurityHeaders(headers, isSecure) {
+export function applyBaselineSecurityHeaders(
+	headers: SecurityHeadersTarget,
+	isSecure: boolean
+): void {
 	if (isSecure) {
 		setHeader(
 			headers,
@@ -674,12 +564,11 @@ export function applyBaselineSecurityHeaders(headers, isSecure) {
 	);
 }
 
-/**
- * @param {Headers | import('node:http').ServerResponse} headers
- * @param {string | undefined | null} pathname
- * @param {boolean} isSecure
- */
-export function applyStaticAssetHeaders(headers, pathname, isSecure) {
+export function applyStaticAssetHeaders(
+	headers: SecurityHeadersTarget,
+	pathname: string | undefined | null,
+	isSecure: boolean
+): void {
 	const cacheControl = getStaticAssetCacheControl(pathname);
 	if (!cacheControl) {
 		return;
@@ -691,12 +580,7 @@ export function applyStaticAssetHeaders(headers, pathname, isSecure) {
 	}
 }
 
-/**
- * @param {Record<string, string | undefined>} env
- * @param {string} name
- * @returns {string}
- */
-function readRequiredTrimmedEnvValue(env, name) {
+function readRequiredTrimmedEnvValue(env: Env, name: string): string {
 	const value = env[name]?.trim();
 	if (!value) {
 		throw new Error(`Missing required environment variable: ${name}`);
@@ -704,18 +588,7 @@ function readRequiredTrimmedEnvValue(env, name) {
 	return value;
 }
 
-/**
- * @param {Record<string, string | undefined>} env
- * @returns {{
- * clientId: string
- * apiKey: string
- * redirectUri: string
- * cookiePassword: string
- * origin: string
- * apiHostname: string
- * }}
- */
-export function getValidatedWorkosEnv(env) {
+export function getValidatedWorkosEnv(env: Env): WorkosEnv {
 	for (const name of REQUIRED_ENV_VARS) {
 		if (!env[name]?.trim()) {
 			throw new Error(`Missing required environment variable: ${name}`);
@@ -784,22 +657,14 @@ export function getValidatedWorkosEnv(env) {
 	};
 }
 
-/**
- * @param {Record<string, string | undefined>} env
- */
-export function assertValidWorkosEnv(env) {
+export function assertValidWorkosEnv(env: Env): void {
 	getValidatedWorkosEnv(env);
 }
 
-/**
- * @param {Record<string, string | undefined>} env
- * @param {string} origin
- * @returns {{
- * trustForwardedProto: boolean
- * trustedProxyIps: string[]
- * }}
- */
-export function getProxyTrustConfiguration(env, origin) {
+export function getProxyTrustConfiguration(
+	env: Env,
+	origin: string
+): { trustForwardedProto: boolean; trustedProxyIps: string[] } {
 	const trustForwardedProto =
 		env.TRUST_X_FORWARDED_PROTO?.trim().toLowerCase() === 'true';
 	const trustedProxyIps = trustForwardedProto
@@ -823,7 +688,9 @@ export function getProxyTrustConfiguration(env, origin) {
 	) {
 		const hasOnlyLoopbackTrustedProxies =
 			trustedProxyIps.length > 0 &&
-			trustedProxyIps.every((ipAddress) => isLoopbackIpAddress(ipAddress));
+			trustedProxyIps.every((ipAddress: string) =>
+				isLoopbackIpAddress(ipAddress)
+			);
 		if (hasOnlyLoopbackTrustedProxies) {
 			throw new Error(LOOPBACK_PROXY_TRUST_ERROR_MESSAGE);
 		}
@@ -832,17 +699,9 @@ export function getProxyTrustConfiguration(env, origin) {
 	return { trustForwardedProto, trustedProxyIps };
 }
 
-/**
- * @typedef {object} SecurityHeadersOptions
- * @property {boolean} [trustForwardedProto]
- * @property {Iterable<string>} [trustedProxyIps]
- */
-
-/**
- * @param {SecurityHeadersOptions} [options]
- * @returns {import('@sveltejs/kit').Handle}
- */
-export function createSecurityHeadersHandle(options = {}) {
+export function createSecurityHeadersHandle(
+	options: SecurityHeadersOptions = {}
+): Handle {
 	const trustForwardedProto = options.trustForwardedProto === true;
 	const trustedProxyIps = buildTrustedProxyIpSet(options.trustedProxyIps);
 	return async ({ event, resolve }) => {

@@ -8,11 +8,11 @@ import {
 	evaluateSecureRequest,
 	getErrorDiagnostics,
 	startHubServer
-} from '../apps/hub/src/lib/server/node-server.js';
+} from '../apps/hub/src/lib/server/node-server.ts';
 import {
 	getProxyTrustConfiguration,
 	LOOPBACK_PROXY_TRUST_ERROR_MESSAGE
-} from '../apps/hub/src/lib/server/workos-security.js';
+} from '../apps/hub/src/lib/server/workos-security.ts';
 import { reserveLocalPort } from './helpers/network.js';
 
 const baseEnv = {

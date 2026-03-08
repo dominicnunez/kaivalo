@@ -21,19 +21,40 @@ const ERROR_CODE_MAX_LENGTH = 64;
 const ERROR_MESSAGE_MAX_LENGTH = 256;
 const PRODUCTION_NODE_ENV = 'production';
 
-/**
- * @param {Record<string, string | undefined>} env
- * @returns {boolean}
- */
-export function shouldIncludeErrorMessage(env) {
+type Env = Record<string, string | undefined>;
+
+export type ErrorLogContext = {
+	errorName: string;
+	errorUpstreamCode?: string;
+	errorCauseName?: string;
+	errorCauseCode?: string;
+	errorMessage?: string;
+	errorCauseMessage?: string;
+};
+
+export type ErrorDiagnostics = {
+	type: string;
+	code?: string;
+	message?: string;
+	stack?: string;
+	causeType?: string;
+	causeMessage?: string;
+};
+
+type ErrorLogContextOptions = {
+	includeMessage?: boolean;
+};
+
+type ErrorDiagnosticsOptions = {
+	includeSensitiveDetails?: boolean;
+	includeMessage?: boolean;
+};
+
+export function shouldIncludeErrorMessage(env: Env): boolean {
 	return env.NODE_ENV?.trim().toLowerCase() !== PRODUCTION_NODE_ENV;
 }
 
-/**
- * @param {string} value
- * @returns {string}
- */
-export function redactSensitiveText(value) {
+export function redactSensitiveText(value: string): string {
 	const collapsedWhitespace = value.replace(/\s+/g, ' ').trim();
 	return collapsedWhitespace
 		.replace(SENSITIVE_QUERY_PATTERN, `$1${REDACTED_VALUE}`)
@@ -44,11 +65,7 @@ export function redactSensitiveText(value) {
 		.slice(0, ERROR_MESSAGE_MAX_LENGTH);
 }
 
-/**
- * @param {unknown} error
- * @returns {unknown}
- */
-export function getErrorCause(error) {
+export function getErrorCause(error: unknown): unknown {
 	if (error instanceof Error && 'cause' in error) {
 		return error.cause;
 	}
@@ -56,11 +73,7 @@ export function getErrorCause(error) {
 	return undefined;
 }
 
-/**
- * @param {unknown} error
- * @returns {string | null}
- */
-export function getErrorCode(error) {
+export function getErrorCode(error: unknown): string | null {
 	if (!error || typeof error !== 'object' || !('code' in error)) {
 		return null;
 	}
@@ -76,11 +89,7 @@ export function getErrorCode(error) {
 	return normalizedCode || null;
 }
 
-/**
- * @param {unknown} error
- * @returns {string | null}
- */
-function getErrorMessage(error) {
+function getErrorMessage(error: unknown): string | null {
 	if (error instanceof Error) {
 		return error.message ? redactSensitiveText(error.message) : null;
 	}
@@ -92,31 +101,13 @@ function getErrorMessage(error) {
 	return redactSensitiveText(String(error));
 }
 
-/**
- * @param {unknown} error
- * @param {{ includeMessage?: boolean }} [options]
- * @returns {{
- *   errorName: string;
- *   errorUpstreamCode?: string;
- *   errorCauseName?: string;
- *   errorCauseCode?: string;
- *   errorMessage?: string;
- *   errorCauseMessage?: string;
- * }}
- */
-export function getErrorLogContext(error, options = {}) {
+export function getErrorLogContext(
+	error: unknown,
+	options: ErrorLogContextOptions = {}
+): ErrorLogContext {
 	const includeMessage = options.includeMessage === true;
 	const cause = getErrorCause(error);
-	/** @type {{
-	 *   errorName: string;
-	 *   errorUpstreamCode?: string;
-	 *   errorCauseName?: string;
-	 *   errorCauseCode?: string;
-	 *   errorMessage?: string;
-	 *   errorCauseMessage?: string;
-	 * }}
-	 */
-	const context = {
+	const context: ErrorLogContext = {
 		errorName: error instanceof Error ? error.name : 'UnknownError'
 	};
 
@@ -151,33 +142,16 @@ export function getErrorLogContext(error, options = {}) {
 	return context;
 }
 
-/**
- * @param {unknown} error
- * @param {{ includeSensitiveDetails?: boolean; includeMessage?: boolean }} [options]
- * @returns {{
- *   type: string;
- *   code?: string;
- *   message?: string;
- *   stack?: string;
- *   causeType?: string;
- *   causeMessage?: string;
- * }}
- */
-export function getErrorDiagnostics(error, options = {}) {
+export function getErrorDiagnostics(
+	error: unknown,
+	options: ErrorDiagnosticsOptions = {}
+): ErrorDiagnostics {
 	const includeSensitiveDetails = options.includeSensitiveDetails === true;
 	const includeMessage =
 		includeSensitiveDetails || options.includeMessage === true;
 
 	if (error instanceof Error) {
-		/** @type {{
-		 *   type: string;
-		 *   code?: string;
-		 *   message?: string;
-		 *   stack?: string;
-		 *   causeType?: string;
-		 *   causeMessage?: string;
-		 * }} */
-		const details = {
+		const details: ErrorDiagnostics = {
 			type: error.name
 		};
 
@@ -208,11 +182,7 @@ export function getErrorDiagnostics(error, options = {}) {
 		return details;
 	}
 
-	/** @type {{
-	 *   type: string;
-	 *   message?: string;
-	 * }} */
-	const details = {
+	const details: ErrorDiagnostics = {
 		type: 'NonErrorThrown'
 	};
 	if (includeMessage) {

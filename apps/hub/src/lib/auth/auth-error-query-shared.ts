@@ -11,13 +11,9 @@ const AUTH_ERROR_QUERY_PARAM_NAMES = [
 	AUTH_ERROR_INCIDENT_QUERY_NAME,
 	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
 	AUTH_ERROR_SIGNATURE_QUERY_NAME
-];
+] as const;
 
-/**
- * @param {URLSearchParams} searchParams
- * @returns {void}
- */
-export function clearAuthErrorQuery(searchParams) {
+export function clearAuthErrorQuery(searchParams: URLSearchParams): void {
 	for (const queryName of AUTH_ERROR_QUERY_PARAM_NAMES) {
 		searchParams.delete(queryName);
 	}

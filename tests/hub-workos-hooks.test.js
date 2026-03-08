@@ -8,7 +8,7 @@ import {
 	getValidatedWorkosEnv,
 	PROXY_HSTS_CONFIGURATION_ERROR_MESSAGE,
 	LOOPBACK_PROXY_TRUST_ERROR_MESSAGE
-} from '../apps/hub/src/lib/server/workos-security.js';
+} from '../apps/hub/src/lib/server/workos-security.ts';
 import { httpGet, startHubPreview } from './helpers/hub-preview.js';
 
 const validEnv = {

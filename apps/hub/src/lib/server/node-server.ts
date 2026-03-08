@@ -1,7 +1,10 @@
 import http from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { canonicalizeIpAddress } from './ip-address.js';
-import { getErrorDiagnostics } from './error-diagnostics.js';
+import { canonicalizeIpAddress } from './ip-address.ts';
+import {
+	getErrorDiagnostics,
+	type ErrorDiagnostics
+} from './error-diagnostics.ts';
 import {
 	applyBaselineSecurityHeaders,
 	applyStaticAssetHeaders,
@@ -10,7 +13,7 @@ import {
 	getProxyTrustConfiguration,
 	getValidatedWorkosEnv,
 	shouldApplyStaticAssetHeaders
-} from './workos-security.js';
+} from './workos-security.ts';
 
 const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_PORT = 3000;
@@ -26,22 +29,65 @@ const MAX_TIMER_DELAY_MS = 2_147_483_647;
 const MIN_PORT = 1;
 const MAX_PORT = 65_535;
 
-export { getErrorDiagnostics } from './error-diagnostics.js';
+export { getErrorDiagnostics } from './error-diagnostics.ts';
 
-/**
- * @param {Record<string, string | undefined>} env
- * @returns {boolean}
- */
-function shouldIncludeSensitiveErrorDetails(env) {
+type Env = Record<string, string | undefined>;
+
+type FatalReason = 'startup-error' | 'shutdown-timeout';
+
+type FatalDetails = {
+	exitCode: number;
+	reason: FatalReason;
+	host?: string;
+	port?: number;
+	configuredPort?: string;
+	activeRequests?: number;
+	shutdownTimeoutMs?: number;
+	error?: ErrorDiagnostics;
+};
+
+type FatalNotifierOptions = {
+	onFatal?: (details: FatalDetails) => void;
+	logger: Pick<Console, 'error'>;
+	env: Env;
+};
+
+type HubServerOptions = {
+	handler: (req: http.IncomingMessage, res: http.ServerResponse) => void;
+	env: Env;
+	logger?: Pick<Console, 'log' | 'warn' | 'error'>;
+	onFatal?: (details: FatalDetails) => void;
+};
+
+type StartHubServerOptions = {
+	handler: (req: http.IncomingMessage, res: http.ServerResponse) => void;
+	env?: Env;
+	logger?: Pick<Console, 'log' | 'warn' | 'error'>;
+	onFatal?: (details: FatalDetails) => void;
+};
+
+type SecureRequestEvaluation = {
+	isSecure: boolean;
+	ignoredForwardedProto: boolean;
+	remoteAddress: string;
+	forwardedProto: string;
+};
+
+type WriteHeadOptions = {
+	statusCode: number | undefined;
+	headerSource: http.OutgoingHttpHeaders | http.OutgoingHttpHeader[] | undefined;
+};
+
+type ResponseSecurityHeaderOptions = {
+	headerSource?: http.OutgoingHttpHeaders | http.OutgoingHttpHeader[] | null;
+	statusCode?: number;
+};
+
+function shouldIncludeSensitiveErrorDetails(env: Env): boolean {
 	return env.NODE_ENV?.trim().toLowerCase() !== PRODUCTION_NODE_ENV;
 }
 
-/**
- * @param {unknown} error
- * @param {Record<string, string | undefined>} env
- * @returns {ReturnType<typeof getErrorDiagnostics>}
- */
-function getFatalErrorDiagnostics(error, env) {
+function getFatalErrorDiagnostics(error: unknown, env: Env): ErrorDiagnostics {
 	return getErrorDiagnostics(error, {
 		includeSensitiveDetails: shouldIncludeSensitiveErrorDetails(env),
 		includeMessage: true
@@ -74,8 +120,12 @@ function getFatalErrorDiagnostics(error, env) {
  *   error?: ReturnType<typeof getErrorDiagnostics>;
  * }) => void}
  */
-function createFatalNotifier({ onFatal, logger, env }) {
-	return (details) => {
+function createFatalNotifier({
+	onFatal,
+	logger,
+	env
+}: FatalNotifierOptions): (details: FatalDetails) => void {
+	return (details: FatalDetails) => {
 		if (!onFatal) {
 			return;
 		}
@@ -94,7 +144,7 @@ function createFatalNotifier({ onFatal, logger, env }) {
  * @param {string | undefined} portValue
  * @returns {number}
  */
-function parsePort(portValue) {
+function parsePort(portValue: string | undefined): number {
 	if (portValue === undefined || portValue.trim() === '') {
 		return DEFAULT_PORT;
 	}
@@ -119,11 +169,11 @@ function parsePort(portValue) {
  * @returns {number}
  */
 function parsePositiveIntegerEnvValue(
-	rawValue,
-	envName,
-	defaultValue,
-	maxValue
-) {
+	rawValue: string | undefined,
+	envName: string,
+	defaultValue: number,
+	maxValue?: number
+): number {
 	if (rawValue === undefined || rawValue.trim() === '') {
 		return defaultValue;
 	}
@@ -147,7 +197,7 @@ function parsePositiveIntegerEnvValue(
  * @param {number} port
  * @returns {string}
  */
-function getListeningLogMessage(env, host, port) {
+function getListeningLogMessage(env: Env, host: string, port: number): string {
 	const internalOrigin = `http://${host}:${port}`;
 	const publicOrigin = getValidatedWorkosEnv(env).origin;
 	if (publicOrigin === internalOrigin) {
@@ -161,7 +211,7 @@ function getListeningLogMessage(env, host, port) {
  * @param {http.IncomingMessage} req
  * @returns {string}
  */
-export function getRequestPathname(req) {
+export function getRequestPathname(req: http.IncomingMessage): string {
 	if (!req.url) {
 		return '/';
 	}
@@ -185,10 +235,10 @@ export function getRequestPathname(req) {
  * }}
  */
 export function evaluateSecureRequest(
-	req,
-	trustForwardedProto,
-	trustedProxyIpSet
-) {
+	req: http.IncomingMessage,
+	trustForwardedProto: boolean,
+	trustedProxyIpSet: Set<string>
+): SecureRequestEvaluation {
 	const remoteAddress = canonicalizeIpAddress(req.socket?.remoteAddress);
 	const forwardedProto = getTrustedForwardedProto(
 		req.headers['x-forwarded-proto']
@@ -230,7 +280,16 @@ export function evaluateSecureRequest(
  * @param {Record<string, string | undefined>} env
  * @returns {{ incidentId: string; method?: string; pathname: string; error: ReturnType<typeof getErrorDiagnostics> }}
  */
-export function buildRequestFailureLog(req, error, env) {
+export function buildRequestFailureLog(
+	req: http.IncomingMessage,
+	error: unknown,
+	env: Env
+): {
+	incidentId: string;
+	method?: string;
+	pathname: string;
+	error: ErrorDiagnostics;
+} {
 	const incidentId = randomUUID();
 	return {
 		incidentId,
@@ -259,7 +318,10 @@ export function buildRequestFailureLog(req, error, env) {
  *   }) => void;
  * }} options
  */
-export function createHubServer(options) {
+export function createHubServer(options: HubServerOptions): {
+	server: http.Server;
+	beginShutdown: () => Promise<number>;
+} {
 	const logger = options.logger ?? console;
 	const workosEnv = getValidatedWorkosEnv(options.env);
 	const { trustForwardedProto, trustedProxyIps } = getProxyTrustConfiguration(
@@ -275,17 +337,12 @@ export function createHubServer(options) {
 
 	let activeRequests = 0;
 	let shuttingDown = false;
-	const activeSockets = new Set();
-	const forwardedProtoWarningKeys = new Map();
-	/** @type {Promise<number> | null} */
-	let shutdownPromise = null;
-	/** @type {((exitCode: number) => void) | null} */
-	let resolveShutdown = null;
+	const activeSockets = new Set<import('node:net').Socket>();
+	const forwardedProtoWarningKeys = new Map<string, number>();
+	let shutdownPromise: Promise<number> | null = null;
+	let resolveShutdown: ((exitCode: number) => void) | null = null;
 
-	/**
-	 * @param {number} now
-	 */
-	function pruneStaleForwardedProtoWarnings(now) {
+	function pruneStaleForwardedProtoWarnings(now: number): void {
 		for (const [key, timestamp] of forwardedProtoWarningKeys.entries()) {
 			if (now - timestamp > FORWARDED_PROTO_WARNING_TTL_MS) {
 				forwardedProtoWarningKeys.delete(key);
@@ -297,7 +354,7 @@ export function createHubServer(options) {
 	 * @param {string} key
 	 * @returns {boolean}
 	 */
-	function shouldLogForwardedProtoWarning(key) {
+	function shouldLogForwardedProtoWarning(key: string): boolean {
 		const now = Date.now();
 		const lastLoggedAt = forwardedProtoWarningKeys.get(key);
 		if (
@@ -310,8 +367,10 @@ export function createHubServer(options) {
 		pruneStaleForwardedProtoWarnings(now);
 
 		if (forwardedProtoWarningKeys.size >= MAX_FORWARDED_PROTO_WARNING_KEYS) {
-			const oldestKey = forwardedProtoWarningKeys.keys().next().value;
-			if (oldestKey) {
+			const oldestKey = forwardedProtoWarningKeys.keys().next().value as
+				| string
+				| undefined;
+			if (oldestKey !== undefined) {
 				forwardedProtoWarningKeys.delete(oldestKey);
 			}
 		}
@@ -344,7 +403,14 @@ export function createHubServer(options) {
 		 * @param {string} headerName
 		 * @returns {string | string[] | number | undefined}
 		 */
-		const getHeaderFromSource = (headerSource, headerName) => {
+		const getHeaderFromSource = (
+			headerSource:
+				| http.OutgoingHttpHeaders
+				| http.OutgoingHttpHeader[]
+				| null
+				| undefined,
+			headerName: string
+		): string | string[] | number | undefined => {
 			if (!headerSource) {
 				return undefined;
 			}
@@ -376,21 +442,19 @@ export function createHubServer(options) {
 		 *   headerSource: http.OutgoingHttpHeaders | http.OutgoingHttpHeader[] | undefined;
 		 * }}
 		 */
-		const getWriteHeadOptions = (args) => {
+		const getWriteHeadOptions = (args: readonly unknown[]): WriteHeadOptions => {
 			const statusCode = typeof args[0] === 'number' ? args[0] : undefined;
 			const secondArgument = args[1];
 			const thirdArgument = args[2];
-			const headerSource =
+			const headerSource: WriteHeadOptions['headerSource'] =
 				args.length === 2 &&
 				secondArgument !== undefined &&
 				typeof secondArgument !== 'string'
-					? /** @type {http.OutgoingHttpHeaders | http.OutgoingHttpHeader[]} */ (
-							secondArgument
-						)
+					? (secondArgument as http.OutgoingHttpHeaders | http.OutgoingHttpHeader[])
 					: args.length >= 3 && thirdArgument !== undefined
-						? /** @type {http.OutgoingHttpHeaders | http.OutgoingHttpHeader[]} */ (
-								thirdArgument
-							)
+						? (thirdArgument as
+								| http.OutgoingHttpHeaders
+								| http.OutgoingHttpHeader[])
 						: undefined;
 			return {
 				statusCode,
@@ -404,7 +468,9 @@ export function createHubServer(options) {
 		 *   statusCode?: number | undefined;
 		 * }} [options]
 		 */
-		const applyResponseSecurityHeaders = (options = {}) => {
+		const applyResponseSecurityHeaders = (
+			options: ResponseSecurityHeaderOptions = {}
+		): void => {
 			if (responseHeadersApplied || res.headersSent) {
 				return;
 			}
@@ -420,7 +486,9 @@ export function createHubServer(options) {
 					typeof contentTypeHeader === 'string'
 						? contentTypeHeader
 						: Array.isArray(contentTypeHeader)
-							? (contentTypeHeader.find((value) => typeof value === 'string') ??
+							? (contentTypeHeader.find(
+									(value): value is string => typeof value === 'string'
+								) ??
 								null)
 							: null;
 				const hasSetCookie =
@@ -456,48 +524,32 @@ export function createHubServer(options) {
 		};
 
 		const originalWriteHead = res.writeHead.bind(res);
-		const patchedWriteHead =
-			/** @type {typeof res.writeHead} */
-			(
-				(...args) => {
-					applyResponseSecurityHeaders(getWriteHeadOptions(args));
-					return Reflect.apply(originalWriteHead, res, args);
-				}
-			);
+		const patchedWriteHead: typeof res.writeHead = (...args) => {
+			applyResponseSecurityHeaders(getWriteHeadOptions(args));
+			return Reflect.apply(originalWriteHead, res, args);
+		};
 		res.writeHead = patchedWriteHead;
 
 		const originalWrite = res.write.bind(res);
-		const patchedWrite =
-			/** @type {typeof res.write} */
-			(
-				(...args) => {
-					applyResponseSecurityHeaders();
-					return Reflect.apply(originalWrite, res, args);
-				}
-			);
+		const patchedWrite: typeof res.write = (...args) => {
+			applyResponseSecurityHeaders();
+			return Reflect.apply(originalWrite, res, args);
+		};
 		res.write = patchedWrite;
 
 		const originalEnd = res.end.bind(res);
-		const patchedEnd =
-			/** @type {typeof res.end} */
-			(
-				(...args) => {
-					applyResponseSecurityHeaders();
-					return Reflect.apply(originalEnd, res, args);
-				}
-			);
+		const patchedEnd = ((...args: Parameters<typeof res.end>) => {
+			applyResponseSecurityHeaders();
+			return Reflect.apply(originalEnd, res, args);
+		}) as typeof res.end;
 		res.end = patchedEnd;
 
 		const originalFlushHeaders = res.flushHeaders?.bind(res);
 		if (originalFlushHeaders) {
-			const patchedFlushHeaders =
-				/** @type {typeof res.flushHeaders} */
-				(
-					(...args) => {
-						applyResponseSecurityHeaders();
-						return Reflect.apply(originalFlushHeaders, res, args);
-					}
-				);
+			const patchedFlushHeaders: typeof res.flushHeaders = (...args) => {
+				applyResponseSecurityHeaders();
+				return Reflect.apply(originalFlushHeaders, res, args);
+			};
 			res.flushHeaders = patchedFlushHeaders;
 		}
 
@@ -516,7 +568,7 @@ export function createHubServer(options) {
 		/**
 		 * @param {unknown} error
 		 */
-		const handleRequestFailure = (error) => {
+		const handleRequestFailure = (error: unknown): void => {
 			if (!res.headersSent) {
 				res.statusCode = 500;
 				res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -576,7 +628,7 @@ export function createHubServer(options) {
 		/**
 		 * @param {number} exitCode
 		 */
-		const completeShutdown = (exitCode) => {
+		const completeShutdown = (exitCode: number): void => {
 			if (shutdownComplete) {
 				return;
 			}
@@ -626,7 +678,9 @@ export function createHubServer(options) {
  * }} options
  * @returns {Promise<http.Server | null>}
  */
-export function startHubServer(options) {
+export function startHubServer(
+	options: StartHubServerOptions
+): Promise<http.Server | null> {
 	const env = options.env ?? process.env;
 	const host = env.HOST || DEFAULT_HOST;
 	const configuredPort =
@@ -639,16 +693,11 @@ export function startHubServer(options) {
 		logger,
 		env
 	});
-	/** @type {number | undefined} */
-	let port;
-	/** @type {http.Server | null} */
-	let server = null;
-	/** @type {() => Promise<number>} */
-	let beginShutdown = () => Promise.resolve(0);
-	/** @type {() => void} */
-	let handleSigInt = () => {};
-	/** @type {() => void} */
-	let handleSigTerm = () => {};
+	let port: number | undefined;
+	let server: http.Server | null = null;
+	let beginShutdown: () => Promise<number> = () => Promise.resolve(0);
+	let handleSigInt = (): void => {};
+	let handleSigTerm = (): void => {};
 	let processListenersCleanedUp = false;
 
 	const cleanupProcessListeners = () => {
@@ -663,7 +712,7 @@ export function startHubServer(options) {
 	/**
 	 * @param {unknown} error
 	 */
-	const handleStartupError = (error) => {
+	const handleStartupError = (error: unknown): void => {
 		cleanupProcessListeners();
 		const diagnostics = getFatalErrorDiagnostics(error, env);
 		const portDetails =
@@ -730,7 +779,7 @@ export function startHubServer(options) {
 		/**
 		 * @param {unknown} error
 		 */
-		const handleListenError = (error) => {
+		const handleListenError = (error: unknown): void => {
 			startedServer.off('listening', handleListening);
 			handleStartupError(error);
 			resolve(null);

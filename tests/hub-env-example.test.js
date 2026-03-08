@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import {
 	getProxyTrustConfiguration,
 	getValidatedWorkosEnv
-} from '../apps/hub/src/lib/server/workos-security.js';
+} from '../apps/hub/src/lib/server/workos-security.ts';
 
 const envExamplePath = resolve(
 	import.meta.dirname,

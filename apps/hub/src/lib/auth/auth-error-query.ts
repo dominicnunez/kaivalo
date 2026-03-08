@@ -7,7 +7,7 @@ export {
 	AUTH_ERROR_SIGNATURE_QUERY_NAME,
 	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
 	clearAuthErrorQuery
-} from './auth-error-query-shared.js';
+} from './auth-error-query-shared.ts';
 import {
 	AUTH_ERROR_INCIDENT_QUERY_NAME,
 	AUTH_ERROR_MESSAGE,
@@ -15,38 +15,46 @@ import {
 	AUTH_ERROR_QUERY_VALUE,
 	AUTH_ERROR_SIGNATURE_QUERY_NAME,
 	AUTH_ERROR_TIMESTAMP_QUERY_NAME
-} from './auth-error-query-shared.js';
+} from './auth-error-query-shared.ts';
 export const AUTH_ERROR_QUERY_TTL_MS = 5 * 60 * 1000;
 
 const CALLBACK_INCIDENT_ID_PATTERN =
 	/^authcb_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/**
- * @param {string} incidentId
- * @returns {boolean}
- */
-function isValidCallbackIncidentId(incidentId) {
+type BuildAuthErrorRedirectQueryOptions = {
+	incidentId: string;
+	secret: string;
+	now?: number;
+};
+
+type ReadVerifiedAuthErrorOptions = {
+	secret: string;
+	now?: number;
+};
+
+export type VerifiedAuthError = {
+	message: string;
+	incidentId: string;
+};
+
+function isValidCallbackIncidentId(incidentId: string): boolean {
 	return CALLBACK_INCIDENT_ID_PATTERN.test(incidentId);
 }
 
-/**
- * @param {string} incidentId
- * @param {string} timestamp
- * @param {string} secret
- * @returns {string}
- */
-function signAuthErrorIncident(incidentId, timestamp, secret) {
+function signAuthErrorIncident(
+	incidentId: string,
+	timestamp: string,
+	secret: string
+): string {
 	return createHmac('sha256', secret)
 		.update(`${incidentId}:${timestamp}`)
 		.digest('base64url');
 }
 
-/**
- * @param {string} actualSignature
- * @param {string} expectedSignature
- * @returns {boolean}
- */
-function signaturesMatch(actualSignature, expectedSignature) {
+function signaturesMatch(
+	actualSignature: string,
+	expectedSignature: string
+): boolean {
 	const actualBuffer = Buffer.from(actualSignature);
 	const expectedBuffer = Buffer.from(expectedSignature);
 	if (actualBuffer.length !== expectedBuffer.length) {
@@ -56,15 +64,11 @@ function signaturesMatch(actualSignature, expectedSignature) {
 	return timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
-/**
- * @param {{ incidentId: string; secret: string; now?: number }} options
- * @returns {string}
- */
 export function buildAuthErrorRedirectQuery({
 	incidentId,
 	secret,
 	now = Date.now()
-}) {
+}: BuildAuthErrorRedirectQueryOptions): string {
 	if (!isValidCallbackIncidentId(incidentId)) {
 		throw new Error('incidentId must be a valid auth callback incident id');
 	}
@@ -84,15 +88,10 @@ export function buildAuthErrorRedirectQuery({
 	return params.toString();
 }
 
-/**
- * @param {URLSearchParams} searchParams
- * @param {{ secret: string; now?: number }} options
- * @returns {{ message: string; incidentId: string } | null}
- */
 export function readVerifiedAuthError(
-	searchParams,
-	{ secret, now = Date.now() }
-) {
+	searchParams: URLSearchParams,
+	{ secret, now = Date.now() }: ReadVerifiedAuthErrorOptions
+): VerifiedAuthError | null {
 	if (
 		searchParams.get(AUTH_ERROR_QUERY_NAME) !== AUTH_ERROR_QUERY_VALUE ||
 		typeof secret !== 'string' ||

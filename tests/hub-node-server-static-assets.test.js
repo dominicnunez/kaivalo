@@ -1,7 +1,7 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert';
 import http from 'node:http';
-import { createHubServer } from '../apps/hub/src/lib/server/node-server.js';
+import { createHubServer } from '../apps/hub/src/lib/server/node-server.ts';
 
 const baseEnv = {
 	NODE_ENV: 'test',

@@ -5,12 +5,12 @@ const HUB_ROOT = path.resolve(import.meta.dirname, '..');
 const RUNTIME_SOURCE_DIR = path.join(HUB_ROOT, 'src', 'lib', 'server');
 const RUNTIME_BUILD_DIR = path.join(HUB_ROOT, 'build', 'runtime', 'server');
 const RUNTIME_SERVER_FILES = [
-	'authkit-config.js',
-	'auth-cookie-names.js',
-	'error-diagnostics.js',
-	'ip-address.js',
-	'node-server.js',
-	'workos-security.js'
+	'authkit-config.ts',
+	'auth-cookie-names.ts',
+	'error-diagnostics.ts',
+	'ip-address.ts',
+	'node-server.ts',
+	'workos-security.ts'
 ];
 
 mkdirSync(RUNTIME_BUILD_DIR, { recursive: true });

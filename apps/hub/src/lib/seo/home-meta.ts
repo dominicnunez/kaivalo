@@ -1,15 +1,13 @@
-/**
- * @param {string} origin
- * @returns {{
- *  title: string;
- *  description: string;
- *  url: string;
- *  image: string;
- *  imageAlt: string;
- *  twitterCard: string;
- * }}
- */
-export function getHomeMeta(origin) {
+export type HomeMeta = {
+	title: string;
+	description: string;
+	url: string;
+	image: string;
+	imageAlt: string;
+	twitterCard: string;
+};
+
+export function getHomeMeta(origin: string): HomeMeta {
 	const siteOrigin = new URL(origin).origin;
 	const imageUrl = new URL('/og-image.png', siteOrigin).toString();
 

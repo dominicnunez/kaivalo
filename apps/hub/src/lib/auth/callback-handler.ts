@@ -1,51 +1,38 @@
 import { error, redirect } from '@sveltejs/kit';
+import type { RequestEvent } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
-import { getErrorLogContext } from '../server/error-diagnostics.js';
-import { normalizeRequestId } from './log-context.js';
-import { buildAuthErrorRedirectQuery } from './auth-error-query.js';
+import { getErrorLogContext } from '../server/error-diagnostics.ts';
+import { normalizeRequestId } from './log-context.ts';
+import { buildAuthErrorRedirectQuery } from './auth-error-query.ts';
 import {
 	isRedirectLikeObject,
 	normalizeSameOriginRedirectLocation,
-	REDIRECT_RESPONSE_STATUSES
-} from './safe-redirect.js';
+	REDIRECT_RESPONSE_STATUSES,
+	type RedirectLikeObject
+} from './safe-redirect.ts';
 
-/** @typedef {import('@sveltejs/kit').RequestEvent} RequestEvent */
-/**
- * @typedef {object} CallbackLogContext
- * @property {string} requestId
- * @property {string} method
- * @property {string} pathname
- * @property {string} incidentId
- * @property {string} errorName
- * @property {string} errorCode
- * @property {string} [errorUpstreamCode]
- * @property {string} [errorCauseName]
- * @property {string} [errorCauseCode]
- */
-/**
- * @typedef {object} CreateAuthCallbackGetHandlerOptions
- * @property {() => (event: RequestEvent) => Promise<Response>} handleCallback
- * @property {(error: unknown) => boolean} isRedirect
- * @property {(error: unknown) => boolean} isHttpError
- * @property {string} cookiePassword
- * @property {boolean} [includeMessageInLogs]
- * @property {(message: string, context: CallbackLogContext) => void} [logError]
- */
+type CallbackLogContext = ReturnType<typeof getErrorLogContext> & {
+	requestId: string;
+	method: string;
+	pathname: string;
+	incidentId: string;
+	errorCode: string;
+};
 
-/**
- * @param {unknown} value
- * @returns {value is { status: number; location: string }}
- */
-function isRedirectLike(value) {
+type CreateAuthCallbackGetHandlerOptions = {
+	handleCallback: () => (event: RequestEvent) => Promise<Response>;
+	isRedirect: (error: unknown) => boolean;
+	isHttpError: (error: unknown) => boolean;
+	cookiePassword: string;
+	includeMessageInLogs?: boolean;
+	logError?: (message: string, context: CallbackLogContext) => void;
+};
+
+function isRedirectLike(value: unknown): value is RedirectLikeObject {
 	return isRedirectLikeObject(value);
 }
 
-/**
- * @param {Response} response
- * @param {string} location
- * @returns {Response}
- */
-function cloneRedirectResponse(response, location) {
+function cloneRedirectResponse(response: Response, location: string): Response {
 	const headers = new Headers(response.headers);
 	headers.set('location', location);
 	return new Response(response.body, {
@@ -55,12 +42,10 @@ function cloneRedirectResponse(response, location) {
 	});
 }
 
-/**
- * @param {Response} response
- * @param {RequestEvent} event
- * @returns {Response}
- */
-function normalizeCallbackResponse(response, event) {
+function normalizeCallbackResponse(
+	response: Response,
+	event: RequestEvent
+): Response {
 	if (!REDIRECT_RESPONSE_STATUSES.has(response.status)) {
 		return response;
 	}
@@ -83,10 +68,6 @@ function normalizeCallbackResponse(response, event) {
 		: cloneRedirectResponse(response, safeLocation);
 }
 
-/**
- * @param {CreateAuthCallbackGetHandlerOptions} options
- * @returns {(event: RequestEvent) => Promise<Response>}
- */
 export function createAuthCallbackGetHandler({
 	handleCallback,
 	isRedirect,
@@ -94,12 +75,8 @@ export function createAuthCallbackGetHandler({
 	cookiePassword,
 	includeMessageInLogs = false,
 	logError = console.error
-}) {
-	/**
-	 * @param {RequestEvent} event
-	 * @returns {boolean}
-	 */
-	function shouldUseUserRedirect(event) {
+}: CreateAuthCallbackGetHandlerOptions): (event: RequestEvent) => Promise<Response> {
+	function shouldUseUserRedirect(event: RequestEvent): boolean {
 		const mode = event.request.headers.get('sec-fetch-mode');
 		const destination = event.request.headers.get('sec-fetch-dest');
 		if (mode === 'navigate' || destination === 'document') {
@@ -110,8 +87,7 @@ export function createAuthCallbackGetHandler({
 		return accept.includes('text/html') && !accept.includes('application/json');
 	}
 
-	/** @param {RequestEvent} event */
-	return async (event) => {
+	return async (event: RequestEvent) => {
 		try {
 			const handler = handleCallback();
 			return normalizeCallbackResponse(await handler(event), event);
@@ -146,7 +122,6 @@ export function createAuthCallbackGetHandler({
 				event.request.headers.get('x-request-id')
 			);
 			const incidentId = `authcb_${randomUUID()}`;
-			/** @type {CallbackLogContext} */
 			const callbackLogContext = {
 				requestId,
 				method: event.request.method,

@@ -43,6 +43,6 @@ describe('hub build freshness inputs', () => {
 			'utf8'
 		);
 
-		assert.match(prepareRuntimeScript, /'authkit-config\.js'/);
+		assert.match(prepareRuntimeScript, /'authkit-config\.ts'/);
 	});
 });

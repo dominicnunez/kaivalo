@@ -92,22 +92,22 @@ describe('static asset security policy', () => {
 		).toBeNull();
 	});
 
-	it('keeps verified static assets cacheable even when auth cookies are present', async () => {
-		const handle = createSecurityHeadersHandle();
-		const response = await handle({
-			event: /** @type {never} */ ({
-				request: new Request(
-					'https://kaivalo.test/_app/immutable/entry/app.js',
-					{
+		it('keeps verified static assets cacheable even when auth cookies are present', async () => {
+			const handle = createSecurityHeadersHandle();
+			const response = await handle({
+				event: {
+					request: new Request(
+						'https://kaivalo.test/_app/immutable/entry/app.js',
+						{
 						headers: {
 							cookie: `${AUTHKIT_COOKIE_NAME}=fixture`
 						}
-					}
-				),
-				url: new URL('https://kaivalo.test/_app/immutable/entry/app.js')
-			}),
-			resolve: async () =>
-				new Response('console.log("fixture")', {
+						}
+					),
+					url: new URL('https://kaivalo.test/_app/immutable/entry/app.js')
+				} as never,
+				resolve: async () =>
+					new Response('console.log("fixture")', {
 					headers: {
 						'Content-Type': 'application/javascript; charset=utf-8'
 					}

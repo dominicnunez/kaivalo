@@ -1,7 +1,7 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import http from 'node:http';
-import { createSignOutPostHandler } from '../apps/hub/src/lib/auth/sign-out-handler.js';
+import { createSignOutPostHandler } from '../apps/hub/src/lib/auth/sign-out-handler.ts';
 import { isHttpError, isRedirect } from '@sveltejs/kit';
 import { startHubPreview } from './helpers/hub-preview.js';
 

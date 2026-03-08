@@ -1,11 +1,7 @@
 const REQUEST_ID_MAX_LENGTH = 64;
 const REQUEST_ID_ALLOWED_CHARS = /^[A-Za-z0-9_-]+$/;
 
-/**
- * @param {string | null} requestId
- * @returns {string}
- */
-export function normalizeRequestId(requestId) {
+export function normalizeRequestId(requestId: string | null): string {
 	if (!requestId) {
 		return 'missing';
 	}

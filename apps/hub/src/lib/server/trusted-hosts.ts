@@ -10,11 +10,7 @@ export const TRUSTED_AVATAR_CSP_SOURCES = [
 	'https://*.googleusercontent.com'
 ];
 
-/**
- * @param {string} hostname
- * @returns {boolean}
- */
-export function isTrustedAvatarHost(hostname) {
+export function isTrustedAvatarHost(hostname: string): boolean {
 	return (
 		TRUSTED_AVATAR_HOSTNAME_SET.has(hostname) ||
 		GOOGLE_AVATAR_HOST_PATTERN.test(hostname)

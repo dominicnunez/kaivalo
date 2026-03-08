@@ -1,38 +1,32 @@
 import { error, isHttpError, isRedirect, redirect } from '@sveltejs/kit';
+import type { RequestEvent } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
-import { getErrorLogContext } from '../server/error-diagnostics.js';
-import { normalizeRequestId } from './log-context.js';
+import { getErrorLogContext } from '../server/error-diagnostics.ts';
+import { normalizeRequestId } from './log-context.ts';
 import {
 	isRedirectLikeObject,
 	normalizeTrustedRedirectLocation,
-	REDIRECT_RESPONSE_STATUSES
-} from './safe-redirect.js';
+	REDIRECT_RESPONSE_STATUSES,
+	type RedirectLikeObject
+} from './safe-redirect.ts';
 
-/** @typedef {import('@sveltejs/kit').RequestEvent} RequestEvent */
-/**
- * @typedef {object} CreateSignOutPostHandlerOptions
- * @property {(event: RequestEvent) => Response | Promise<Response>} signOut
- * @property {string} expectedOrigin
- * @property {Iterable<string>} [allowedRedirectOrigins]
- * @property {boolean} [includeMessageInLogs]
- * @property {(message: string, context: {
- * requestId: string
- * method: string
- * pathname: string
- * incidentId: string
- * errorName: string
- * errorCauseName?: string
- * errorCode: string
- * errorUpstreamCode?: string
- * errorCauseCode?: string
- * }) => void} [logError]
- */
+type SignOutLogContext = ReturnType<typeof getErrorLogContext> & {
+	requestId: string;
+	method: string;
+	pathname: string;
+	incidentId: string;
+	errorCode: string;
+};
 
-/**
- * @param {string} value
- * @returns {URL | null}
- */
-function readUrl(value) {
+type CreateSignOutPostHandlerOptions = {
+	signOut: (event: RequestEvent) => Response | Promise<Response>;
+	expectedOrigin: string;
+	allowedRedirectOrigins?: Iterable<string>;
+	includeMessageInLogs?: boolean;
+	logError?: (message: string, context: SignOutLogContext) => void;
+};
+
+function readUrl(value: string): URL | null {
 	try {
 		return new URL(value);
 	} catch {
@@ -40,11 +34,7 @@ function readUrl(value) {
 	}
 }
 
-/**
- * @param {string} value
- * @returns {string | null}
- */
-function normalizeOriginHeader(value) {
+function normalizeOriginHeader(value: string): string | null {
 	const parsed = readUrl(value);
 	if (
 		!parsed ||
@@ -60,11 +50,7 @@ function normalizeOriginHeader(value) {
 	return parsed.origin;
 }
 
-/**
- * @param {string} value
- * @returns {string | null}
- */
-function normalizeRefererHeader(value) {
+function normalizeRefererHeader(value: string): string | null {
 	const parsed = readUrl(value);
 	if (!parsed || parsed.username || parsed.password) {
 		return null;
@@ -73,12 +59,10 @@ function normalizeRefererHeader(value) {
 	return parsed.origin;
 }
 
-/**
- * @param {RequestEvent} event
- * @param {string} expectedOrigin
- * @returns {void}
- */
-function assertSameOriginRequest(event, expectedOrigin) {
+function assertSameOriginRequest(
+	event: RequestEvent,
+	expectedOrigin: string
+): void {
 	const origin = event.request.headers.get('origin');
 	if (origin !== null && normalizeOriginHeader(origin) !== expectedOrigin) {
 		throw error(403, 'Invalid origin');
@@ -94,22 +78,14 @@ function assertSameOriginRequest(event, expectedOrigin) {
 	}
 }
 
-/**
- * @param {RequestEvent} event
- * @returns {void}
- */
-function assertPostMethod(event) {
+function assertPostMethod(event: RequestEvent): void {
 	if (event.request.method !== 'POST') {
 		throw error(405, 'Method not allowed');
 	}
 }
 
-/**
- * @param {string} value
- * @returns {string}
- */
-function normalizeExpectedOrigin(value) {
-	let parsed;
+function normalizeExpectedOrigin(value: string): string {
+	let parsed: URL;
 	try {
 		parsed = new URL(value);
 	} catch {
@@ -129,14 +105,7 @@ function normalizeExpectedOrigin(value) {
 	return parsed.origin;
 }
 
-/**
- * Accept redirects that survive transport as plain objects rather than
- * relying solely on runtime identity from one specific SvelteKit module copy.
- *
- * @param {unknown} value
- * @returns {value is { status: number; location: string }}
- */
-function isRedirectLike(value) {
+function isRedirectLike(value: unknown): value is RedirectLikeObject {
 	if (isRedirect(value)) {
 		return true;
 	}
@@ -144,12 +113,7 @@ function isRedirectLike(value) {
 	return isRedirectLikeObject(value);
 }
 
-/**
- * @param {Response} response
- * @param {string} location
- * @returns {Response}
- */
-function cloneRedirectResponse(response, location) {
+function cloneRedirectResponse(response: Response, location: string): Response {
 	const headers = new Headers(response.headers);
 	headers.set('location', location);
 	return new Response(response.body, {
@@ -159,17 +123,11 @@ function cloneRedirectResponse(response, location) {
 	});
 }
 
-/**
- * @param {Response} response
- * @param {string} expectedOrigin
- * @param {Iterable<string>} allowedRedirectOrigins
- * @returns {Response}
- */
 function normalizeSignOutResponse(
-	response,
-	expectedOrigin,
-	allowedRedirectOrigins
-) {
+	response: Response,
+	expectedOrigin: string,
+	allowedRedirectOrigins: Iterable<string>
+): Response {
 	if (!REDIRECT_RESPONSE_STATUSES.has(response.status)) {
 		return response;
 	}
@@ -193,24 +151,19 @@ function normalizeSignOutResponse(
 		: cloneRedirectResponse(response, safeLocation);
 }
 
-/**
- * @param {CreateSignOutPostHandlerOptions} options
- * @returns {(event: RequestEvent) => Promise<Response>}
- */
 export function createSignOutPostHandler({
 	signOut,
 	expectedOrigin,
 	allowedRedirectOrigins = [],
 	includeMessageInLogs = false,
 	logError = console.error
-}) {
+}: CreateSignOutPostHandlerOptions): (event: RequestEvent) => Promise<Response> {
 	const trustedOrigin = normalizeExpectedOrigin(expectedOrigin);
 	const trustedRedirectOrigins = Array.from(allowedRedirectOrigins, (origin) =>
 		normalizeExpectedOrigin(origin)
 	);
 
-	/** @param {RequestEvent} event */
-	return async (event) => {
+	return async (event: RequestEvent) => {
 		assertPostMethod(event);
 		assertSameOriginRequest(event, trustedOrigin);
 		try {
@@ -222,8 +175,7 @@ export function createSignOutPostHandler({
 		} catch (err) {
 			let normalizedError = err;
 			if (isRedirectLike(err)) {
-				const redirectError =
-					/** @type {{ status: number; location: string }} */ (normalizedError);
+				const redirectError: RedirectLikeObject = err;
 				const safeLocation = normalizeTrustedRedirectLocation(
 					redirectError.location,
 					trustedOrigin,

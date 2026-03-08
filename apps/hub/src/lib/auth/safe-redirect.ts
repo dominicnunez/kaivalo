@@ -1,13 +1,12 @@
 export const REDIRECT_RESPONSE_STATUSES = new Set([301, 302, 303, 307, 308]);
 const MAX_PERCENT_DECODING_PASSES = 4;
 
-/**
- * Decode nested percent-encoding for validation purposes.
- *
- * @param {string} value
- * @returns {string}
- */
-function decodePercentEscapes(value) {
+export type RedirectLikeObject = {
+	status: number;
+	location: string;
+};
+
+function decodePercentEscapes(value: string): string {
 	let decoded = value;
 	for (let index = 0; index < MAX_PERCENT_DECODING_PASSES; index += 1) {
 		let next;
@@ -27,11 +26,7 @@ function decodePercentEscapes(value) {
 	return decoded;
 }
 
-/**
- * @param {string} location
- * @returns {boolean}
- */
-function hasUnsafeRelativeRedirectPrefix(location) {
+function hasUnsafeRelativeRedirectPrefix(location: string): boolean {
 	const decodedLocation = decodePercentEscapes(location);
 	if (hasControlCharacters(decodedLocation)) {
 		return true;
@@ -45,11 +40,7 @@ function hasUnsafeRelativeRedirectPrefix(location) {
 	return postRootPrefix.startsWith('/') || postRootPrefix.startsWith('\\');
 }
 
-/**
- * @param {string} value
- * @returns {boolean}
- */
-function hasControlCharacters(value) {
+function hasControlCharacters(value: string): boolean {
 	for (let index = 0; index < value.length; index += 1) {
 		const codePoint = value.charCodeAt(index);
 		if (codePoint <= 0x1f || codePoint === 0x7f) {
@@ -60,11 +51,7 @@ function hasControlCharacters(value) {
 	return false;
 }
 
-/**
- * @param {string} value
- * @returns {string}
- */
-function normalizeTrustedOrigin(value) {
+function normalizeTrustedOrigin(value: string): string {
 	let parsed;
 	try {
 		parsed = new URL(value);
@@ -85,11 +72,7 @@ function normalizeTrustedOrigin(value) {
 	return parsed.origin;
 }
 
-/**
- * @param {unknown} value
- * @returns {value is { status: number; location: string }}
- */
-export function isRedirectLikeObject(value) {
+export function isRedirectLikeObject(value: unknown): value is RedirectLikeObject {
 	return Boolean(
 		value &&
 		typeof value === 'object' &&
@@ -100,26 +83,18 @@ export function isRedirectLikeObject(value) {
 	);
 }
 
-/**
- * @param {string} location
- * @param {string} requestOrigin
- * @returns {string | null}
- */
-export function normalizeSameOriginRedirectLocation(location, requestOrigin) {
+export function normalizeSameOriginRedirectLocation(
+	location: string,
+	requestOrigin: string
+): string | null {
 	return normalizeTrustedRedirectLocation(location, requestOrigin);
 }
 
-/**
- * @param {string} location
- * @param {string} requestOrigin
- * @param {Iterable<string>} [trustedOrigins]
- * @returns {string | null}
- */
 export function normalizeTrustedRedirectLocation(
-	location,
-	requestOrigin,
-	trustedOrigins = []
-) {
+	location: string,
+	requestOrigin: string,
+	trustedOrigins: Iterable<string> = []
+): string | null {
 	if (location.trim() !== location || location.length === 0) {
 		return null;
 	}

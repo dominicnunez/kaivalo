@@ -1,10 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { startHubServer } from '../apps/hub/src/lib/server/node-server.js';
+import { startHubServer } from '../apps/hub/src/lib/server/node-server.ts';
 import {
 	LOOPBACK_PROXY_TRUST_ERROR_MESSAGE,
 	PROXY_HSTS_CONFIGURATION_ERROR_MESSAGE
-} from '../apps/hub/src/lib/server/workos-security.js';
+} from '../apps/hub/src/lib/server/workos-security.ts';
 
 const baseEnv = {
 	NODE_ENV: 'test',

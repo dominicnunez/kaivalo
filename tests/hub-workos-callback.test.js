@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { createAuthCallbackGetHandler } from '../apps/hub/src/lib/auth/callback-handler.js';
+import { createAuthCallbackGetHandler } from '../apps/hub/src/lib/auth/callback-handler.ts';
 import {
 	AUTH_ERROR_INCIDENT_QUERY_NAME,
 	AUTH_ERROR_QUERY_NAME,
@@ -8,7 +8,7 @@ import {
 	AUTH_ERROR_SIGNATURE_QUERY_NAME,
 	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
 	readVerifiedAuthError
-} from '../apps/hub/src/lib/auth/auth-error-query.js';
+} from '../apps/hub/src/lib/auth/auth-error-query.ts';
 import { isHttpError, isRedirect } from '@sveltejs/kit';
 import { httpGet, startHubPreview } from './helpers/hub-preview.js';
 

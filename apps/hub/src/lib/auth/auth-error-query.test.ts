@@ -16,6 +16,8 @@ const cookiePassword = 'ab'.repeat(32);
 const incidentId = 'authcb_123e4567-e89b-12d3-a456-426614174000';
 const issuedAt = 1_710_000_000_000;
 
+type SearchParamsMutator = (searchParams: URLSearchParams) => void;
+
 function buildSearchParams(now = issuedAt) {
 	return new URLSearchParams(
 		buildAuthErrorRedirectQuery({
@@ -25,10 +27,6 @@ function buildSearchParams(now = issuedAt) {
 		})
 	);
 }
-
-/**
- * @typedef {(searchParams: URLSearchParams) => void} SearchParamsMutator
- */
 
 describe('readVerifiedAuthError', () => {
 	it('accepts a signed auth error at the ttl boundary', () => {
@@ -56,8 +54,7 @@ describe('readVerifiedAuthError', () => {
 		).toBeNull();
 	});
 
-	/** @type {Array<[string, SearchParamsMutator]>} */
-	const rejectionCases = [
+	const rejectionCases: Array<[string, SearchParamsMutator]> = [
 		[
 			'missing auth marker',
 			(searchParams) => searchParams.delete(AUTH_ERROR_QUERY_NAME)

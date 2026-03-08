@@ -1,10 +1,8 @@
 import { isIP } from 'node:net';
 
-/**
- * @param {string | undefined | null} value
- * @returns {string}
- */
-export function canonicalizeIpAddress(value) {
+export function canonicalizeIpAddress(
+	value: string | undefined | null
+): string {
 	let candidate = value?.trim().toLowerCase() ?? '';
 	if (!candidate) {
 		return '';
