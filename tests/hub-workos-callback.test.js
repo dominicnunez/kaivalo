@@ -115,6 +115,29 @@ describe('WorkOS Auth Callback Route', () => {
 			assert.strictEqual(logs[0][0], 'Auth callback failed');
 		});
 
+		it('rejects callback responses with encoded same-origin separator payloads', async () => {
+			const logs = [];
+			const handler = createAuthCallbackGetHandler({
+				handleCallback: () => async () =>
+					Response.redirect('https://kaivalo.test/%2F%2Fevil.test/phish', 303),
+				isRedirect,
+				isHttpError,
+				cookiePassword,
+				logError: (...args) => logs.push(args)
+			});
+
+			await assert.rejects(
+				() => handler(createEvent({ accept: 'application/json' })),
+				(caught) => {
+					assert.ok(isHttpError(caught));
+					assert.strictEqual(caught.status, 503);
+					return true;
+				}
+			);
+			assert.strictEqual(logs.length, 1);
+			assert.strictEqual(logs[0][0], 'Auth callback failed');
+		});
+
 		it('rethrows redirect responses from upstream handler', async () => {
 			const redirectErr = { kind: 'redirect' };
 			const handler = createAuthCallbackGetHandler({

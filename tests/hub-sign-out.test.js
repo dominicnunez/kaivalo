@@ -587,6 +587,37 @@ describe('sign-out handler unit behavior', () => {
 			'Sign-out produced an invalid redirect location'
 		);
 	});
+
+	it('rejects encoded same-origin separator payloads from signOut handlers', async () => {
+		const logs = [];
+		const postHandler = createSignOutPostHandler({
+			signOut: async () =>
+				Response.redirect('https://kaivalo.com/%2F%2Fevil.test/phish', 303),
+			expectedOrigin: 'https://kaivalo.com',
+			logError: (...args) => logs.push(args)
+		});
+
+		await assert.rejects(
+			() =>
+				postHandler({
+					request: new Request('https://kaivalo.test/auth/sign-out', {
+						method: 'POST',
+						headers: {
+							origin: 'https://kaivalo.com',
+							accept: 'application/json'
+						}
+					}),
+					url: new URL('https://kaivalo.test/auth/sign-out')
+				}),
+			(caught) => {
+				assert.ok(isHttpError(caught));
+				assert.strictEqual(caught.status, 503);
+				return true;
+			}
+		);
+		assert.strictEqual(logs.length, 1);
+		assert.strictEqual(logs[0][0], 'Sign-out failed');
+	});
 });
 
 describe('sign-out route integration behavior', () => {

@@ -13,6 +13,7 @@ import {
 
 describe('check-sveltekit-upstream', () => {
 	it('uses a bounded timeout when fetching registry metadata', async () => {
+		const controller = new AbortController();
 		const fetchMock = mock.fn(async () => {
 			return {
 				ok: true,
@@ -26,22 +27,72 @@ describe('check-sveltekit-upstream', () => {
 				}
 			};
 		});
+		const originalTimeout = AbortSignal.timeout;
+		AbortSignal.timeout = mock.fn(() => controller.signal);
 
-		const metadata = await readLatestMetadata({ fetchImpl: fetchMock });
+		try {
+			const metadata = await readLatestMetadata({ fetchImpl: fetchMock });
 
-		assert.deepStrictEqual(metadata, {
-			version: '2.53.4',
-			cookieRange: '^0.6.0'
-		});
-		assert.strictEqual(fetchMock.mock.calls.length, 1);
-		const [url, options] = fetchMock.mock.calls[0].arguments;
-		assert.match(String(url), /registry\.npmjs\.org/);
-		assert.strictEqual(options.headers.accept, 'application/json');
-		assert.ok(options.signal instanceof AbortSignal);
-		assert.ok(
-			AbortSignal.timeout(FETCH_TIMEOUT_MS).constructor ===
-				options.signal.constructor
-		);
+			assert.deepStrictEqual(metadata, {
+				version: '2.53.4',
+				cookieRange: '^0.6.0'
+			});
+			assert.strictEqual(fetchMock.mock.calls.length, 1);
+			assert.strictEqual(AbortSignal.timeout.mock.calls.length, 1);
+			assert.deepStrictEqual(AbortSignal.timeout.mock.calls[0].arguments, [
+				FETCH_TIMEOUT_MS
+			]);
+			const [url, options] = fetchMock.mock.calls[0].arguments;
+			assert.match(String(url), /registry\.npmjs\.org/);
+			assert.strictEqual(options.headers.accept, 'application/json');
+			assert.ok(options.signal instanceof AbortSignal);
+			assert.strictEqual(options.signal, controller.signal);
+			assert.strictEqual(options.signal.aborted, false);
+		} finally {
+			AbortSignal.timeout = originalTimeout;
+		}
+	});
+
+	it('fails with a timeout-specific message when the fetch is aborted by the timeout signal', async () => {
+		const controller = new AbortController();
+		const originalTimeout = AbortSignal.timeout;
+		AbortSignal.timeout = mock.fn(() => controller.signal);
+
+		try {
+			await assert.rejects(
+				() =>
+					readLatestMetadata({
+						fetchImpl: (_url, options) =>
+							new Promise((_, reject) => {
+								options.signal.addEventListener(
+									'abort',
+									() =>
+										reject(
+											new DOMException(
+												'The operation was aborted.',
+												'TimeoutError'
+											)
+										),
+									{ once: true }
+								);
+								controller.abort(
+									new DOMException('The operation was aborted.', 'TimeoutError')
+								);
+							})
+					}),
+				(error) => {
+					assert.match(
+						error.message,
+						new RegExp(
+							`Timed out fetching latest @sveltejs/kit metadata after ${FETCH_TIMEOUT_MS}ms`
+						)
+					);
+					return true;
+				}
+			);
+		} finally {
+			AbortSignal.timeout = originalTimeout;
+		}
 	});
 
 	it('turns aborts into an actionable timeout message', () => {
