@@ -179,6 +179,52 @@ describe('sign-out handler unit behavior', () => {
 		);
 	});
 
+	it('rejects malformed referer values when origin is absent', async () => {
+		const postHandler = createSignOutPostHandler({
+			signOut: async () => new Response(null, { status: 303 }),
+			expectedOrigin: 'https://kaivalo.com'
+		});
+
+		for (const referer of ['https://', 'not a url', 'https://exa mple.test']) {
+			await assert.rejects(
+				() =>
+					postHandler({
+						request: new Request('https://kaivalo.test/auth/sign-out', {
+							method: 'POST',
+							headers: { referer }
+						}),
+						url: new URL('https://kaivalo.test/auth/sign-out')
+					}),
+				(caught) => {
+					assert.strictEqual(caught.status, 403);
+					return true;
+				}
+			);
+		}
+	});
+
+	it('rejects opaque null referer values when origin is absent', async () => {
+		const postHandler = createSignOutPostHandler({
+			signOut: async () => new Response(null, { status: 303 }),
+			expectedOrigin: 'https://kaivalo.com'
+		});
+
+		await assert.rejects(
+			() =>
+				postHandler({
+					request: new Request('https://kaivalo.test/auth/sign-out', {
+						method: 'POST',
+						headers: { referer: 'null' }
+					}),
+					url: new URL('https://kaivalo.test/auth/sign-out')
+				}),
+			(caught) => {
+				assert.strictEqual(caught.status, 403);
+				return true;
+			}
+		);
+	});
+
 	it('rejects non-post requests even when origin is valid', async () => {
 		const postHandler = createSignOutPostHandler({
 			signOut: async () => new Response(null, { status: 303 }),
@@ -449,6 +495,26 @@ describe('sign-out route integration behavior', () => {
 			origin: 'null',
 			'sec-fetch-site': 'same-origin',
 			cookie: 'wos-session=test-fixture'
+		});
+
+		assert.strictEqual(response.statusCode, 403);
+	});
+
+	it('rejects route-level POST requests with malformed referer fallback values', async () => {
+		for (const referer of ['https://', 'not a url']) {
+			const response = await post(`${preview.baseUrl}/auth/sign-out`, {
+				referer,
+				'sec-fetch-site': 'same-origin'
+			});
+
+			assert.strictEqual(response.statusCode, 403);
+		}
+	});
+
+	it('rejects route-level POST requests with opaque null referer fallback values', async () => {
+		const response = await post(`${preview.baseUrl}/auth/sign-out`, {
+			referer: 'null',
+			'sec-fetch-site': 'same-origin'
 		});
 
 		assert.strictEqual(response.statusCode, 403);

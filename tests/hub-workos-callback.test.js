@@ -260,6 +260,89 @@ describe('WorkOS Auth Callback Route', () => {
 			assert.match(logs[0][1].incidentId, /^authcb_[0-9a-f-]+$/);
 		});
 
+		it('treats document navigation requests as browser redirects without relying on Accept', async () => {
+			const handler = createAuthCallbackGetHandler({
+				handleCallback: () => async () => {
+					throw new Error('upstream failure');
+				},
+				isRedirect: () => false,
+				isHttpError: () => false,
+				cookiePassword
+			});
+
+			await assert.rejects(
+				() =>
+					handler(
+						createEvent({
+							accept: 'application/json',
+							'sec-fetch-mode': 'navigate'
+						})
+					),
+				(caught) => {
+					assert.ok(isRedirect(caught));
+					assert.strictEqual(caught.status, 303);
+					return true;
+				}
+			);
+		});
+
+		it('treats document destinations as browser redirects without relying on Accept', async () => {
+			const handler = createAuthCallbackGetHandler({
+				handleCallback: () => async () => {
+					throw new Error('upstream failure');
+				},
+				isRedirect: () => false,
+				isHttpError: () => false,
+				cookiePassword
+			});
+
+			await assert.rejects(
+				() =>
+					handler(
+						createEvent({
+							accept: 'application/json',
+							'sec-fetch-dest': 'document'
+						})
+					),
+				(caught) => {
+					assert.ok(isRedirect(caught));
+					assert.strictEqual(caught.status, 303);
+					return true;
+				}
+			);
+		});
+
+		it('handles failures while creating the callback handler factory', async () => {
+			const logs = [];
+			const handler = createAuthCallbackGetHandler({
+				handleCallback: () => {
+					throw Object.assign(new Error('factory failed'), {
+						code: 'WORKOS_HANDLER_INIT_FAILED'
+					});
+				},
+				isRedirect: () => false,
+				isHttpError: () => false,
+				cookiePassword,
+				logError: (...args) => logs.push(args)
+			});
+
+			await assert.rejects(
+				() => handler(createEvent({ accept: 'application/json' })),
+				(caught) => {
+					assert.ok(isHttpError(caught));
+					assert.strictEqual(caught.status, 503);
+					return true;
+				}
+			);
+
+			assert.strictEqual(logs.length, 1);
+			assert.strictEqual(
+				logs[0][1].errorUpstreamCode,
+				'WORKOS_HANDLER_INIT_FAILED'
+			);
+			assert.match(logs[0][1].incidentId, /^authcb_[0-9a-f-]+$/);
+		});
+
 		it('normalizes untrusted request id values before logging', async () => {
 			const logs = [];
 			const handler = createAuthCallbackGetHandler({
