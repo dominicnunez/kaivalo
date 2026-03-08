@@ -468,7 +468,7 @@ describe('sign-out handler unit behavior', () => {
 		const postHandler = createSignOutPostHandler({
 			signOut: async () =>
 				Response.redirect(
-					'https://kaivalo.test/account?from=sign-out#done',
+					'https://kaivalo.com/account?from=sign-out#done',
 					302
 				),
 			expectedOrigin: 'https://kaivalo.com'
@@ -492,7 +492,7 @@ describe('sign-out handler unit behavior', () => {
 	it('normalizes same-origin redirect-like throws from signOut handlers', async () => {
 		const redirectLike = {
 			status: 302,
-			location: 'https://kaivalo.test/account?from=sign-out#done'
+			location: 'https://kaivalo.com/account?from=sign-out#done'
 		};
 		const postHandler = createSignOutPostHandler({
 			signOut: async () => {
@@ -519,7 +519,39 @@ describe('sign-out handler unit behavior', () => {
 		);
 	});
 
-	it('rejects external redirect-like responses from signOut handlers', async () => {
+	it('allows external WorkOS logout redirects from signOut handlers', async () => {
+		const redirectLike = {
+			status: 302,
+			location:
+				'https://api.workos.com/user_management/sessions/logout?session_id=session_123&return_to=https%3A%2F%2Fkaivalo.test'
+		};
+		const postHandler = createSignOutPostHandler({
+			signOut: async () => {
+				throw redirectLike;
+			},
+			expectedOrigin: 'https://kaivalo.com',
+			allowedRedirectOrigins: ['https://api.workos.com']
+		});
+
+		await assert.rejects(
+			() =>
+				postHandler({
+					request: new Request('https://attacker.test/auth/sign-out', {
+						method: 'POST',
+						headers: { origin: 'https://kaivalo.com' }
+					}),
+					url: new URL('https://attacker.test/auth/sign-out')
+				}),
+			(caught) => {
+				assert.ok(isRedirect(caught));
+				assert.strictEqual(caught.status, 302);
+				assert.strictEqual(caught.location, redirectLike.location);
+				return true;
+			}
+		);
+	});
+
+	it('rejects external redirect-like responses from untrusted origins', async () => {
 		const redirectLike = {
 			status: 302,
 			location: 'https://evil.test/phish'

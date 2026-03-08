@@ -4,7 +4,7 @@ import { getErrorLogContext } from '../server/error-diagnostics.js';
 import { normalizeRequestId } from './log-context.js';
 import {
 	isRedirectLikeObject,
-	normalizeSameOriginRedirectLocation,
+	normalizeTrustedRedirectLocation,
 	REDIRECT_RESPONSE_STATUSES
 } from './safe-redirect.js';
 
@@ -13,6 +13,7 @@ import {
  * @typedef {object} CreateSignOutPostHandlerOptions
  * @property {(event: RequestEvent) => Response | Promise<Response>} signOut
  * @property {string} expectedOrigin
+ * @property {Iterable<string>} [allowedRedirectOrigins]
  * @property {boolean} [includeMessageInLogs]
  * @property {(message: string, context: {
  * requestId: string
@@ -160,10 +161,15 @@ function cloneRedirectResponse(response, location) {
 
 /**
  * @param {Response} response
- * @param {RequestEvent} event
+ * @param {string} expectedOrigin
+ * @param {Iterable<string>} allowedRedirectOrigins
  * @returns {Response}
  */
-function normalizeSignOutResponse(response, event) {
+function normalizeSignOutResponse(
+	response,
+	expectedOrigin,
+	allowedRedirectOrigins
+) {
 	if (!REDIRECT_RESPONSE_STATUSES.has(response.status)) {
 		return response;
 	}
@@ -173,9 +179,10 @@ function normalizeSignOutResponse(response, event) {
 		return response;
 	}
 
-	const safeLocation = normalizeSameOriginRedirectLocation(
+	const safeLocation = normalizeTrustedRedirectLocation(
 		location,
-		event.url.origin
+		expectedOrigin,
+		allowedRedirectOrigins
 	);
 	if (!safeLocation) {
 		throw new Error('Sign-out produced an invalid redirect location');
@@ -193,25 +200,34 @@ function normalizeSignOutResponse(response, event) {
 export function createSignOutPostHandler({
 	signOut,
 	expectedOrigin,
+	allowedRedirectOrigins = [],
 	includeMessageInLogs = false,
 	logError = console.error
 }) {
 	const trustedOrigin = normalizeExpectedOrigin(expectedOrigin);
+	const trustedRedirectOrigins = Array.from(allowedRedirectOrigins, (origin) =>
+		normalizeExpectedOrigin(origin)
+	);
 
 	/** @param {RequestEvent} event */
 	return async (event) => {
 		assertPostMethod(event);
 		assertSameOriginRequest(event, trustedOrigin);
 		try {
-			return normalizeSignOutResponse(await signOut(event), event);
+			return normalizeSignOutResponse(
+				await signOut(event),
+				trustedOrigin,
+				trustedRedirectOrigins
+			);
 		} catch (err) {
 			let normalizedError = err;
 			if (isRedirectLike(err)) {
 				const redirectError =
 					/** @type {{ status: number; location: string }} */ (normalizedError);
-				const safeLocation = normalizeSameOriginRedirectLocation(
+				const safeLocation = normalizeTrustedRedirectLocation(
 					redirectError.location,
-					event.url.origin
+					trustedOrigin,
+					trustedRedirectOrigins
 				);
 				if (safeLocation) {
 					if (

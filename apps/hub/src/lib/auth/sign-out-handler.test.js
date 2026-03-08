@@ -13,7 +13,37 @@ function createEvent({
 }
 
 describe('createSignOutPostHandler', () => {
-	it('rejects external redirect-like failures with a sanitized 503', async () => {
+	it('allows redirect-like failures to the configured WorkOS logout origin', async () => {
+		const handler = createSignOutPostHandler({
+			expectedOrigin: 'https://kaivalo.test',
+			allowedRedirectOrigins: ['https://api.workos.com'],
+			signOut: async () => {
+				throw {
+					status: 302,
+					location:
+						'https://api.workos.com/user_management/sessions/logout?session_id=session_123&return_to=https%3A%2F%2Fkaivalo.test'
+				};
+			}
+		});
+
+		await expect(
+			handler(
+				/** @type {never} */ (
+					createEvent({
+						headers: {
+							origin: 'https://kaivalo.test'
+						}
+					})
+				)
+			)
+		).rejects.toMatchObject({
+			status: 302,
+			location:
+				'https://api.workos.com/user_management/sessions/logout?session_id=session_123&return_to=https%3A%2F%2Fkaivalo.test'
+		});
+	});
+
+	it('rejects redirect-like failures to untrusted external origins with a sanitized 503', async () => {
 		const logError = vi.fn();
 		const handler = createSignOutPostHandler({
 			expectedOrigin: 'https://kaivalo.test',
