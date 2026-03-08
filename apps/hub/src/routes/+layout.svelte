@@ -2,7 +2,7 @@
 	import '../app.css';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { clearAuthErrorQuery } from '$lib/auth/auth-error-query.js';
+	import { clearAuthErrorQuery } from '$lib/auth/auth-error-query-shared.js';
 	import type { Snippet } from 'svelte';
 	import type { LayoutData } from './$types';
 

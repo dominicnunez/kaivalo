@@ -1,19 +1,22 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-
-export const AUTH_ERROR_QUERY_NAME = 'error';
-export const AUTH_ERROR_QUERY_VALUE = 'auth';
-export const AUTH_ERROR_INCIDENT_QUERY_NAME = 'incident';
-export const AUTH_ERROR_TIMESTAMP_QUERY_NAME = 'ts';
-export const AUTH_ERROR_SIGNATURE_QUERY_NAME = 'sig';
-export const AUTH_ERROR_QUERY_TTL_MS = 5 * 60 * 1000;
-export const AUTH_ERROR_MESSAGE =
-	'Sign-in is temporarily unavailable. Please try again shortly.';
-const AUTH_ERROR_QUERY_PARAM_NAMES = [
-	AUTH_ERROR_QUERY_NAME,
+export {
 	AUTH_ERROR_INCIDENT_QUERY_NAME,
+	AUTH_ERROR_MESSAGE,
+	AUTH_ERROR_QUERY_NAME,
+	AUTH_ERROR_QUERY_VALUE,
+	AUTH_ERROR_SIGNATURE_QUERY_NAME,
 	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
-	AUTH_ERROR_SIGNATURE_QUERY_NAME
-];
+	clearAuthErrorQuery
+} from './auth-error-query-shared.js';
+import {
+	AUTH_ERROR_INCIDENT_QUERY_NAME,
+	AUTH_ERROR_MESSAGE,
+	AUTH_ERROR_QUERY_NAME,
+	AUTH_ERROR_QUERY_VALUE,
+	AUTH_ERROR_SIGNATURE_QUERY_NAME,
+	AUTH_ERROR_TIMESTAMP_QUERY_NAME
+} from './auth-error-query-shared.js';
+export const AUTH_ERROR_QUERY_TTL_MS = 5 * 60 * 1000;
 
 const CALLBACK_INCIDENT_ID_PATTERN =
 	/^authcb_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -79,16 +82,6 @@ export function buildAuthErrorRedirectQuery({
 		signAuthErrorIncident(incidentId, timestamp, secret)
 	);
 	return params.toString();
-}
-
-/**
- * @param {URLSearchParams} searchParams
- * @returns {void}
- */
-export function clearAuthErrorQuery(searchParams) {
-	for (const queryName of AUTH_ERROR_QUERY_PARAM_NAMES) {
-		searchParams.delete(queryName);
-	}
 }
 
 /**
