@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { JSDOM } from 'jsdom';
 import { startHubPreview, httpGet } from './helpers/hub-preview.js';
 
-describe('ui package runtime behavior', () => {
+describe('ui package SSR markup', () => {
 	let preview;
 	let homepage;
 	let dom;
