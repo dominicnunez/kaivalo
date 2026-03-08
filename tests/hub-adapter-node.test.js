@@ -17,6 +17,8 @@ const PROCESS_EXIT_TIMEOUT_MS = 5000;
 const MAX_STARTUP_OUTPUT_LINES = 120;
 const STARTUP_READY_PATTERN = /\bListening on\b/;
 const STARTUP_PROBE_TIMEOUT_MS = 500;
+const STARTUP_HEALTH_PATH = '/healthz';
+const STARTUP_HEALTH_RESPONSE = 'ok';
 
 function delay(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -182,10 +184,17 @@ function httpGetWithAgent(url, agent) {
 
 function probeServerReady(url) {
 	return new Promise((resolve) => {
-		const req = http.get(url, (res) => {
-			res.resume();
+		const req = http.get(new URL(STARTUP_HEALTH_PATH, url), (res) => {
+			const chunks = [];
+			res.on('data', (chunk) =>
+				chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+			);
 			res.once('end', () => {
-				resolve((res.statusCode ?? 0) > 0);
+				resolve(
+					res.statusCode === 200 &&
+						Buffer.concat(chunks).toString('utf8').trim() ===
+							STARTUP_HEALTH_RESPONSE
+				);
 			});
 		});
 		req.on('error', () => resolve(false));
@@ -195,6 +204,56 @@ function probeServerReady(url) {
 		});
 	});
 }
+
+describe('hub production readiness probe', () => {
+	it('accepts a healthy 200 healthz response', async () => {
+		const server = http.createServer((request, response) => {
+			if (request.url === STARTUP_HEALTH_PATH) {
+				response.writeHead(200, { 'content-type': 'text/plain' });
+				response.end(STARTUP_HEALTH_RESPONSE);
+				return;
+			}
+
+			response.writeHead(404);
+			response.end('not found');
+		});
+		await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+		const address = server.address();
+		const baseUrl = `http://127.0.0.1:${address.port}`;
+
+		try {
+			assert.strictEqual(await probeServerReady(baseUrl), true);
+		} finally {
+			await new Promise((resolve, reject) =>
+				server.close((error) => (error ? reject(error) : resolve()))
+			);
+		}
+	});
+
+	it('rejects non-200 startup responses', async () => {
+		const server = http.createServer((request, response) => {
+			if (request.url === STARTUP_HEALTH_PATH) {
+				response.writeHead(500, { 'content-type': 'text/plain' });
+				response.end('Internal Server Error');
+				return;
+			}
+
+			response.writeHead(404);
+			response.end('not found');
+		});
+		await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+		const address = server.address();
+		const baseUrl = `http://127.0.0.1:${address.port}`;
+
+		try {
+			assert.strictEqual(await probeServerReady(baseUrl), false);
+		} finally {
+			await new Promise((resolve, reject) =>
+				server.close((error) => (error ? reject(error) : resolve()))
+			);
+		}
+	});
+});
 
 describe('hub production adapter runtime', () => {
 	before({ timeout: 60000 }, () => {
