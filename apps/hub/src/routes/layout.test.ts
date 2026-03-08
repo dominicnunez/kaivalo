@@ -316,6 +316,20 @@ describe('layout server load', () => {
 		});
 	});
 
+	it('normalizes trusted app-origin sign-in urls even when the request host is poisoned', async () => {
+		mockedAuthKit.getUser.mockResolvedValue(null as never);
+		mockedAuthKit.getSignInUrl.mockResolvedValue(
+			'https://kaivalo.test/user_management/authorize?screen_hint=sign-up#top' as never
+		);
+
+		const result = await load(createEvent('https://attacker.test/'));
+		expect(result).toEqual({
+			user: null,
+			signInUrl: '/user_management/authorize?screen_hint=sign-up#top',
+			authError: null
+		});
+	});
+
 	it('accepts safe relative sign-in URLs', async () => {
 		mockedAuthKit.getUser.mockResolvedValue(null as never);
 		mockedAuthKit.getSignInUrl.mockResolvedValue(

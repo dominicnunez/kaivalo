@@ -12,8 +12,10 @@ import {
 	AUTH_ERROR_MESSAGE,
 	readVerifiedAuthError
 } from '$lib/auth/auth-error-query.js';
+import { normalizeTrustedRedirectLocation } from '$lib/auth/safe-redirect.js';
 import { isTrustedAvatarHost } from '$lib/server/trusted-hosts.js';
 import { getAuthUser } from '$lib/server/authkit-runtime.js';
+import { getTrustedAuthOriginSet } from '$lib/server/auth-origin-policy.js';
 
 const TRUSTED_SIGN_IN_PATH_PREFIXES = [
 	'/auth/sign-in',
@@ -37,10 +39,7 @@ function getTrustedSignInOriginSet(): Set<string> {
 			return trustedSignInOriginSetCache;
 		}
 
-		const trustedOrigins = new Set<string>();
-		trustedOrigins.add(`https://${workosEnv.apiHostname}`);
-		trustedOrigins.add(workosEnv.origin);
-		trustedOrigins.add(new URL(workosEnv.redirectUri).origin);
+		const trustedOrigins = getTrustedAuthOriginSet(workosEnv);
 		trustedSignInOriginSetCache = trustedOrigins;
 		trustedSignInOriginCacheKey = cacheKey;
 		return trustedOrigins;
@@ -77,46 +76,25 @@ function sanitizeAvatarUrl(
 
 function sanitizeSignInUrl(
 	candidate: string | null | undefined,
-	eventOrigin: string,
+	appOrigin: string,
 	trustedOrigins: Set<string>
 ): string | null {
 	if (!candidate) {
 		return null;
 	}
 
-	if (candidate.startsWith('/')) {
-		if (candidate.startsWith('//')) {
-			return null;
-		}
-
-		const parsedRelativeUrl = new URL(candidate, eventOrigin);
-		return isTrustedSignInPath(parsedRelativeUrl.pathname)
-			? parsedRelativeUrl.pathname +
-					parsedRelativeUrl.search +
-					parsedRelativeUrl.hash
-			: null;
-	}
-
 	try {
-		const parsed = new URL(candidate);
-		if (parsed.protocol !== 'https:' || parsed.username || parsed.password) {
+		const normalizedLocation = normalizeTrustedRedirectLocation(
+			candidate,
+			appOrigin,
+			trustedOrigins
+		);
+		if (!normalizedLocation) {
 			return null;
 		}
 
-		if (!trustedOrigins.has(parsed.origin)) {
-			return null;
-		}
-
-		if (!isTrustedSignInPath(parsed.pathname)) {
-			return null;
-		}
-
-		const eventOriginUrl = new URL(eventOrigin);
-		if (parsed.origin === eventOriginUrl.origin) {
-			return parsed.pathname + parsed.search + parsed.hash;
-		}
-
-		return parsed.toString();
+		const parsed = new URL(normalizedLocation, appOrigin);
+		return isTrustedSignInPath(parsed.pathname) ? normalizedLocation : null;
 	} catch {
 		return null;
 	}
@@ -147,10 +125,11 @@ export const load: LayoutServerLoad = async (event) => {
 		const user = await getAuthUser(event);
 		let signInUrl = null;
 		if (!user) {
+			const workosEnv = getValidatedWorkosEnv(env);
 			const trustedSignInOrigins = getTrustedSignInOriginSet();
 			signInUrl = sanitizeSignInUrl(
 				await authKit.getSignInUrl(),
-				event.url.origin,
+				workosEnv.origin,
 				trustedSignInOrigins
 			);
 		}
