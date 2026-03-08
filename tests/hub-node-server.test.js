@@ -76,6 +76,53 @@ function httpGet(port, headers = {}, path = '/favicon.svg') {
 }
 
 /**
+ * @param {number} port
+ * @param {Record<string, string>} [headers]
+ * @param {string} [path]
+ */
+function httpGetWithAbortObservation(
+	port,
+	headers = {},
+	path = '/favicon.svg'
+) {
+	return new Promise((resolve, reject) => {
+		const req = http.get(
+			{
+				hostname: '127.0.0.1',
+				port,
+				path,
+				headers
+			},
+			(res) => {
+				const chunks = [];
+				let settled = false;
+				const complete = (aborted) => {
+					if (settled) {
+						return;
+					}
+					settled = true;
+					resolve({
+						statusCode: res.statusCode ?? 0,
+						body: Buffer.concat(chunks).toString('utf8'),
+						headers: res.headers,
+						aborted
+					});
+				};
+
+				res.on('data', (chunk) =>
+					chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+				);
+				res.on('end', () => complete(false));
+				res.on('aborted', () => complete(true));
+				res.on('close', () => complete(res.complete !== true));
+			}
+		);
+		req.on('error', reject);
+		req.setTimeout(5000, () => req.destroy(new Error('request timeout')));
+	});
+}
+
+/**
  * @param {http.Server} server
  * @returns {Promise<void>}
  */
@@ -276,7 +323,7 @@ describe('node server proxy trust handling', () => {
 		assert.deepStrictEqual(errors, ['Request handler failed']);
 	});
 
-	it('terminates partially-written responses without rewriting committed headers', async () => {
+	it('aborts partially-written responses without appending an error body', async () => {
 		const errors = [];
 		const logger = {
 			log: () => {},
@@ -298,14 +345,19 @@ describe('node server proxy trust handling', () => {
 		servers.push(server);
 
 		const port = await listenOnEphemeralPort(server);
-		const response = await httpGet(port, {}, '/partial-response');
+		const response = await httpGetWithAbortObservation(
+			port,
+			{},
+			'/partial-response'
+		);
 
 		assert.strictEqual(
 			response.statusCode,
 			200,
 			'committed status code should remain intact after a late failure'
 		);
-		assert.strictEqual(response.body, 'partial Internal Server Error');
+		assert.strictEqual(response.aborted, true);
+		assert.strictEqual(response.body, 'partial ');
 		assert.strictEqual(
 			response.headers['content-type'],
 			'text/plain; charset=utf-8'

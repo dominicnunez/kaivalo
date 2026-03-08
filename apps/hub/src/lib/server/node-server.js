@@ -407,7 +407,41 @@ export function createHubServer(options) {
 			return undefined;
 		};
 
-		/** @param {{ headerSource?: http.OutgoingHttpHeaders | http.OutgoingHttpHeader[] | null | undefined }} [options] */
+		/**
+		 * @param {readonly unknown[]} args
+		 * @returns {{
+		 *   statusCode: number | undefined;
+		 *   headerSource: http.OutgoingHttpHeaders | http.OutgoingHttpHeader[] | undefined;
+		 * }}
+		 */
+		const getWriteHeadOptions = (args) => {
+			const statusCode = typeof args[0] === 'number' ? args[0] : undefined;
+			const secondArgument = args[1];
+			const thirdArgument = args[2];
+			const headerSource =
+				args.length === 2 &&
+				secondArgument !== undefined &&
+				typeof secondArgument !== 'string'
+					? /** @type {http.OutgoingHttpHeaders | http.OutgoingHttpHeader[]} */ (
+							secondArgument
+						)
+					: args.length >= 3 && thirdArgument !== undefined
+						? /** @type {http.OutgoingHttpHeaders | http.OutgoingHttpHeader[]} */ (
+								thirdArgument
+							)
+						: undefined;
+			return {
+				statusCode,
+				headerSource
+			};
+		};
+
+		/**
+		 * @param {{
+		 *   headerSource?: http.OutgoingHttpHeaders | http.OutgoingHttpHeader[] | null | undefined;
+		 *   statusCode?: number | undefined;
+		 * }} [options]
+		 */
 		const applyResponseSecurityHeaders = (options = {}) => {
 			if (responseHeadersApplied || res.headersSent) {
 				return;
@@ -416,6 +450,7 @@ export function createHubServer(options) {
 			applyBaselineSecurityHeaders(res, secureRequest.isSecure);
 			if (isStaticAssetRequest) {
 				const headerSource = options.headerSource;
+				const responseStatusCode = options.statusCode ?? res.statusCode;
 				const contentTypeHeader =
 					getHeaderFromSource(headerSource, 'content-type') ??
 					res.getHeader('Content-Type');
@@ -434,7 +469,7 @@ export function createHubServer(options) {
 					res.hasHeader('Cache-Control');
 				const staticCacheControl = getStaticAssetCacheControlForResponse({
 					pathname,
-					statusCode: res.statusCode,
+					statusCode: responseStatusCode,
 					contentType,
 					hasSetCookie
 				});
@@ -463,15 +498,7 @@ export function createHubServer(options) {
 			/** @type {typeof res.writeHead} */
 			(
 				(...args) => {
-					const trailingArgument = args.at(-1);
-					applyResponseSecurityHeaders({
-						headerSource:
-							/** @type {http.OutgoingHttpHeaders | http.OutgoingHttpHeader[] | undefined} */ (
-								args.length > 1 && typeof trailingArgument !== 'string'
-									? trailingArgument
-									: undefined
-							)
-					});
+					applyResponseSecurityHeaders(getWriteHeadOptions(args));
 					return Reflect.apply(originalWriteHead, res, args);
 				}
 			);
@@ -533,9 +560,15 @@ export function createHubServer(options) {
 				res.setHeader('Content-Type', 'text/plain; charset=utf-8');
 				applyBaselineSecurityHeaders(res, secureRequest.isSecure);
 				res.setHeader('Cache-Control', PRIVATE_NO_STORE_CACHE_CONTROL);
-			}
-			if (!res.writableEnded) {
-				res.end('Internal Server Error');
+				if (!res.writableEnded) {
+					res.end('Internal Server Error');
+				}
+			} else if (!res.writableEnded && !res.destroyed) {
+				res.destroy(
+					error instanceof Error
+						? error
+						: new Error('Request handler failed after response started')
+				);
 			}
 			logger.error(
 				'Request handler failed',
