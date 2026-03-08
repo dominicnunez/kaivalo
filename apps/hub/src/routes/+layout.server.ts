@@ -128,16 +128,6 @@ function isTrustedSignInPath(pathname: string): boolean {
 	);
 }
 
-function shouldForceAuthFailure(
-	event: Parameters<LayoutServerLoad>[0]
-): boolean {
-	return (
-		env.NODE_ENV === 'test' &&
-		env.KAIVALO_ENABLE_TEST_AUTH_FAILURE === '1' &&
-		event.request.headers.get('x-kaivalo-test-auth-failure') === '1'
-	);
-}
-
 function markAuthFailureNoStore(event: Parameters<LayoutServerLoad>[0]): void {
 	if (typeof event.setHeaders !== 'function') {
 		return;
@@ -151,10 +141,6 @@ function markAuthFailureNoStore(event: Parameters<LayoutServerLoad>[0]): void {
 
 export const load: LayoutServerLoad = async (event) => {
 	try {
-		if (shouldForceAuthFailure(event)) {
-			throw new Error('Forced auth failure for integration test');
-		}
-
 		const authErrorFromQuery = readVerifiedAuthError(event.url.searchParams, {
 			secret: env.WORKOS_COOKIE_PASSWORD ?? ''
 		});

@@ -24,10 +24,7 @@ vi.mock('@workos/authkit-sveltekit', () => ({
 }));
 
 vi.mock('$env/dynamic/private', () => ({
-	env: {
-		NODE_ENV: 'test',
-		KAIVALO_ENABLE_TEST_AUTH_FAILURE: '0'
-	}
+	env: {}
 }));
 
 function createEvent(origin: string) {

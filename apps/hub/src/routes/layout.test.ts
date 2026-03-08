@@ -3,8 +3,6 @@ import { buildAuthErrorRedirectQuery } from '$lib/auth/auth-error-query.js';
 
 const { mockEnv } = vi.hoisted(() => ({
 	mockEnv: {
-		NODE_ENV: 'test',
-		KAIVALO_ENABLE_TEST_AUTH_FAILURE: '0',
 		WORKOS_CLIENT_ID: 'client_123',
 		WORKOS_API_KEY: 'sk_test_123',
 		WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback',
@@ -40,8 +38,6 @@ const baseEvent = createEvent('https://kaivalo.test/');
 describe('layout server load', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockEnv.NODE_ENV = 'test';
-		mockEnv.KAIVALO_ENABLE_TEST_AUTH_FAILURE = '0';
 		delete mockEnv.WORKOS_API_HOSTNAME;
 	});
 
@@ -400,55 +396,6 @@ describe('layout server load', () => {
 				errorName: 'Error',
 				pathname: '/',
 				requestId: 'bad_value___trace'
-			})
-		);
-		errorSpy.mockRestore();
-	});
-
-	it('ignores forced auth-failure header when test toggle is disabled', async () => {
-		mockedAuthKit.getUser.mockResolvedValue(null as never);
-		mockedAuthKit.getSignInUrl.mockResolvedValue('/auth/sign-in' as never);
-
-		const result = await load(
-			createEvent('https://kaivalo.test/', {
-				'x-kaivalo-test-auth-failure': '1'
-			})
-		);
-
-		expect(result).toEqual({
-			user: null,
-			signInUrl: '/auth/sign-in',
-			authError: null
-		});
-	});
-
-	it('forces auth-unavailable state only when header and test toggle are both enabled', async () => {
-		const errorSpy = vi
-			.spyOn(console, 'error')
-			.mockImplementation(() => undefined);
-		mockEnv.KAIVALO_ENABLE_TEST_AUTH_FAILURE = '1';
-
-		const result = await load(
-			createEvent('https://kaivalo.test/', {
-				'x-kaivalo-test-auth-failure': '1'
-			})
-		);
-
-		expect(mockedAuthKit.getUser).not.toHaveBeenCalled();
-		expect(result).toEqual({
-			user: null,
-			signInUrl: null,
-			authError: {
-				message:
-					'Sign-in is temporarily unavailable. Please try again shortly.',
-				incidentId: expect.stringMatching(/^authlayout_/)
-			}
-		});
-		expect(errorSpy).toHaveBeenCalledWith(
-			'Auth layout load failed',
-			expect.objectContaining({
-				errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
-				errorName: 'Error'
 			})
 		);
 		errorSpy.mockRestore();

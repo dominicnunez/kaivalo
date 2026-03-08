@@ -148,4 +148,23 @@ describe('home page content', () => {
 		).toBeTruthy();
 		expect(within(controls as HTMLElement).getByText('K')).toBeTruthy();
 	});
+
+	it('renders a disabled fallback control when sign-in is unavailable', () => {
+		renderPage({
+			signInUrl: null,
+			authError: {
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
+				incidentId: 'authlayout_123'
+			}
+		});
+
+		const button = screen.getByRole('button', {
+			name: /sign in unavailable/i
+		});
+		expect(button.getAttribute('disabled')).toBe('');
+		expect(button.getAttribute('title')).toBe(
+			'Sign-in is temporarily unavailable'
+		);
+	});
 });
