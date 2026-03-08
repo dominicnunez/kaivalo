@@ -55,6 +55,7 @@ function getFatalErrorDiagnostics(error, env) {
  *     reason: 'startup-error' | 'shutdown-timeout';
  *     host?: string;
  *     port?: number;
+ *     configuredPort?: string;
  *     activeRequests?: number;
  *     shutdownTimeoutMs?: number;
  *     error?: ReturnType<typeof getErrorDiagnostics>;
@@ -67,6 +68,7 @@ function getFatalErrorDiagnostics(error, env) {
  *   reason: 'startup-error' | 'shutdown-timeout';
  *   host?: string;
  *   port?: number;
+ *   configuredPort?: string;
  *   activeRequests?: number;
  *   shutdownTimeoutMs?: number;
  *   error?: ReturnType<typeof getErrorDiagnostics>;
@@ -250,6 +252,7 @@ export function buildRequestFailureLog(req, error, env) {
  *     reason: 'startup-error' | 'shutdown-timeout';
  *     host?: string;
  *     port?: number;
+ *     configuredPort?: string;
  *     activeRequests?: number;
  *     shutdownTimeoutMs?: number;
  *     error?: ReturnType<typeof getErrorDiagnostics>;
@@ -626,13 +629,18 @@ export function createHubServer(options) {
 export function startHubServer(options) {
 	const env = options.env ?? process.env;
 	const host = env.HOST || DEFAULT_HOST;
+	const configuredPort =
+		env.PORT === undefined || env.PORT.trim() === ''
+			? undefined
+			: env.PORT.trim();
 	const logger = options.logger ?? console;
 	const notifyFatal = createFatalNotifier({
 		onFatal: options.onFatal,
 		logger,
 		env
 	});
-	let port = DEFAULT_PORT;
+	/** @type {number | undefined} */
+	let port;
 	/** @type {http.Server | null} */
 	let server = null;
 	/** @type {() => Promise<number>} */
@@ -658,16 +666,22 @@ export function startHubServer(options) {
 	const handleStartupError = (error) => {
 		cleanupProcessListeners();
 		const diagnostics = getFatalErrorDiagnostics(error, env);
+		const portDetails =
+			port === undefined
+				? configuredPort === undefined
+					? {}
+					: { configuredPort }
+				: { port };
 		logger.error('Failed to start hub server', {
 			host,
-			port,
+			...portDetails,
 			error: diagnostics
 		});
 		notifyFatal({
 			exitCode: 1,
 			reason: 'startup-error',
 			host,
-			port,
+			...portDetails,
 			error: diagnostics
 		});
 	};
@@ -686,7 +700,15 @@ export function startHubServer(options) {
 			resolve(null);
 			return;
 		}
+		if (port === undefined) {
+			handleStartupError(
+				new Error('PORT must be parsed before server startup')
+			);
+			resolve(null);
+			return;
+		}
 		const startedServer = server;
+		const listeningPort = port;
 
 		handleSigInt = () => {
 			void beginShutdown();
@@ -701,7 +723,7 @@ export function startHubServer(options) {
 
 		const handleListening = () => {
 			startedServer.off('error', handleListenError);
-			logger.log(getListeningLogMessage(env, host, port));
+			logger.log(getListeningLogMessage(env, host, listeningPort));
 			resolve(startedServer);
 		};
 
@@ -718,7 +740,7 @@ export function startHubServer(options) {
 		startedServer.once('listening', handleListening);
 
 		try {
-			startedServer.listen(port, host);
+			startedServer.listen(listeningPort, host);
 		} catch (error) {
 			handleListenError(error);
 		}
