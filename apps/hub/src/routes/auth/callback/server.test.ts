@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
+import { error, redirect } from '@sveltejs/kit';
 
 const {
 	mockEnv,
-	mockHandleCallback,
 	mockShouldIncludeErrorMessage,
-	mockAuthKit
+	mockHandleCallback,
+	mockGetHandler,
+	mockCreateAuthCallbackGetHandler
 } = vi.hoisted(() => ({
 	mockEnv: {
 		WORKOS_CLIENT_ID: 'client_123',
@@ -13,11 +15,10 @@ const {
 		WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
 		ORIGIN: 'https://kaivalo.test'
 	} as Record<string, string>,
+	mockShouldIncludeErrorMessage: vi.fn(() => true),
 	mockHandleCallback: vi.fn(),
-	mockShouldIncludeErrorMessage: vi.fn(() => false),
-	mockAuthKit: {
-		handleCallback: vi.fn()
-	}
+	mockGetHandler: vi.fn(),
+	mockCreateAuthCallbackGetHandler: vi.fn()
 }));
 
 vi.mock('$env/dynamic/private', () => ({
@@ -25,26 +26,35 @@ vi.mock('$env/dynamic/private', () => ({
 }));
 
 vi.mock('@workos/authkit-sveltekit', () => ({
-	authKit: mockAuthKit
+	authKit: {
+		handleCallback: mockHandleCallback
+	}
 }));
 
-vi.mock('$lib/server/error-diagnostics.js', async (importOriginal) => {
-	const actual = (await importOriginal()) as Record<string, unknown>;
-	return {
-		...actual,
-		shouldIncludeErrorMessage: mockShouldIncludeErrorMessage
-	};
-});
+vi.mock('$lib/server/error-diagnostics.js', () => ({
+	shouldIncludeErrorMessage: mockShouldIncludeErrorMessage
+}));
+
+vi.mock('$lib/auth/callback-handler.js', () => ({
+	createAuthCallbackGetHandler: mockCreateAuthCallbackGetHandler
+}));
+
+function captureThrown(factory: () => unknown) {
+	try {
+		factory();
+		throw new Error('expected factory to throw');
+	} catch (thrown) {
+		return thrown;
+	}
+}
 
 describe('auth callback route', () => {
-	it('uses the AuthKit callback handler response', async () => {
+	it('configures the callback handler from env and delegates GET requests', async () => {
 		vi.resetModules();
-		const upstreamResponse = Response.redirect(
-			'https://kaivalo.test/account?from=auth',
-			302
-		);
-		mockHandleCallback.mockResolvedValueOnce(upstreamResponse);
-		mockAuthKit.handleCallback.mockReturnValueOnce(mockHandleCallback);
+		mockCreateAuthCallbackGetHandler.mockReturnValueOnce(mockGetHandler);
+		mockGetHandler.mockResolvedValueOnce(new Response(null, { status: 204 }));
+		const upstreamHandler = vi.fn();
+		mockHandleCallback.mockReturnValueOnce(upstreamHandler);
 
 		const { GET } = await import('./+server');
 		const event = {
@@ -54,9 +64,19 @@ describe('auth callback route', () => {
 
 		const response = await GET(event);
 
-		expect(mockAuthKit.handleCallback).toHaveBeenCalledOnce();
-		expect(mockHandleCallback).toHaveBeenCalledWith(event);
-		expect(response.status).toBe(302);
-		expect(response.headers.get('location')).toBe('/account?from=auth');
+		expect(response.status).toBe(204);
+		expect(mockCreateAuthCallbackGetHandler).toHaveBeenCalledOnce();
+		const options = mockCreateAuthCallbackGetHandler.mock.calls[0][0];
+		expect(options.cookiePassword).toBe(mockEnv.WORKOS_COOKIE_PASSWORD);
+		expect(options.includeMessageInLogs).toBe(true);
+		expect(options.handleCallback()).toBe(upstreamHandler);
+		expect(
+			options.isRedirect(captureThrown(() => redirect(303, '/done')))
+		).toBe(true);
+		expect(
+			options.isHttpError(captureThrown(() => error(400, 'bad request')))
+		).toBe(true);
+		expect(mockShouldIncludeErrorMessage).toHaveBeenCalledWith(mockEnv);
+		expect(mockGetHandler).toHaveBeenCalledWith(event);
 	});
 });
