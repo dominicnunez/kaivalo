@@ -46,10 +46,10 @@ function assertNotIgnored(path) {
 
 describe('git ignore behavior', () => {
 	it('ignores local build and environment artifact paths', () => {
-		assertIgnored('node_modules/foo');
+		assertIgnored('packages/ui/node_modules/foo');
 		assertIgnored('.env');
-		assertIgnored('build/output.txt');
-		assertIgnored('.svelte-kit/generated');
+		assertIgnored('apps/hub/build/server-output.js');
+		assertIgnored('apps/hub/.svelte-kit/generated/server/internal.js');
 	});
 
 	it('keeps committed templates trackable', () => {

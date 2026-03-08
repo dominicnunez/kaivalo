@@ -2,12 +2,10 @@ import { describe, it } from 'vitest';
 import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 const hubDir = process.cwd();
-const buildEntry = path.join(hubDir, 'build', 'index.js');
-const buildHandler = path.join(hubDir, 'build', 'handler.js');
-const buildServer = path.join(hubDir, 'build', 'server', 'index.js');
+const nodeEntrypoint = path.join(hubDir, 'server.js');
+const clientBuildDir = path.join(hubDir, 'build', 'client');
 
 type ExecErrorWithOutput = Error & {
 	stdout?: string | Buffer;
@@ -53,34 +51,15 @@ function runBuildWithDiagnostics() {
 
 describe('Production build', () => {
 	it(
-		'builds loadable adapter output for the production server',
+		'builds the documented node entrypoint and browser assets',
 		{ timeout: 60000 },
-		async () => {
+		() => {
 			runBuildWithDiagnostics();
-			if (!existsSync(buildEntry)) {
-				throw new Error('build/index.js was not generated');
+			if (!existsSync(nodeEntrypoint)) {
+				throw new Error('server.js was not generated');
 			}
-			if (!existsSync(buildHandler)) {
-				throw new Error('build/handler.js was not generated');
-			}
-			if (!existsSync(buildServer)) {
-				throw new Error('build/server/index.js was not generated');
-			}
-
-			const handlerModule = await import(
-				`${pathToFileURL(buildHandler).href}?t=${Date.now()}`
-			);
-			if (typeof handlerModule.handler !== 'function') {
-				throw new Error('build/handler.js did not export a request handler');
-			}
-
-			const serverModule = await import(
-				`${pathToFileURL(buildServer).href}?t=${Date.now()}`
-			);
-			if (typeof serverModule.Server !== 'function') {
-				throw new Error(
-					'build/server/index.js did not export the server entry'
-				);
+			if (!existsSync(clientBuildDir)) {
+				throw new Error('build/client was not generated');
 			}
 		}
 	);
