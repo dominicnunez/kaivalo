@@ -10,7 +10,11 @@ const RUNTIME_SERVER_FILES = [
 	'error-diagnostics.ts',
 	'ip-address.ts',
 	'node-server.ts',
-	'workos-security.ts'
+	'node-server-request.ts',
+	'node-server-runtime.ts',
+	'workos-security.ts',
+	'workos-security-cache.ts',
+	'workos-security-env.ts'
 ];
 
 mkdirSync(RUNTIME_BUILD_DIR, { recursive: true });
