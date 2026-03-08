@@ -36,6 +36,58 @@ function shouldIncludeSensitiveErrorDetails(env) {
 }
 
 /**
+ * @param {unknown} error
+ * @param {Record<string, string | undefined>} env
+ * @returns {ReturnType<typeof getErrorDiagnostics>}
+ */
+function getFatalErrorDiagnostics(error, env) {
+	return getErrorDiagnostics(error, {
+		includeSensitiveDetails: shouldIncludeSensitiveErrorDetails(env),
+		includeMessage: true
+	});
+}
+
+/**
+ * @param {{
+ *   onFatal?: (details: {
+ *     exitCode: number;
+ *     reason: 'startup-error' | 'shutdown-timeout';
+ *     host?: string;
+ *     port?: number;
+ *     activeRequests?: number;
+ *     shutdownTimeoutMs?: number;
+ *     error?: ReturnType<typeof getErrorDiagnostics>;
+ *   }) => void;
+ *   logger: Pick<Console, 'error'>;
+ *   env: Record<string, string | undefined>;
+ * }} options
+ * @returns {(details: {
+ *   exitCode: number;
+ *   reason: 'startup-error' | 'shutdown-timeout';
+ *   host?: string;
+ *   port?: number;
+ *   activeRequests?: number;
+ *   shutdownTimeoutMs?: number;
+ *   error?: ReturnType<typeof getErrorDiagnostics>;
+ * }) => void}
+ */
+function createFatalNotifier({ onFatal, logger, env }) {
+	return (details) => {
+		if (!onFatal) {
+			return;
+		}
+
+		try {
+			onFatal(details);
+		} catch (error) {
+			logger.error('Fatal handler threw', {
+				error: getFatalErrorDiagnostics(error, env)
+			});
+		}
+	};
+}
+
+/**
  * @param {string | undefined} portValue
  * @returns {number}
  */
@@ -201,6 +253,11 @@ export function createHubServer(options) {
 		options.env,
 		workosEnv.origin
 	);
+	const notifyFatal = createFatalNotifier({
+		onFatal: options.onFatal,
+		logger,
+		env: options.env
+	});
 	const trustedProxyIpSet = new Set(trustedProxyIps);
 
 	let activeRequests = 0;
@@ -211,35 +268,6 @@ export function createHubServer(options) {
 	let shutdownPromise = null;
 	/** @type {((exitCode: number) => void) | null} */
 	let resolveShutdown = null;
-
-	/**
-	 * @param {{
-	 *   exitCode: number;
-	 *   reason: 'startup-error' | 'shutdown-timeout';
-	 *   host?: string;
-	 *   port?: number;
-	 *   activeRequests?: number;
-	 *   shutdownTimeoutMs?: number;
-	 *   error?: ReturnType<typeof getErrorDiagnostics>;
-	 * }} details
-	 */
-	function notifyFatal(details) {
-		if (!options.onFatal) {
-			return;
-		}
-
-		try {
-			options.onFatal(details);
-		} catch (error) {
-			logger.error('Fatal handler threw', {
-				error: getErrorDiagnostics(error, {
-					includeSensitiveDetails: shouldIncludeSensitiveErrorDetails(
-						options.env
-					)
-				})
-			});
-		}
-	}
 
 	/**
 	 * @param {number} now
@@ -588,6 +616,11 @@ export function startHubServer(options) {
 	const env = options.env ?? process.env;
 	const host = env.HOST || DEFAULT_HOST;
 	const logger = options.logger ?? console;
+	const notifyFatal = createFatalNotifier({
+		onFatal: options.onFatal,
+		logger,
+		env
+	});
 	let port = DEFAULT_PORT;
 	/** @type {http.Server | null} */
 	let server = null;
@@ -613,24 +646,19 @@ export function startHubServer(options) {
 	 */
 	const handleStartupError = (error) => {
 		cleanupProcessListeners();
-		const diagnostics = getErrorDiagnostics(error, {
-			includeSensitiveDetails: shouldIncludeSensitiveErrorDetails(env),
-			includeMessage: true
-		});
+		const diagnostics = getFatalErrorDiagnostics(error, env);
 		logger.error('Failed to start hub server', {
 			host,
 			port,
 			error: diagnostics
 		});
-		if (options.onFatal) {
-			options.onFatal({
-				exitCode: 1,
-				reason: 'startup-error',
-				host,
-				port,
-				error: diagnostics
-			});
-		}
+		notifyFatal({
+			exitCode: 1,
+			reason: 'startup-error',
+			host,
+			port,
+			error: diagnostics
+		});
 	};
 
 	return new Promise((resolve) => {

@@ -117,6 +117,31 @@ describe('node server port validation', () => {
 		);
 	});
 
+	it('contains startup failures when the fatal callback throws', async () => {
+		const logs = [];
+		const server = await startHubServer({
+			handler: (_req, res) => res.end('ok'),
+			env: {
+				...baseEnv,
+				WORKOS_CLIENT_ID: ''
+			},
+			logger: {
+				log: () => {},
+				warn: () => {},
+				error: /** @param {string} message */ (message) => logs.push(message)
+			},
+			onFatal: () => {
+				throw new Error('fatal handler failure');
+			}
+		});
+
+		assert.strictEqual(server, null);
+		assert.deepStrictEqual(logs, [
+			'Failed to start hub server',
+			'Fatal handler threw'
+		]);
+	});
+
 	it('reports missing trusted proxy ips when forwarded proto trust is enabled', async () => {
 		const { server, logs, fatalEvents } = await startWithFatalCapture({
 			...baseEnv,
