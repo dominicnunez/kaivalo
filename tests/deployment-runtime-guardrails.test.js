@@ -11,6 +11,12 @@ const DEPLOY_WORKFLOW_PATH = path.join(
 	'deploy.yml'
 );
 const CI_WORKFLOW_PATH = path.join(ROOT, '.github', 'workflows', 'ci.yml');
+const DAILY_FULL_SUITE_WORKFLOW_PATH = path.join(
+	ROOT,
+	'.github',
+	'workflows',
+	'daily-full-suite.yml'
+);
 const DOCKERFILE_PATH = path.join(ROOT, 'Dockerfile');
 const DEPLOYABLE_REF_CONDITION =
 	"github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')";
@@ -122,7 +128,7 @@ function getRuntimeStageBuildCopies(dockerfile) {
 }
 
 describe('deployment runtime guardrails', () => {
-	it('runs repository verification on push and pull requests before deployment', () => {
+	it('runs the fast verification lane on push and pull requests', () => {
 		const workflow = readFileSync(CI_WORKFLOW_PATH, 'utf8');
 		const triggerBlock = getWorkflowTriggerBlock(workflow);
 
@@ -130,8 +136,28 @@ describe('deployment runtime guardrails', () => {
 		assert.match(triggerBlock, /^\s{2}pull_request:\s*$/m);
 		assert.match(workflow, /^\s{6}- name: Run linter$/m);
 		assert.match(workflow, /^\s{8}run: npm run lint$/m);
-		assert.match(workflow, /^\s{6}- name: Run CI test suite$/m);
+		assert.match(workflow, /^\s{6}- name: Run fast CI test suite$/m);
 		assert.match(workflow, /^\s{8}run: npm run test:ci$/m);
+	});
+
+	it('runs the full verification lane before deployment', () => {
+		const workflow = readFileSync(DEPLOY_WORKFLOW_PATH, 'utf8');
+
+		assert.match(workflow, /^\s{6}- name: Run full deploy test suite$/m);
+		assert.match(workflow, /^\s{8}run: npm run test:deploy$/m);
+	});
+
+	it('runs the full verification lane on a daily schedule', () => {
+		const workflow = readFileSync(DAILY_FULL_SUITE_WORKFLOW_PATH, 'utf8');
+		const triggerBlock = getWorkflowTriggerBlock(workflow);
+
+		assert.match(triggerBlock, /^\s{2}workflow_dispatch:\s*$/m);
+		assert.match(triggerBlock, /^\s{4}- cron: '0 14 \* \* \*'$/m);
+		assert.match(workflow, /^permissions:\n\s{2}contents: read$/m);
+		assert.match(workflow, /^\s{10}node-version: 24$/m);
+		assert.match(workflow, /^\s{10}cache: npm$/m);
+		assert.match(workflow, /^\s{6}- name: Run daily full test suite$/m);
+		assert.match(workflow, /^\s{8}run: npm run test:full$/m);
 	});
 
 	it('only builds and deploys from deployable refs', () => {

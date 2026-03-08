@@ -17,10 +17,13 @@
 		"lint": "eslint . --ext .js,.mjs,.cjs,.ts,.svelte",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
-		"test": "npm run test:core && npm run test:build:hub && npm run test:production && npm run test:integration",
+		"test": "npm run test:full",
+		"test:fast": "npm run test:core",
+		"test:full": "npm run test:fast && npm run test:build:hub && npm run test:production && npm run test:integration && npm run audit:deps",
 		"test:production": "node --test --test-concurrency=1 tests/hub-adapter-node.test.js",
 		"test:integration": "node --test --test-concurrency=1 tests/hub-auth-landing.test.js tests/hub-favicon.test.js tests/hub-links.test.js tests/hub-lucide-icons.test.js tests/hub-og-image.test.js tests/hub-seo-meta.test.js tests/hub-sign-out.test.js tests/hub-tailwind.test.js tests/hub-workos-callback.test.js tests/hub-workos-hooks.test.js tests/ui-ssr-rendering.test.js",
-		"test:ci": "npm test && npm run audit:deps"
+		"test:ci": "npm run test:fast",
+		"test:deploy": "npm run test:full"
 	},
 	"engines": {
 		"node": ">=24.0.0"
