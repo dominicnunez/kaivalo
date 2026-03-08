@@ -41,7 +41,7 @@ describe('hub seo metadata behavior', () => {
 		}
 	});
 
-	it('renders absolute HTTPS URLs for social preview metadata', async () => {
+	it('renders absolute social preview metadata URLs on the deployed origin', async () => {
 		const preview = await startHubPreview();
 		try {
 			const homepage = await httpGet(preview.baseUrl);
