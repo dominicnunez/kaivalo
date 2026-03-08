@@ -7,16 +7,20 @@ const ROOT = resolve(import.meta.dirname, '..', '..');
 const HUB_DIR = join(ROOT, 'apps', 'hub');
 const BUILD_DIR = join(HUB_DIR, 'build');
 const BUILD_ENTRY = join(BUILD_DIR, 'index.js');
-const BUILD_INPUT_PATHS = [
-	join(ROOT, 'package.json'),
-	join(ROOT, 'package-lock.json'),
-	join(HUB_DIR, 'src'),
-	join(HUB_DIR, 'static'),
-	join(HUB_DIR, 'package.json'),
-	join(HUB_DIR, 'svelte.config.js'),
-	join(HUB_DIR, 'tsconfig.json'),
-	join(HUB_DIR, 'vite.config.ts')
-];
+
+export function getHubBuildInputPaths() {
+	return [
+		join(ROOT, 'package.json'),
+		join(ROOT, 'package-lock.json'),
+		join(ROOT, 'packages', 'ui'),
+		join(HUB_DIR, 'src'),
+		join(HUB_DIR, 'static'),
+		join(HUB_DIR, 'package.json'),
+		join(HUB_DIR, 'svelte.config.js'),
+		join(HUB_DIR, 'tsconfig.json'),
+		join(HUB_DIR, 'vite.config.ts')
+	];
+}
 
 let didCheckBuild = false;
 let shouldBuildCache = false;
@@ -36,7 +40,7 @@ function shouldRebuildOncePerProcess() {
 	clearNewestMtimeCache();
 	const buildTimeMs = statSync(BUILD_ENTRY).mtimeMs;
 	const newestInputTimeMs = Math.max(
-		...BUILD_INPUT_PATHS.map((entryPath) => getNewestMtimeMs(entryPath))
+		...getHubBuildInputPaths().map((entryPath) => getNewestMtimeMs(entryPath))
 	);
 	shouldBuildCache = newestInputTimeMs > buildTimeMs;
 	return shouldBuildCache;

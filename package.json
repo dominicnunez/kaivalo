@@ -11,7 +11,7 @@
 	"scripts": {
 		"prepare": "husky",
 		"check": "npm --prefix apps/hub run check",
-		"test:core": "npm run check && npm --prefix apps/hub run test:unit && node --test tests/gitignore.test.js tests/hub-env-example.test.js tests/hub-node-server-port-validation.test.js tests/hub-node-server-static-assets.test.js tests/hub-node-server.test.js",
+		"test:core": "npm run check && npm --prefix apps/hub run test:unit && node --test tests/check-sveltekit-upstream.test.js tests/gitignore.test.js tests/hub-build-freshness.test.js tests/hub-env-example.test.js tests/hub-node-server-port-validation.test.js tests/hub-node-server-static-assets.test.js tests/hub-node-server.test.js",
 		"test:build:hub": "npm --prefix apps/hub run test:build",
 		"lint": "eslint . --ext .js,.mjs,.cjs,.ts,.svelte",
 		"format": "prettier --write .",
