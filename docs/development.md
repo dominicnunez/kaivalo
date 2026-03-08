@@ -27,11 +27,13 @@ npm run check
 npm run lint
 npm run format
 npm run format:check
+npm run test:core
 npm test
 npm run test:integration
 npm run test:ci
 ```
 
-`npm test` is the fast local lane: app type checks, app Vitest coverage, and the pure Node-side test files.
-`npm run test:integration` runs the slower build- and preview-backed integration coverage.
-`npm run test:ci` runs both lanes.
+`npm run test:core` is the faster local lane: app type checks, app Vitest coverage, and the pure Node-side test files.
+`npm test` runs the full verification flow: core, build, production, and integration coverage.
+`npm run test:integration` runs the slower preview-backed integration coverage after the app is built.
+`npm run test:ci` is currently an alias for `npm test`.
