@@ -50,6 +50,8 @@ function setRequiredWorkosEnv() {
 	privateEnv.WORKOS_REDIRECT_URI = 'https://kaivalo.test/auth/callback';
 	privateEnv.WORKOS_COOKIE_PASSWORD = 'ab'.repeat(32);
 	privateEnv.ORIGIN = 'https://kaivalo.test';
+	privateEnv.TRUST_X_FORWARDED_PROTO = 'true';
+	privateEnv.TRUSTED_PROXY_IPS = '203.0.113.10';
 }
 
 function createEvent(url: string, headers: HeadersInit = {}) {
@@ -179,6 +181,56 @@ describe('hooks server behavior', () => {
 				errorCauseMessage: 'oauth code=[redacted] should not leak',
 				pathname: '/broken',
 				requestId: 'bad_request_id___trace'
+			})
+		);
+		errorSpy.mockRestore();
+	});
+
+	it('omits sensitive error messages from production handleError logs', async () => {
+		privateEnv.NODE_ENV = 'production';
+		const errorSpy = vi
+			.spyOn(console, 'error')
+			.mockImplementation(() => undefined);
+		const { handleError } = await import('./hooks.server');
+		const cause = Object.assign(
+			new Error('oauth code=secret-code should not leak'),
+			{
+				code: 'UPSTREAM_TIMEOUT'
+			}
+		);
+
+		const result = handleError({
+			error: Object.assign(
+				new Error('request failed with token=super-secret'),
+				{
+					code: 'WORKOS_FETCH_FAILED',
+					cause
+				}
+			),
+			status: 500,
+			message: 'ignored',
+			event: createEvent('https://kaivalo.test/broken') as never
+		});
+
+		expect(result).toEqual({
+			message: 'An unexpected error occurred. Please try again.',
+			incidentId: expect.stringMatching(/^hook_/)
+		});
+		expect(errorSpy).toHaveBeenCalledWith(
+			'Unhandled request error',
+			expect.not.objectContaining({
+				errorMessage: expect.anything(),
+				errorCauseMessage: expect.anything()
+			})
+		);
+		expect(errorSpy).toHaveBeenCalledWith(
+			'Unhandled request error',
+			expect.objectContaining({
+				errorCode: 'HOOK_UNEXPECTED_FAILURE',
+				errorUpstreamCode: 'WORKOS_FETCH_FAILED',
+				errorCauseCode: 'UPSTREAM_TIMEOUT',
+				errorCauseName: 'Error',
+				pathname: '/broken'
 			})
 		);
 		errorSpy.mockRestore();

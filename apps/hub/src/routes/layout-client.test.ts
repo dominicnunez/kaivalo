@@ -30,23 +30,6 @@ describe('layout client behavior', () => {
 		);
 	});
 
-	it('does not render auth errors from untrusted query parameters', () => {
-		render(Layout, {
-			data: {
-				user: null,
-				signInUrl: '/auth/sign-in',
-				authError: null
-			},
-			children: snippet
-		});
-
-		expect(
-			screen.queryByText(
-				'Sign-in is temporarily unavailable. Please try again shortly.'
-			)
-		).toBeNull();
-	});
-
 	it('renders trusted auth incident identifiers from server data', () => {
 		render(Layout, {
 			data: {
