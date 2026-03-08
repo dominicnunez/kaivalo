@@ -12,7 +12,11 @@ const HUB_DIR = path.join(ROOT, 'apps', 'hub');
 const BUILD_ENTRY = path.join(HUB_DIR, 'server.js');
 const STARTUP_RETRY_COUNT = 40;
 const STARTUP_DELAY_MS = 250;
+const STARTUP_TIMEOUT_MS = STARTUP_RETRY_COUNT * STARTUP_DELAY_MS;
 const PROCESS_EXIT_TIMEOUT_MS = 5000;
+const MAX_STARTUP_OUTPUT_LINES = 120;
+const STARTUP_READY_PATTERN = /\bListening on\b/;
+const STARTUP_PROBE_TIMEOUT_MS = 500;
 
 function delay(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -43,22 +47,60 @@ async function startBuiltServer(envOverrides = {}) {
 	const reservation = await reserveLocalPort();
 	const port = reservation.port;
 	const baseUrl = `http://127.0.0.1:${port}`;
+	const startupOutput = [];
+	let sawReadyLog = false;
+	const appendOutput = (chunk) => {
+		if (!chunk) {
+			return;
+		}
+
+		const text = chunk.toString();
+		if (STARTUP_READY_PATTERN.test(text)) {
+			sawReadyLog = true;
+		}
+		for (const line of text.split(/\r?\n/)) {
+			if (!line) {
+				continue;
+			}
+			startupOutput.push(line);
+			if (startupOutput.length > MAX_STARTUP_OUTPUT_LINES) {
+				startupOutput.shift();
+			}
+		}
+	};
 	const server = spawn('node', [BUILD_ENTRY], {
 		cwd: HUB_DIR,
-		stdio: 'ignore',
+		stdio: ['ignore', 'pipe', 'pipe'],
 		detached: true,
 		env: createFixtureEnv(port, envOverrides)
 	});
+	server.stdout?.on('data', appendOutput);
+	server.stderr?.on('data', appendOutput);
 	await reservation.release();
 
+	let exitCode = null;
+	let exitSignal = null;
+	let spawnError = null;
+	let didExit = false;
+	server.once('error', (error) => {
+		spawnError = error;
+	});
+	server.once('exit', (code, signal) => {
+		didExit = true;
+		exitCode = code;
+		exitSignal = signal;
+	});
+
 	for (let i = 0; i < STARTUP_RETRY_COUNT; i += 1) {
-		try {
-			const homepage = await httpGet(baseUrl);
-			if (homepage.statusCode === 200) {
-				return { server, baseUrl };
-			}
-		} catch {
-			// Keep waiting for startup.
+		if (spawnError) {
+			break;
+		}
+		if (didExit) {
+			break;
+		}
+
+		if ((sawReadyLog || i % 2 === 0) && (await probeServerReady(baseUrl))) {
+			return { server, baseUrl };
 		}
 		await delay(STARTUP_DELAY_MS);
 	}
@@ -68,7 +110,26 @@ async function startBuiltServer(envOverrides = {}) {
 	} catch {
 		// Ignore if already down.
 	}
-	throw new Error('expected server to respond before timeout');
+
+	const startupSummary = startupOutput.length
+		? startupOutput.join('\n')
+		: '(no startup output captured)';
+	const failureReason = spawnError
+		? `spawn failed: ${spawnError.message}`
+		: didExit
+			? `process exited before readiness (code ${exitCode ?? 'null'}, signal ${exitSignal ?? 'null'})`
+			: `server did not become ready within ${STARTUP_TIMEOUT_MS}ms`;
+	const readinessSummary = sawReadyLog
+		? 'saw readiness log but health checks never succeeded'
+		: 'never observed readiness log output';
+
+	throw new Error(
+		[
+			`expected built server to become ready: ${failureReason}`,
+			readinessSummary,
+			`startup output:\n${startupSummary}`
+		].join('\n')
+	);
 }
 
 function stopProcessGroup(server, signal = 'SIGTERM') {
@@ -116,6 +177,22 @@ function httpGetWithAgent(url, agent) {
 		});
 		req.on('error', reject);
 		req.setTimeout(5000, () => req.destroy(new Error('request timeout')));
+	});
+}
+
+function probeServerReady(url) {
+	return new Promise((resolve) => {
+		const req = http.get(url, (res) => {
+			res.resume();
+			res.once('end', () => {
+				resolve((res.statusCode ?? 0) > 0);
+			});
+		});
+		req.on('error', () => resolve(false));
+		req.setTimeout(STARTUP_PROBE_TIMEOUT_MS, () => {
+			req.destroy(new Error('startup probe timeout'));
+			resolve(false);
+		});
 	});
 }
 
