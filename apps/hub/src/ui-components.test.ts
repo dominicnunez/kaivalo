@@ -24,15 +24,21 @@ describe('ui components', () => {
 		expect(container.textContent).toContain('Rendered child');
 	});
 
-	it('renders badge content in a semantic inline element', () => {
+	it('renders badge content with the requested status styling', () => {
 		const { container } = render(Badge, {
 			status: 'coming-soon',
 			size: 'sm',
 			children: snippet
 		});
 
-		const badge = container.querySelector('span');
-		expect(badge).not.toBeNull();
+		const badge = container.querySelector('.badge-coming-soon.badge-sm');
+		if (!badge) {
+			throw new Error(
+				'Expected badge wrapper to render with requested classes'
+			);
+		}
+		expect(badge.className).toContain('badge-coming-soon');
+		expect(badge.className).toContain('badge-sm');
 		expect(container.textContent).toContain('Rendered child');
 	});
 
@@ -155,7 +161,7 @@ describe('ui components', () => {
 		const root = container.firstElementChild;
 		expect(root).not.toBeNull();
 		expect(root?.className).toContain('custom-wrapper');
-		expect(root?.getAttribute('data-ui')).toBe('container');
+		expect(root?.className).toContain('max-w-screen-xl');
 		expect(container.textContent).toContain('Rendered child');
 	});
 });

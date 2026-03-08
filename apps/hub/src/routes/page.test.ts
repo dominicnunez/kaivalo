@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/svelte';
 import Page from './+page.svelte';
+import type { PageData } from './$types';
 
 const currentYear = String(new Date().getFullYear());
 const matchMediaStub = vi.fn().mockImplementation(() => ({
@@ -9,21 +10,26 @@ const matchMediaStub = vi.fn().mockImplementation(() => ({
 	removeEventListener: vi.fn()
 }));
 
-function renderPage() {
+function createPageData(overrides: Partial<PageData> = {}): PageData {
+	return {
+		meta: {
+			title: 'Kaivalo | Tools That Solve Things',
+			description: 'Test description',
+			url: 'https://kaivalo.test',
+			image: 'https://kaivalo.test/og-image.png',
+			imageAlt: 'Kaivalo test image',
+			twitterCard: 'summary_large_image'
+		},
+		user: null,
+		signInUrl: null,
+		authError: null,
+		...overrides
+	};
+}
+
+function renderPage(overrides: Partial<PageData> = {}) {
 	return render(Page, {
-		data: {
-			meta: {
-				title: 'Kaivalo | Tools That Solve Things',
-				description: 'Test description',
-				url: 'https://kaivalo.test',
-				image: 'https://kaivalo.test/og-image.png',
-				imageAlt: 'Kaivalo test image',
-				twitterCard: 'summary_large_image'
-			},
-			user: null,
-			signInUrl: null,
-			authError: null
-		}
+		data: createPageData(overrides)
 	});
 }
 
@@ -88,5 +94,58 @@ describe('home page content', () => {
 
 		const contactLink = screen.getByRole('link', { name: /contact/i });
 		expect(contactLink.getAttribute('href')).toBe('mailto:kaivalo@proton.me');
+	});
+
+	it('renders signed-in controls with the user profile image and sign-out action', () => {
+		const { container } = renderPage({
+			user: {
+				firstName: 'Kai',
+				email: 'kai@example.com',
+				profilePictureUrl: 'https://avatars.githubusercontent.com/u/1'
+			}
+		});
+
+		const signOutForm = container.querySelector(
+			'form[action="/auth/sign-out"]'
+		);
+		expect(signOutForm).not.toBeNull();
+		const controls = signOutForm?.parentElement;
+		expect(controls).not.toBeNull();
+		expect(
+			within(controls as HTMLElement).getByRole('img', { name: 'Kai' })
+		).toBeTruthy();
+		expect(within(controls as HTMLElement).getByText('Kai')).toBeTruthy();
+		expect(
+			within(signOutForm as HTMLFormElement).getByRole('button', {
+				name: /sign out/i
+			})
+		).toBeTruthy();
+		expect(
+			within(controls as HTMLElement).queryByRole('link', { name: /sign in/i })
+		).toBeNull();
+	});
+
+	it('renders fallback identity controls when the user has no profile image', () => {
+		const { container } = renderPage({
+			user: {
+				firstName: null,
+				email: 'kai@example.com',
+				profilePictureUrl: null
+			}
+		});
+
+		const signOutForm = container.querySelector(
+			'form[action="/auth/sign-out"]'
+		);
+		expect(signOutForm).not.toBeNull();
+		const controls = signOutForm?.parentElement;
+		expect(controls).not.toBeNull();
+		expect(
+			within(controls as HTMLElement).queryByRole('img', { name: /kai/i })
+		).toBeNull();
+		expect(
+			within(controls as HTMLElement).getByText('kai@example.com')
+		).toBeTruthy();
+		expect(within(controls as HTMLElement).getByText('K')).toBeTruthy();
 	});
 });

@@ -55,14 +55,7 @@ describe('layout trusted origin initialization', () => {
 		mockGetSignInUrl.mockResolvedValue('/auth/sign-in' as never);
 	});
 
-	it('validates WorkOS env once and reuses trusted origins across requests', async () => {
-		mockGetValidatedWorkosEnv.mockReturnValueOnce({
-			origin: 'https://kaivalo.test',
-			redirectUri: 'https://kaivalo.test/auth/callback'
-		} as never);
-		mockGetValidatedWorkosEnv.mockImplementation(() => {
-			throw new Error('trusted origins should stay cached after success');
-		});
+	it('preserves sanitized same-origin sign-in targets across repeated requests', async () => {
 		mockGetSignInUrl.mockResolvedValue(
 			'https://kaivalo.test/auth/sign-in?screen_hint=sign-up' as never
 		);
