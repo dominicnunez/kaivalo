@@ -122,43 +122,6 @@ function httpGetWithAbortObservation(
 	});
 }
 
-/**
- * @param {http.Server} server
- * @returns {Promise<void>}
- */
-function waitForServerListening(server) {
-	return new Promise((resolve, reject) => {
-		if (server.listening) {
-			resolve();
-			return;
-		}
-		server.once('listening', resolve);
-		server.once('error', reject);
-	});
-}
-
-/**
- * @param {() => boolean} predicate
- * @param {number} [timeoutMs]
- * @returns {Promise<void>}
- */
-function waitForCondition(predicate, timeoutMs = 1000) {
-	return new Promise((resolve, reject) => {
-		const start = Date.now();
-		const interval = setInterval(() => {
-			if (predicate()) {
-				clearInterval(interval);
-				resolve();
-				return;
-			}
-			if (Date.now() - start >= timeoutMs) {
-				clearInterval(interval);
-				reject(new Error('timed out waiting for condition'));
-			}
-		}, 10);
-	});
-}
-
 const servers = [];
 afterEach(async () => {
 	for (const server of servers.splice(0)) {
@@ -598,7 +561,7 @@ describe('node server lifecycle', () => {
 
 		const firstReservation = await reserveLocalPort();
 		await firstReservation.release();
-		const firstServer = startHubServer({
+		const firstServer = await startHubServer({
 			handler: (_req, res) => res.end('ok'),
 			env: {
 				...baseEnv,
@@ -607,8 +570,9 @@ describe('node server lifecycle', () => {
 			},
 			logger: { log: () => {}, warn: () => {}, error: () => {} }
 		});
+		assert.ok(firstServer);
+		assert.strictEqual(firstServer.listening, true);
 		servers.push(firstServer);
-		await waitForServerListening(firstServer);
 		assert.strictEqual(
 			process.listenerCount('SIGINT'),
 			initialSigIntListeners + 1
@@ -626,7 +590,7 @@ describe('node server lifecycle', () => {
 
 		const secondReservation = await reserveLocalPort();
 		await secondReservation.release();
-		const secondServer = startHubServer({
+		const secondServer = await startHubServer({
 			handler: (_req, res) => res.end('ok'),
 			env: {
 				...baseEnv,
@@ -635,8 +599,9 @@ describe('node server lifecycle', () => {
 			},
 			logger: { log: () => {}, warn: () => {}, error: () => {} }
 		});
+		assert.ok(secondServer);
+		assert.strictEqual(secondServer.listening, true);
 		servers.push(secondServer);
-		await waitForServerListening(secondServer);
 		assert.strictEqual(
 			process.listenerCount('SIGINT'),
 			initialSigIntListeners + 1
@@ -666,14 +631,14 @@ describe('node server lifecycle', () => {
 		};
 
 		try {
-			startHubServer({
+			const server = await startHubServer({
 				handler: (_req, res) => res.end('ok'),
 				env: { ...baseEnv, HOST: '127.0.0.1', PORT: String(reservation.port) },
 				logger,
 				onFatal: (details) => fatalEvents.push(details)
 			});
 
-			await waitForCondition(() => fatalEvents.length > 0);
+			assert.strictEqual(server, null);
 			assert.strictEqual(fatalEvents.length, 1);
 			assert.strictEqual(fatalEvents[0].exitCode, 1);
 			assert.strictEqual(fatalEvents[0].reason, 'startup-error');
@@ -695,7 +660,7 @@ describe('node server lifecycle', () => {
 		const reservation = await reserveLocalPort();
 		await reservation.release();
 		const logs = [];
-		const server = startHubServer({
+		const server = await startHubServer({
 			handler: (_req, res) => res.end('ok'),
 			env: {
 				...baseEnv,
@@ -712,9 +677,10 @@ describe('node server lifecycle', () => {
 				error: () => {}
 			}
 		});
+		assert.ok(server);
+		assert.strictEqual(server.listening, true);
 		servers.push(server);
 
-		await waitForServerListening(server);
 		assert.deepStrictEqual(logs, [
 			`Listening on internal http://127.0.0.1:${reservation.port} (public https://kaivalo.test)`
 		]);

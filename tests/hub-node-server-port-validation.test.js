@@ -17,7 +17,7 @@ const baseEnv = {
 
 /**
  * @param {Record<string, string | undefined>} env
- * @returns {{
+ * @returns {Promise<{
  *   server: import('node:http').Server | null;
  *   logs: string[];
  *   fatalEvents: Array<{
@@ -27,12 +27,12 @@ const baseEnv = {
  *     port?: number;
  *     error?: { message?: string };
  *   }>;
- * }}
+ * }>}
  */
 function startWithFatalCapture(env) {
 	const logs = [];
 	const fatalEvents = [];
-	const server = startHubServer({
+	return startHubServer({
 		handler: (_req, res) => res.end('ok'),
 		env,
 		logger: {
@@ -41,14 +41,16 @@ function startWithFatalCapture(env) {
 			error: /** @param {string} message */ (message) => logs.push(message)
 		},
 		onFatal: (details) => fatalEvents.push(details)
-	});
-
-	return { server, logs, fatalEvents };
+	}).then((server) => ({
+		server,
+		logs,
+		fatalEvents
+	}));
 }
 
 describe('node server port validation', () => {
-	it('reports invalid out-of-range PORT values through startup fatal handling', () => {
-		const { server, logs, fatalEvents } = startWithFatalCapture({
+	it('reports invalid out-of-range PORT values through startup fatal handling', async () => {
+		const { server, logs, fatalEvents } = await startWithFatalCapture({
 			...baseEnv,
 			PORT: '65536'
 		});
@@ -66,8 +68,8 @@ describe('node server port validation', () => {
 		);
 	});
 
-	it('reports malformed PORT values through startup fatal handling', () => {
-		const { server, fatalEvents } = startWithFatalCapture({
+	it('reports malformed PORT values through startup fatal handling', async () => {
+		const { server, fatalEvents } = await startWithFatalCapture({
 			...baseEnv,
 			PORT: '3000abc'
 		});
@@ -82,8 +84,8 @@ describe('node server port validation', () => {
 		);
 	});
 
-	it('reports malformed shutdown timeout values through startup fatal handling', () => {
-		const { server, fatalEvents } = startWithFatalCapture({
+	it('reports malformed shutdown timeout values through startup fatal handling', async () => {
+		const { server, fatalEvents } = await startWithFatalCapture({
 			...baseEnv,
 			SHUTDOWN_TIMEOUT_MS: '30000abc'
 		});
@@ -98,8 +100,8 @@ describe('node server port validation', () => {
 		);
 	});
 
-	it('reports missing WorkOS environment variables through startup fatal handling', () => {
-		const { server, logs, fatalEvents } = startWithFatalCapture({
+	it('reports missing WorkOS environment variables through startup fatal handling', async () => {
+		const { server, logs, fatalEvents } = await startWithFatalCapture({
 			...baseEnv,
 			WORKOS_CLIENT_ID: ''
 		});
@@ -115,8 +117,8 @@ describe('node server port validation', () => {
 		);
 	});
 
-	it('reports missing trusted proxy ips when forwarded proto trust is enabled', () => {
-		const { server, logs, fatalEvents } = startWithFatalCapture({
+	it('reports missing trusted proxy ips when forwarded proto trust is enabled', async () => {
+		const { server, logs, fatalEvents } = await startWithFatalCapture({
 			...baseEnv,
 			NODE_ENV: 'production',
 			ORIGIN: 'https://kaivalo.test',
@@ -137,8 +139,8 @@ describe('node server port validation', () => {
 		);
 	});
 
-	it('reports production https origins that skip trusted forwarded proto handling', () => {
-		const { server, logs, fatalEvents } = startWithFatalCapture({
+	it('reports production https origins that skip trusted forwarded proto handling', async () => {
+		const { server, logs, fatalEvents } = await startWithFatalCapture({
 			...baseEnv,
 			NODE_ENV: 'production',
 			ORIGIN: 'https://kaivalo.test',
@@ -159,8 +161,8 @@ describe('node server port validation', () => {
 		);
 	});
 
-	it('reports loopback-only trusted proxies for production https origins', () => {
-		const { server, logs, fatalEvents } = startWithFatalCapture({
+	it('reports loopback-only trusted proxies for production https origins', async () => {
+		const { server, logs, fatalEvents } = await startWithFatalCapture({
 			...baseEnv,
 			NODE_ENV: 'production',
 			ORIGIN: 'https://kaivalo.test',

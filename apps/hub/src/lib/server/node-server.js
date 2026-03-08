@@ -666,6 +666,7 @@ export function createHubServer(options) {
  *     error?: ReturnType<typeof getErrorDiagnostics>;
  *   }) => void;
  * }} options
+ * @returns {Promise<http.Server | null>}
  */
 export function startHubServer(options) {
 	const env = options.env ?? process.env;
@@ -716,39 +717,55 @@ export function startHubServer(options) {
 		}
 	};
 
-	try {
-		port = parsePort(env.PORT);
-		({ server, beginShutdown } = createHubServer({
-			handler: options.handler,
-			env,
-			logger,
-			onFatal: options.onFatal
-		}));
-	} catch (error) {
-		handleStartupError(error);
-		return null;
-	}
+	return new Promise((resolve) => {
+		try {
+			port = parsePort(env.PORT);
+			({ server, beginShutdown } = createHubServer({
+				handler: options.handler,
+				env,
+				logger,
+				onFatal: options.onFatal
+			}));
+		} catch (error) {
+			handleStartupError(error);
+			resolve(null);
+			return;
+		}
+		const startedServer = server;
 
-	handleSigInt = () => {
-		void beginShutdown();
-	};
-	handleSigTerm = () => {
-		void beginShutdown();
-	};
-	process.on('SIGINT', handleSigInt);
-	process.on('SIGTERM', handleSigTerm);
+		handleSigInt = () => {
+			void beginShutdown();
+		};
+		handleSigTerm = () => {
+			void beginShutdown();
+		};
+		process.on('SIGINT', handleSigInt);
+		process.on('SIGTERM', handleSigTerm);
 
-	server.once('close', cleanupProcessListeners);
+		startedServer.once('close', cleanupProcessListeners);
 
-	const handleListening = () => {
-		server.off('error', handleStartupError);
-		logger.log(getListeningLogMessage(env, host, port));
-	};
+		const handleListening = () => {
+			startedServer.off('error', handleListenError);
+			logger.log(getListeningLogMessage(env, host, port));
+			resolve(startedServer);
+		};
 
-	server.once('error', handleStartupError);
-	server.once('listening', handleListening);
+		/**
+		 * @param {unknown} error
+		 */
+		const handleListenError = (error) => {
+			startedServer.off('listening', handleListening);
+			handleStartupError(error);
+			resolve(null);
+		};
 
-	server.listen(port, host);
+		startedServer.once('error', handleListenError);
+		startedServer.once('listening', handleListening);
 
-	return server;
+		try {
+			startedServer.listen(port, host);
+		} catch (error) {
+			handleListenError(error);
+		}
+	});
 }
