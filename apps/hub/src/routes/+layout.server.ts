@@ -3,13 +3,17 @@ import { env } from '$env/dynamic/private';
 import { randomUUID } from 'node:crypto';
 import type { LayoutServerLoad } from './$types';
 import { getValidatedWorkosEnv } from '$lib/server/workos-security.js';
-import { getErrorLogContext } from '$lib/server/error-diagnostics.js';
+import {
+	getErrorLogContext,
+	shouldIncludeErrorMessage
+} from '$lib/server/error-diagnostics.js';
 import { normalizeRequestId } from '$lib/auth/log-context.js';
 import {
 	AUTH_ERROR_MESSAGE,
 	readVerifiedAuthError
 } from '$lib/auth/auth-error-query.js';
 import { isTrustedAvatarHost } from '$lib/server/trusted-hosts.js';
+import { getAuthUser } from '$lib/server/authkit-runtime.js';
 
 const TRUSTED_SIGN_IN_PATH_PREFIXES = [
 	'/auth/sign-in',
@@ -154,7 +158,7 @@ export const load: LayoutServerLoad = async (event) => {
 		const authErrorFromQuery = readVerifiedAuthError(event.url.searchParams, {
 			secret: env.WORKOS_COOKIE_PASSWORD ?? ''
 		});
-		const user = await authKit.getUser(event);
+		const user = await getAuthUser(event);
 		let signInUrl = null;
 		if (!user) {
 			const trustedSignInOrigins = getTrustedSignInOriginSet();
@@ -198,7 +202,9 @@ export const load: LayoutServerLoad = async (event) => {
 			pathname: event.url.pathname,
 			method: event.request.method,
 			errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
-			...getErrorLogContext(err)
+			...getErrorLogContext(err, {
+				includeMessage: shouldIncludeErrorMessage(env)
+			})
 		});
 		markAuthFailureNoStore(event);
 

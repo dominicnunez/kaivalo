@@ -8,7 +8,10 @@ import {
 	getProxyTrustConfiguration,
 	getValidatedWorkosEnv
 } from '$lib/server/workos-security.js';
-import { getErrorLogContext } from '$lib/server/error-diagnostics.js';
+import {
+	getErrorLogContext,
+	shouldIncludeErrorMessage
+} from '$lib/server/error-diagnostics.js';
 import { normalizeRequestId } from '$lib/auth/log-context.js';
 
 const workosEnv = getValidatedWorkosEnv(env);
@@ -36,7 +39,7 @@ export const handleError: HandleServerError = ({ error, event, status }) => {
 	const requestId = normalizeRequestId(
 		event.request.headers.get('x-request-id')
 	);
-	const includeMessage = env.NODE_ENV?.trim().toLowerCase() !== 'production';
+	const includeMessage = shouldIncludeErrorMessage(env);
 	console.error('Unhandled request error', {
 		incidentId,
 		requestId,

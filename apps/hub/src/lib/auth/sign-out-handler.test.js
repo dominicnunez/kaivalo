@@ -17,6 +17,7 @@ describe('createSignOutPostHandler', () => {
 		const logError = vi.fn();
 		const handler = createSignOutPostHandler({
 			expectedOrigin: 'https://kaivalo.test',
+			includeMessageInLogs: true,
 			signOut: async () => {
 				const cause = Object.assign(new Error('upstream detail'), {
 					code: 'SESSION_DELETE_TIMEOUT'
@@ -51,6 +52,8 @@ describe('createSignOutPostHandler', () => {
 			'Sign-out failed',
 			expect.objectContaining({
 				errorCode: 'AUTH_SIGN_OUT_UNEXPECTED_FAILURE',
+				errorMessage: 'sign-out failed',
+				errorCauseMessage: 'upstream detail',
 				errorUpstreamCode: 'WORKOS_SIGNOUT_FAILED',
 				errorCauseCode: 'SESSION_DELETE_TIMEOUT',
 				errorCauseName: 'Error',

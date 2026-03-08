@@ -6,6 +6,15 @@ const SENSITIVE_QUERY_PATTERN =
 	/([?&](?:access_token|refresh_token|id_token|token|api_key|client_secret|code|password)=)[^&#\s]*/gi;
 const ERROR_CODE_MAX_LENGTH = 64;
 const ERROR_MESSAGE_MAX_LENGTH = 256;
+const PRODUCTION_NODE_ENV = 'production';
+
+/**
+ * @param {Record<string, string | undefined>} env
+ * @returns {boolean}
+ */
+export function shouldIncludeErrorMessage(env) {
+	return env.NODE_ENV?.trim().toLowerCase() !== PRODUCTION_NODE_ENV;
+}
 
 /**
  * @param {string} value

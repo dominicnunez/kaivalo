@@ -12,6 +12,7 @@ const PREVIEW_HEALTH_RETRY_DELAY_MS = 300;
 const PREVIEW_PORT_RETRY_COUNT = 5;
 const PREVIEW_SHUTDOWN_TIMEOUT_MS = 5000;
 const PREVIEW_FORCE_KILL_TIMEOUT_MS = 2000;
+const TEST_AUTH_USER_HEADER = 'x-kaivalo-test-auth-user';
 
 function delay(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -25,6 +26,7 @@ function createPreviewEnv(previewPort) {
 	return {
 		NODE_ENV: 'test',
 		KAIVALO_ENABLE_TEST_AUTH_FAILURE: '1',
+		KAIVALO_ENABLE_TEST_AUTH_FIXTURE: '1',
 		WORKOS_CLIENT_ID: 'client_test_fixture',
 		WORKOS_API_KEY: 'sk_test_fixture',
 		WORKOS_REDIRECT_URI: `${origin}/auth/callback`,
@@ -32,6 +34,14 @@ function createPreviewEnv(previewPort) {
 		ORIGIN: origin,
 		HOST: '127.0.0.1',
 		PORT: String(previewPort)
+	};
+}
+
+export function createAuthenticatedPreviewHeaders(user) {
+	return {
+		[TEST_AUTH_USER_HEADER]: Buffer.from(JSON.stringify(user)).toString(
+			'base64url'
+		)
 	};
 }
 

@@ -8,6 +8,7 @@ import { normalizeRequestId } from './log-context.js';
  * @typedef {object} CreateSignOutPostHandlerOptions
  * @property {(event: RequestEvent) => Response | Promise<Response>} signOut
  * @property {string} expectedOrigin
+ * @property {boolean} [includeMessageInLogs]
  * @property {(message: string, context: {
  * requestId: string
  * method: string
@@ -119,6 +120,7 @@ function isRedirectLike(value) {
 export function createSignOutPostHandler({
 	signOut,
 	expectedOrigin,
+	includeMessageInLogs = false,
 	logError = console.error
 }) {
 	const trustedOrigin = normalizeExpectedOrigin(expectedOrigin);
@@ -147,7 +149,9 @@ export function createSignOutPostHandler({
 				pathname: event.url.pathname,
 				incidentId,
 				errorCode: 'AUTH_SIGN_OUT_UNEXPECTED_FAILURE',
-				...getErrorLogContext(err)
+				...getErrorLogContext(err, {
+					includeMessage: includeMessageInLogs
+				})
 			});
 
 			throw error(503, `Sign-out failed. Reference: ${incidentId}`);

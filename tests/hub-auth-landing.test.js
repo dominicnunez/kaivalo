@@ -1,7 +1,11 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import { JSDOM } from 'jsdom';
-import { startHubPreview, httpGet } from './helpers/hub-preview.js';
+import {
+	startHubPreview,
+	httpGet,
+	createAuthenticatedPreviewHeaders
+} from './helpers/hub-preview.js';
 
 describe('auth landing page behavior', () => {
 	const trustedPathPrefixes = ['/auth/sign-in', '/user_management/authorize'];
@@ -105,6 +109,53 @@ describe('auth landing page behavior', () => {
 			assert.strictEqual(unavailableButton?.getAttribute('disabled') ?? '', '');
 		} finally {
 			failureDom.window.close();
+		}
+	});
+
+	it('renders signed-in controls for an authenticated runtime session fixture', async () => {
+		const signedInResponse = await httpGet(
+			preview.baseUrl,
+			createAuthenticatedPreviewHeaders({
+				firstName: 'Kai',
+				email: 'kai@example.com',
+				profilePictureUrl: 'https://attacker.example/avatar.png'
+			})
+		);
+		const signedInDom = new JSDOM(signedInResponse.data);
+		const signedInDocument = signedInDom.window.document;
+
+		try {
+			assert.strictEqual(signedInResponse.statusCode, 200);
+			const signOutForm = signedInDocument.querySelector(
+				'form[action="/auth/sign-out"]'
+			);
+			assert.ok(signOutForm, 'Expected sign-out form for signed-in visitors');
+			assert.match(
+				signedInDocument.body.textContent ?? '',
+				/\bKai\b/,
+				'Expected rendered signed-in user name'
+			);
+
+			const signInLink = Array.from(
+				signedInDocument.querySelectorAll('a[href]')
+			).find((anchor) =>
+				(anchor.textContent ?? '').toLowerCase().includes('sign in')
+			);
+			assert.strictEqual(signInLink, undefined);
+
+			const avatarImage = signedInDocument.querySelector('img[alt="Kai"]');
+			assert.strictEqual(
+				avatarImage,
+				null,
+				'Expected untrusted avatar URLs to be dropped in the real runtime path'
+			);
+			assert.match(
+				signOutForm.parentElement?.textContent ?? '',
+				/\bK\b/,
+				'Expected fallback avatar initial when profile image is rejected'
+			);
+		} finally {
+			signedInDom.window.close();
 		}
 	});
 });

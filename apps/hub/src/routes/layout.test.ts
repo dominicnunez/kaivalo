@@ -392,6 +392,8 @@ describe('layout server load', () => {
 			'Auth layout load failed',
 			expect.objectContaining({
 				errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
+				errorMessage: 'upstream failed',
+				errorCauseMessage: 'upstream detail',
 				errorUpstreamCode: 'workos_fetch_failed',
 				errorCauseCode: 'cause_timeout',
 				errorCauseName: 'Error',

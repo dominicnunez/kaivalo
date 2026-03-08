@@ -23,6 +23,7 @@ import { buildAuthErrorRedirectQuery } from './auth-error-query.js';
  * @property {(error: unknown) => boolean} isRedirect
  * @property {(error: unknown) => boolean} isHttpError
  * @property {string} cookiePassword
+ * @property {boolean} [includeMessageInLogs]
  * @property {(message: string, context: CallbackLogContext) => void} [logError]
  */
 
@@ -35,6 +36,7 @@ export function createAuthCallbackGetHandler({
 	isRedirect,
 	isHttpError,
 	cookiePassword,
+	includeMessageInLogs = false,
 	logError = console.error
 }) {
 	/**
@@ -73,7 +75,9 @@ export function createAuthCallbackGetHandler({
 				pathname: event.url.pathname,
 				incidentId,
 				errorCode: 'AUTH_CALLBACK_UNEXPECTED_FAILURE',
-				...getErrorLogContext(err)
+				...getErrorLogContext(err, {
+					includeMessage: includeMessageInLogs
+				})
 			};
 
 			logError('Auth callback failed', callbackLogContext);
