@@ -6,4 +6,6 @@ npm-debug.log*
 .env.*
 .git
 .github
-
+audit
+docs
+tests
