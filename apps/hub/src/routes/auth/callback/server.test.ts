@@ -1,24 +1,21 @@
-import { describe, expect, it, vi } from 'vitest';
-import { error, redirect } from '@sveltejs/kit';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+	AUTH_ERROR_QUERY_NAME,
+	AUTH_ERROR_QUERY_VALUE,
+	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
+	readVerifiedAuthError
+} from '$lib/auth/auth-error-query.js';
 
-const {
-	mockEnv,
-	mockShouldIncludeErrorMessage,
-	mockHandleCallback,
-	mockGetHandler,
-	mockCreateAuthCallbackGetHandler
-} = vi.hoisted(() => ({
+const { mockEnv, mockHandleCallback } = vi.hoisted(() => ({
 	mockEnv: {
 		WORKOS_CLIENT_ID: 'client_123',
 		WORKOS_API_KEY: 'sk_test_123',
 		WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback',
 		WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
-		ORIGIN: 'https://kaivalo.test'
+		ORIGIN: 'https://kaivalo.test',
+		NODE_ENV: 'production'
 	} as Record<string, string>,
-	mockShouldIncludeErrorMessage: vi.fn(() => true),
-	mockHandleCallback: vi.fn(),
-	mockGetHandler: vi.fn(),
-	mockCreateAuthCallbackGetHandler: vi.fn()
+	mockHandleCallback: vi.fn()
 }));
 
 vi.mock('$env/dynamic/private', () => ({
@@ -31,52 +28,80 @@ vi.mock('@workos/authkit-sveltekit', () => ({
 	}
 }));
 
-vi.mock('$lib/server/error-diagnostics.js', () => ({
-	shouldIncludeErrorMessage: mockShouldIncludeErrorMessage
-}));
-
-vi.mock('$lib/auth/callback-handler.js', () => ({
-	createAuthCallbackGetHandler: mockCreateAuthCallbackGetHandler
-}));
-
-function captureThrown(factory: () => unknown) {
-	try {
-		factory();
-		throw new Error('expected factory to throw');
-	} catch (thrown) {
-		return thrown;
-	}
+function createEvent(headers: HeadersInit = {}) {
+	return {
+		request: new Request('https://kaivalo.test/auth/callback', {
+			headers
+		}),
+		url: new URL('https://kaivalo.test/auth/callback')
+	} as never;
 }
 
 describe('auth callback route', () => {
-	it('configures the callback handler from env and delegates GET requests', async () => {
+	beforeEach(() => {
 		vi.resetModules();
-		mockCreateAuthCallbackGetHandler.mockReturnValueOnce(mockGetHandler);
-		mockGetHandler.mockResolvedValueOnce(new Response(null, { status: 204 }));
-		const upstreamHandler = vi.fn();
-		mockHandleCallback.mockReturnValueOnce(upstreamHandler);
+		mockHandleCallback.mockReset();
+	});
+
+	it('returns the upstream callback response for successful requests', async () => {
+		mockHandleCallback.mockReturnValue(
+			async () => new Response('ok', { status: 200 })
+		);
 
 		const { GET } = await import('./+server');
-		const event = {
-			request: new Request('https://kaivalo.test/auth/callback'),
-			url: new URL('https://kaivalo.test/auth/callback')
-		} as never;
+		const response = await GET(createEvent());
 
-		const response = await GET(event);
+		expect(response.status).toBe(200);
+		await expect(response.text()).resolves.toBe('ok');
+		expect(mockHandleCallback).toHaveBeenCalledOnce();
+	});
 
-		expect(response.status).toBe(204);
-		expect(mockCreateAuthCallbackGetHandler).toHaveBeenCalledOnce();
-		const options = mockCreateAuthCallbackGetHandler.mock.calls[0][0];
-		expect(options.cookiePassword).toBe(mockEnv.WORKOS_COOKIE_PASSWORD);
-		expect(options.includeMessageInLogs).toBe(true);
-		expect(options.handleCallback()).toBe(upstreamHandler);
-		expect(
-			options.isRedirect(captureThrown(() => redirect(303, '/done')))
-		).toBe(true);
-		expect(
-			options.isHttpError(captureThrown(() => error(400, 'bad request')))
-		).toBe(true);
-		expect(mockShouldIncludeErrorMessage).toHaveBeenCalledWith(mockEnv);
-		expect(mockGetHandler).toHaveBeenCalledWith(event);
+	it('redirects browser callback failures with a verified signed auth error', async () => {
+		mockHandleCallback.mockReturnValue(async () => {
+			throw new Error('upstream unavailable');
+		});
+
+		const { GET } = await import('./+server');
+		try {
+			await GET(
+				createEvent({
+					accept: 'text/html',
+					'sec-fetch-mode': 'navigate'
+				})
+			);
+			throw new Error('expected GET to redirect');
+		} catch (thrown) {
+			expect(thrown).toMatchObject({
+				status: 303,
+				location: expect.any(String)
+			});
+
+			if (
+				typeof thrown !== 'object' ||
+				thrown === null ||
+				!('location' in thrown) ||
+				typeof thrown.location !== 'string'
+			) {
+				throw thrown;
+			}
+
+			const location = new URL(thrown.location, mockEnv.ORIGIN);
+			expect(location.pathname).toBe('/');
+			expect(location.searchParams.get(AUTH_ERROR_QUERY_NAME)).toBe(
+				AUTH_ERROR_QUERY_VALUE
+			);
+			expect(
+				readVerifiedAuthError(location.searchParams, {
+					secret: mockEnv.WORKOS_COOKIE_PASSWORD,
+					now: Number(
+						location.searchParams.get(AUTH_ERROR_TIMESTAMP_QUERY_NAME)
+					)
+				})
+			).toEqual({
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
+				incidentId: expect.stringMatching(/^authcb_/)
+			});
+		}
 	});
 });
