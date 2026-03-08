@@ -1,4 +1,4 @@
-import { AUTHKIT_COOKIE_NAME } from './authkit-config.ts';
+import { AUTHKIT_COOKIE_NAME } from './authkit-config.js';
 
 const COOKIE_NAME_PREFIXES = ['', '__secure-', '__host-'];
 
