@@ -2,7 +2,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import http from 'node:http';
 import { createSignOutPostHandler } from '../apps/hub/src/lib/auth/sign-out-handler.js';
-import { isHttpError } from '@sveltejs/kit';
+import { isHttpError, isRedirect } from '@sveltejs/kit';
 import { startHubPreview } from './helpers/hub-preview.js';
 
 /**
@@ -46,27 +46,6 @@ function getSetCookieHeaders(headers) {
 		return [];
 	}
 	return Array.isArray(values) ? values : [values];
-}
-
-function assertHardenedCookies(setCookieHeaders) {
-	for (const cookie of setCookieHeaders) {
-		const lower = cookie.toLowerCase();
-		assert.match(
-			lower,
-			/\bhttponly\b/,
-			`set-cookie must include HttpOnly: ${cookie}`
-		);
-		assert.match(
-			lower,
-			/\bsecure\b/,
-			`set-cookie must include Secure: ${cookie}`
-		);
-		assert.match(
-			lower,
-			/\bsamesite=(strict|lax|none)\b/,
-			`set-cookie must include SameSite: ${cookie}`
-		);
-	}
 }
 
 describe('sign-out handler unit behavior', () => {
@@ -358,6 +337,36 @@ describe('sign-out handler unit behavior', () => {
 		);
 		assert.match(logs[0][1].incidentId, /^authso_/);
 	});
+
+	it('rethrows redirect-like responses from signOut handlers', async () => {
+		const redirectLike = {
+			status: 302,
+			location: '/'
+		};
+		const postHandler = createSignOutPostHandler({
+			signOut: async () => {
+				throw redirectLike;
+			},
+			expectedOrigin: 'https://kaivalo.com'
+		});
+
+		await assert.rejects(
+			() =>
+				postHandler({
+					request: new Request('https://kaivalo.test/auth/sign-out', {
+						method: 'POST',
+						headers: { origin: 'https://kaivalo.com' }
+					}),
+					url: new URL('https://kaivalo.test/auth/sign-out')
+				}),
+			(caught) => {
+				assert.ok(isRedirect(caught));
+				assert.strictEqual(caught.status, 302);
+				assert.strictEqual(caught.location, '/');
+				return true;
+			}
+		);
+	});
 });
 
 describe('sign-out route integration behavior', () => {
@@ -384,8 +393,7 @@ describe('sign-out route integration behavior', () => {
 	it('accepts same-origin POST requests at route level', async () => {
 		const response = await post(`${preview.baseUrl}/auth/sign-out`, {
 			origin: preview.baseUrl,
-			'sec-fetch-site': 'same-origin',
-			cookie: 'wos-session=test-fixture'
+			'sec-fetch-site': 'same-origin'
 		});
 
 		assert.strictEqual(
@@ -402,18 +410,17 @@ describe('sign-out route integration behavior', () => {
 		const varyHeader = (response.headers['vary'] ?? '').toLowerCase();
 		assert.ok(varyHeader.includes('cookie'));
 		assert.ok(varyHeader.includes('authorization'));
-		assertHardenedCookies(getSetCookieHeaders(response.headers));
-		assert.match(
-			getSetCookieHeaders(response.headers).join('\n'),
-			/\bwos-session=;.*\bmax-age=0\b/i
+		assert.deepStrictEqual(
+			getSetCookieHeaders(response.headers),
+			[],
+			'sign-out without a valid AuthKit session should not fabricate logout cookies'
 		);
 	});
 
 	it('accepts route-level POST requests without origin when same-origin referer is present', async () => {
 		const response = await post(`${preview.baseUrl}/auth/sign-out`, {
 			referer: `${preview.baseUrl}/`,
-			'sec-fetch-site': 'same-origin',
-			cookie: 'wos-session=test-fixture'
+			'sec-fetch-site': 'same-origin'
 		});
 
 		assert.strictEqual(
@@ -430,10 +437,10 @@ describe('sign-out route integration behavior', () => {
 		const varyHeader = (response.headers['vary'] ?? '').toLowerCase();
 		assert.ok(varyHeader.includes('cookie'));
 		assert.ok(varyHeader.includes('authorization'));
-		assertHardenedCookies(getSetCookieHeaders(response.headers));
-		assert.match(
-			getSetCookieHeaders(response.headers).join('\n'),
-			/\bwos-session=;.*\bmax-age=0\b/i
+		assert.deepStrictEqual(
+			getSetCookieHeaders(response.headers),
+			[],
+			'sign-out without a valid AuthKit session should not fabricate logout cookies'
 		);
 	});
 

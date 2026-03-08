@@ -329,20 +329,27 @@ describe('WorkOS Auth Callback Route', () => {
 			}
 		});
 
-		it('returns a hardened redirect response when callback handling succeeds', async () => {
-			const preview = await startHubPreview({
-				callbackMode: 'success',
-				callbackReturnTo: '/workspace'
-			});
-
+		it('uses the real WorkOS callback handler contract for code exchanges', async () => {
+			const preview = await startHubPreview();
 			try {
 				const response = await httpGet(
 					`${preview.baseUrl}/auth/callback?code=test-code&state=test-state`,
 					{ accept: 'text/html' }
 				);
 
-				assert.strictEqual(response.statusCode, 302);
-				assert.strictEqual(response.headers.location, '/workspace');
+				assert.strictEqual(response.statusCode, 303);
+				const location = new URL(
+					response.headers.location ?? '/',
+					preview.baseUrl
+				);
+				assert.strictEqual(
+					location.searchParams.get(AUTH_ERROR_QUERY_NAME),
+					AUTH_ERROR_QUERY_VALUE
+				);
+				assert.match(
+					location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME) ?? '',
+					/^authcb_[0-9a-f-]+$/
+				);
 				assert.strictEqual(
 					response.headers['cache-control'],
 					'private, no-store'
@@ -350,10 +357,10 @@ describe('WorkOS Auth Callback Route', () => {
 				const varyHeader = (response.headers['vary'] ?? '').toLowerCase();
 				assert.ok(varyHeader.includes('cookie'));
 				assert.ok(varyHeader.includes('authorization'));
-				assertHardenedCookies(getSetCookieHeaders(response.headers));
-				assert.match(
-					getSetCookieHeaders(response.headers).join('\n'),
-					/\bwos-session=fixture-session\b/i
+				assert.deepStrictEqual(
+					getSetCookieHeaders(response.headers),
+					[],
+					'failed upstream exchanges must not mint synthetic session cookies'
 				);
 			} finally {
 				await preview.stop();

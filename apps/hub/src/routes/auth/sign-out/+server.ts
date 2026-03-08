@@ -12,7 +12,7 @@ function getPostHandler(): ReturnType<typeof createSignOutPostHandler> {
 	}
 
 	const workosEnv = getValidatedWorkosEnv(env);
-	const { signOut } = getAuthRouteHandlers(env);
+	const { signOut } = getAuthRouteHandlers();
 
 	postHandler = createSignOutPostHandler({
 		signOut,

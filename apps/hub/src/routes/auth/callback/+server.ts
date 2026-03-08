@@ -5,7 +5,7 @@ import { createAuthCallbackGetHandler } from '$lib/auth/callback-handler.js';
 import { getAuthRouteHandlers } from '$lib/server/authkit-runtime.js';
 
 const getHandler = createAuthCallbackGetHandler({
-	handleCallback: () => getAuthRouteHandlers(env).handleCallback(),
+	handleCallback: () => getAuthRouteHandlers().handleCallback(),
 	isRedirect,
 	isHttpError,
 	cookiePassword: env.WORKOS_COOKIE_PASSWORD ?? ''

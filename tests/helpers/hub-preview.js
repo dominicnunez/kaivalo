@@ -19,20 +19,12 @@ function delay(ms) {
 
 /**
  * @param {number} previewPort
- * @param {{
- * callbackMode?: 'error' | 'success' | 'workos';
- * callbackReturnTo?: string;
- * signOutMode?: 'success' | 'workos';
- * }} [options]
  */
-function createPreviewFixtureEnv(previewPort, options = {}) {
+function createPreviewEnv(previewPort) {
 	const origin = `http://127.0.0.1:${previewPort}`;
 	return {
 		NODE_ENV: 'test',
 		KAIVALO_ENABLE_TEST_AUTH_FAILURE: '1',
-		KAIVALO_TEST_CALLBACK_MODE: options.callbackMode ?? 'error',
-		KAIVALO_TEST_CALLBACK_RETURN_TO: options.callbackReturnTo ?? '/',
-		KAIVALO_TEST_SIGN_OUT_MODE: options.signOutMode ?? 'success',
 		WORKOS_CLIENT_ID: 'client_test_fixture',
 		WORKOS_API_KEY: 'sk_test_fixture',
 		WORKOS_REDIRECT_URI: `${origin}/auth/callback`,
@@ -95,18 +87,7 @@ function decodeTextBody(body, contentTypeHeader) {
 	return body.toString('utf8');
 }
 
-/**
- * @param {{
- * callbackMode?: 'error' | 'success' | 'workos';
- * callbackReturnTo?: string;
- * signOutMode?: 'success' | 'workos';
- * }} [options]
- */
-export async function startHubPreview(options = {}) {
-	if (Object.keys(options).length > 0) {
-		return createHubPreview(options);
-	}
-
+export async function startHubPreview() {
 	return acquireSharedHubPreview();
 }
 
@@ -197,7 +178,7 @@ async function acquireSharedHubPreview(retryOnStale = true) {
 	};
 }
 
-async function createHubPreview(options = {}) {
+async function createHubPreview() {
 	ensureHubBuild();
 
 	const hubDir = path.join(
@@ -213,8 +194,7 @@ async function createHubPreview(options = {}) {
 			return await startPreviewProcess(
 				hubDir,
 				reservedPort.port,
-				reservedPort.release,
-				options
+				reservedPort.release
 			);
 		} catch (error) {
 			lastError = error;
@@ -237,8 +217,7 @@ async function createHubPreview(options = {}) {
 async function startPreviewProcess(
 	hubDir,
 	previewPort,
-	releasePortReservation,
-	options
+	releasePortReservation
 ) {
 	const baseUrl = `http://127.0.0.1:${previewPort}`;
 	const output = [];
@@ -258,7 +237,7 @@ async function startPreviewProcess(
 		detached: true,
 		env: {
 			...process.env,
-			...createPreviewFixtureEnv(previewPort, options)
+			...createPreviewEnv(previewPort)
 		}
 	});
 	server.stdout?.on('data', appendOutput);

@@ -1,4 +1,4 @@
-import { error, isHttpError, isRedirect } from '@sveltejs/kit';
+import { error, isHttpError, isRedirect, redirect } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import { getErrorLogContext } from '../server/error-diagnostics.js';
 import { normalizeRequestId } from './log-context.js';
@@ -91,6 +91,28 @@ function normalizeExpectedOrigin(value) {
 }
 
 /**
+ * Accept redirects that survive transport as plain objects rather than
+ * relying solely on runtime identity from one specific SvelteKit module copy.
+ *
+ * @param {unknown} value
+ * @returns {value is { status: number; location: string }}
+ */
+function isRedirectLike(value) {
+	if (isRedirect(value)) {
+		return true;
+	}
+
+	return Boolean(
+		value &&
+		typeof value === 'object' &&
+		'status' in value &&
+		'location' in value &&
+		typeof value.status === 'number' &&
+		typeof value.location === 'string'
+	);
+}
+
+/**
  * @param {CreateSignOutPostHandlerOptions} options
  * @returns {(event: RequestEvent) => Promise<Response>}
  */
@@ -110,6 +132,9 @@ export function createSignOutPostHandler({
 		} catch (err) {
 			if (isRedirect(err) || isHttpError(err)) {
 				throw err;
+			}
+			if (isRedirectLike(err)) {
+				throw redirect(err.status, err.location);
 			}
 
 			const requestId = normalizeRequestId(
