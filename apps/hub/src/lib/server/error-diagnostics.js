@@ -1,6 +1,19 @@
 const REDACTED_VALUE = '[redacted]';
-const SENSITIVE_TEXT_PATTERN =
-	/\b((?:access[_-]?token|refresh[_-]?token|id[_-]?token|token|api[_-]?key|client[_-]?secret|secret|password|oauth\s+code)\s*[=:]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi;
+const SENSITIVE_FIELD_NAME_PATTERN =
+	'(?:access[_-]?token|refresh[_-]?token|id[_-]?token|token|api[_-]?key|client[_-]?secret|secret|password|oauth\\s+code)';
+const SENSITIVE_VALUE_PATTERN = `(?:"[^"]*"|'[^']*'|[^\\s,;}\\]]+)`;
+const SENSITIVE_TEXT_PATTERN = new RegExp(
+	`\\b((${SENSITIVE_FIELD_NAME_PATTERN})\\s*[=:]\\s*)${SENSITIVE_VALUE_PATTERN}`,
+	'gi'
+);
+const SENSITIVE_OBJECT_PATTERN = new RegExp(
+	`((?:"|')${SENSITIVE_FIELD_NAME_PATTERN}(?:"|')\\s*:\\s*)${SENSITIVE_VALUE_PATTERN}`,
+	'gi'
+);
+const SENSITIVE_BARE_OBJECT_PATTERN = new RegExp(
+	`\\b(${SENSITIVE_FIELD_NAME_PATTERN}\\s*:\\s*)${SENSITIVE_VALUE_PATTERN}`,
+	'gi'
+);
 const BEARER_TOKEN_PATTERN = /\b(bearer\s+)[^\s,;]+/gi;
 const SENSITIVE_QUERY_PATTERN =
 	/([?&](?:access_token|refresh_token|id_token|token|api_key|client_secret|code|password)=)[^&#\s]*/gi;
@@ -23,8 +36,10 @@ export function shouldIncludeErrorMessage(env) {
 export function redactSensitiveText(value) {
 	const collapsedWhitespace = value.replace(/\s+/g, ' ').trim();
 	return collapsedWhitespace
-		.replace(SENSITIVE_TEXT_PATTERN, `$1${REDACTED_VALUE}`)
 		.replace(SENSITIVE_QUERY_PATTERN, `$1${REDACTED_VALUE}`)
+		.replace(SENSITIVE_OBJECT_PATTERN, `$1${REDACTED_VALUE}`)
+		.replace(SENSITIVE_BARE_OBJECT_PATTERN, `$1${REDACTED_VALUE}`)
+		.replace(SENSITIVE_TEXT_PATTERN, `$1${REDACTED_VALUE}`)
 		.replace(BEARER_TOKEN_PATTERN, `$1${REDACTED_VALUE}`)
 		.slice(0, ERROR_MESSAGE_MAX_LENGTH);
 }

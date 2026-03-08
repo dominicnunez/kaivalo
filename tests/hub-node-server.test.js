@@ -198,6 +198,28 @@ describe('node server diagnostics', () => {
 		});
 	});
 
+	it('redacts structured secret payloads in diagnostics output', () => {
+		const cause = new Error(
+			'upstream payload {"refresh_token":"refresh-secret","password":"super-secret"}'
+		);
+		const err = new Error(
+			'failed for {"access_token":"abc123","client_secret":"top-secret"}',
+			{ cause }
+		);
+		const diagnostics = getErrorDiagnostics(err, {
+			includeSensitiveDetails: true
+		});
+
+		assert.strictEqual(
+			diagnostics.message,
+			'failed for {"access_token":[redacted],"client_secret":[redacted]}'
+		);
+		assert.strictEqual(
+			diagnostics.causeMessage,
+			'upstream payload {"refresh_token":[redacted],"password":[redacted]}'
+		);
+	});
+
 	it('builds request failure logs with a sanitized pathname and incident id', () => {
 		const req = {
 			method: 'GET',

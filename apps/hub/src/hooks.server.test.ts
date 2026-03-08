@@ -205,6 +205,45 @@ describe('hooks server behavior', () => {
 		errorSpy.mockRestore();
 	});
 
+	it('redacts structured secret payloads from handleError logs', async () => {
+		const errorSpy = vi
+			.spyOn(console, 'error')
+			.mockImplementation(() => undefined);
+		const { handleError } = await import('./hooks.server');
+		const cause = Object.assign(
+			new Error(
+				'upstream payload {"refresh_token":"refresh-secret","password":"super-secret"}'
+			),
+			{
+				code: 'UPSTREAM_TIMEOUT'
+			}
+		);
+
+		handleError({
+			error: Object.assign(
+				new Error(
+					'request failed with {"access_token":"access-secret","client_secret":"client-secret"}'
+				),
+				{
+					code: 'WORKOS_FETCH_FAILED',
+					cause
+				}
+			),
+			status: 500,
+			message: 'ignored',
+			event: createEvent('https://kaivalo.test/broken') as never
+		});
+
+		const errorContext = errorSpy.mock.calls.at(-1)?.[1];
+		expect(errorContext?.errorMessage).toBe(
+			'request failed with {"access_token":[redacted],"client_secret":[redacted]}'
+		);
+		expect(errorContext?.errorCauseMessage).toBe(
+			'upstream payload {"refresh_token":[redacted],"password":[redacted]}'
+		);
+		errorSpy.mockRestore();
+	});
+
 	it('omits sensitive error messages from production handleError logs', async () => {
 		privateEnv.NODE_ENV = 'production';
 		const errorSpy = vi
