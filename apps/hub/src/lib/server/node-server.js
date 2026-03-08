@@ -22,6 +22,7 @@ const FORWARDED_PROTO_WARNING_TTL_MS = 10 * 60 * 1000;
 const MAX_FORWARDED_PROTO_WARNING_KEYS = 512;
 const PRIVATE_NO_STORE_CACHE_CONTROL = 'private, no-store';
 const PRODUCTION_NODE_ENV = 'production';
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
 const MIN_PORT = 1;
 const MAX_PORT = 65_535;
 
@@ -112,9 +113,15 @@ function parsePort(portValue) {
  * @param {string | undefined} rawValue
  * @param {string} envName
  * @param {number} defaultValue
+ * @param {number} [maxValue]
  * @returns {number}
  */
-function parsePositiveIntegerEnvValue(rawValue, envName, defaultValue) {
+function parsePositiveIntegerEnvValue(
+	rawValue,
+	envName,
+	defaultValue,
+	maxValue
+) {
 	if (rawValue === undefined || rawValue.trim() === '') {
 		return defaultValue;
 	}
@@ -125,6 +132,9 @@ function parsePositiveIntegerEnvValue(rawValue, envName, defaultValue) {
 	const parsed = Number(normalized);
 	if (!Number.isInteger(parsed) || parsed <= 0) {
 		throw new Error(`${envName} must be a positive integer`);
+	}
+	if (maxValue !== undefined && parsed > maxValue) {
+		throw new Error(`${envName} must be less than or equal to ${maxValue}`);
 	}
 	return parsed;
 }
@@ -545,7 +555,8 @@ export function createHubServer(options) {
 	const effectiveShutdownTimeoutMs = parsePositiveIntegerEnvValue(
 		options.env.SHUTDOWN_TIMEOUT_MS,
 		'SHUTDOWN_TIMEOUT_MS',
-		SHUTDOWN_TIMEOUT_MS
+		SHUTDOWN_TIMEOUT_MS,
+		MAX_TIMER_DELAY_MS
 	);
 
 	function beginShutdown() {

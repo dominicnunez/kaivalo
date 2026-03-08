@@ -100,6 +100,22 @@ describe('node server port validation', () => {
 		);
 	});
 
+	it('reports shutdown timeout values above the node timer limit', async () => {
+		const { server, fatalEvents } = await startWithFatalCapture({
+			...baseEnv,
+			SHUTDOWN_TIMEOUT_MS: '2147483648'
+		});
+
+		assert.strictEqual(server, null);
+		assert.strictEqual(fatalEvents.length, 1);
+		assert.strictEqual(fatalEvents[0].reason, 'startup-error');
+		assert.strictEqual(fatalEvents[0].exitCode, 1);
+		assert.strictEqual(
+			fatalEvents[0].error?.message,
+			'SHUTDOWN_TIMEOUT_MS must be less than or equal to 2147483647'
+		);
+	});
+
 	it('reports missing WorkOS environment variables through startup fatal handling', async () => {
 		const { server, logs, fatalEvents } = await startWithFatalCapture({
 			...baseEnv,

@@ -53,7 +53,7 @@ For a development-oriented starting point, see `apps/hub/.env.example`.
 
 - `SHUTDOWN_TIMEOUT_MS`
   Optional graceful-shutdown timeout in milliseconds before force exit.
-  Must be a whole positive integer when set.
+  Must be a whole positive integer between `1` and `2147483647` when set.
 
 ## Production Expectations
 

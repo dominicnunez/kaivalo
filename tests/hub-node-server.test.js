@@ -486,6 +486,20 @@ describe('node server lifecycle', () => {
 		await requestResult;
 	});
 
+	it('allows the maximum node timer delay for shutdown timeout', async () => {
+		const { server, beginShutdown } = createHubServer({
+			handler: (_req, res) => res.end('ok'),
+			env: {
+				...baseEnv,
+				SHUTDOWN_TIMEOUT_MS: '2147483647'
+			}
+		});
+		servers.push(server);
+
+		const shutdownExitCode = await beginShutdown();
+		assert.strictEqual(shutdownExitCode, 0);
+	});
+
 	it('forces timeout shutdown for half-open sockets without active requests', async () => {
 		/** @type {Array<{
 		 *   exitCode: number;
