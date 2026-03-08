@@ -72,7 +72,9 @@ function normalizeTrustedOrigin(value: string): string {
 	return parsed.origin;
 }
 
-export function isRedirectLikeObject(value: unknown): value is RedirectLikeObject {
+export function isRedirectLikeObject(
+	value: unknown
+): value is RedirectLikeObject {
 	return Boolean(
 		value &&
 		typeof value === 'object' &&

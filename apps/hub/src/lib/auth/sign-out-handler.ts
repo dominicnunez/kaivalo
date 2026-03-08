@@ -157,7 +157,9 @@ export function createSignOutPostHandler({
 	allowedRedirectOrigins = [],
 	includeMessageInLogs = false,
 	logError = console.error
-}: CreateSignOutPostHandlerOptions): (event: RequestEvent) => Promise<Response> {
+}: CreateSignOutPostHandlerOptions): (
+	event: RequestEvent
+) => Promise<Response> {
 	const trustedOrigin = normalizeExpectedOrigin(expectedOrigin);
 	const trustedRedirectOrigins = Array.from(allowedRedirectOrigins, (origin) =>
 		normalizeExpectedOrigin(origin)

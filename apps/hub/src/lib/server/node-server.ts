@@ -75,7 +75,10 @@ type SecureRequestEvaluation = {
 
 type WriteHeadOptions = {
 	statusCode: number | undefined;
-	headerSource: http.OutgoingHttpHeaders | http.OutgoingHttpHeader[] | undefined;
+	headerSource:
+		| http.OutgoingHttpHeaders
+		| http.OutgoingHttpHeader[]
+		| undefined;
 };
 
 type ResponseSecurityHeaderOptions = {
@@ -442,7 +445,9 @@ export function createHubServer(options: HubServerOptions): {
 		 *   headerSource: http.OutgoingHttpHeaders | http.OutgoingHttpHeader[] | undefined;
 		 * }}
 		 */
-		const getWriteHeadOptions = (args: readonly unknown[]): WriteHeadOptions => {
+		const getWriteHeadOptions = (
+			args: readonly unknown[]
+		): WriteHeadOptions => {
 			const statusCode = typeof args[0] === 'number' ? args[0] : undefined;
 			const secondArgument = args[1];
 			const thirdArgument = args[2];
@@ -450,7 +455,9 @@ export function createHubServer(options: HubServerOptions): {
 				args.length === 2 &&
 				secondArgument !== undefined &&
 				typeof secondArgument !== 'string'
-					? (secondArgument as http.OutgoingHttpHeaders | http.OutgoingHttpHeader[])
+					? (secondArgument as
+							| http.OutgoingHttpHeaders
+							| http.OutgoingHttpHeader[])
 					: args.length >= 3 && thirdArgument !== undefined
 						? (thirdArgument as
 								| http.OutgoingHttpHeaders
@@ -488,8 +495,7 @@ export function createHubServer(options: HubServerOptions): {
 						: Array.isArray(contentTypeHeader)
 							? (contentTypeHeader.find(
 									(value): value is string => typeof value === 'string'
-								) ??
-								null)
+								) ?? null)
 							: null;
 				const hasSetCookie =
 					getHeaderFromSource(headerSource, 'set-cookie') !== undefined ||

@@ -75,7 +75,9 @@ export function createAuthCallbackGetHandler({
 	cookiePassword,
 	includeMessageInLogs = false,
 	logError = console.error
-}: CreateAuthCallbackGetHandlerOptions): (event: RequestEvent) => Promise<Response> {
+}: CreateAuthCallbackGetHandlerOptions): (
+	event: RequestEvent
+) => Promise<Response> {
 	function shouldUseUserRedirect(event: RequestEvent): boolean {
 		const mode = event.request.headers.get('sec-fetch-mode');
 		const destination = event.request.headers.get('sec-fetch-dest');

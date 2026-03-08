@@ -250,7 +250,9 @@ function buildTrustedProxyIpSet(
 	return trustedProxyIpSet;
 }
 
-function parseTrustedProxyIps(trustedProxyIpsValue: string | undefined): string[] {
+function parseTrustedProxyIps(
+	trustedProxyIpsValue: string | undefined
+): string[] {
 	const entries =
 		trustedProxyIpsValue
 			?.split(',')
