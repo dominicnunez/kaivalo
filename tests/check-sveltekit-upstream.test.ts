@@ -11,7 +11,7 @@ import {
 	formatGithubOutputEntries,
 	readCurrentVersion,
 	readLatestMetadata
-} from '../scripts/check-sveltekit-upstream.mjs';
+} from '../scripts/check-sveltekit-upstream.ts';
 
 describe('check-sveltekit-upstream', () => {
 	it('uses a bounded timeout when fetching registry metadata', async () => {

@@ -4,7 +4,7 @@ import {
 	AUTH_ERROR_QUERY_VALUE,
 	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
 	readVerifiedAuthError
-} from '$lib/auth/auth-error-query.js';
+} from '$lib/auth/auth-error-query.ts';
 
 const { mockEnv, mockHandleCallback } = vi.hoisted(() => ({
 	mockEnv: {

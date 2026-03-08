@@ -5,7 +5,7 @@ import http from 'node:http';
 import net from 'node:net';
 
 const hubDir = process.cwd();
-const nodeEntrypoint = path.join(hubDir, 'server.js');
+const nodeEntrypoint = path.join(hubDir, 'server.ts');
 const STARTUP_TIMEOUT_MS = 10_000;
 const PROCESS_EXIT_TIMEOUT_MS = 5_000;
 

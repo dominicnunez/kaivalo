@@ -1,19 +1,19 @@
 import { env } from '$env/dynamic/private';
 import { randomUUID } from 'node:crypto';
 import type { LayoutServerLoad } from './$types';
-import { getValidatedWorkosEnv } from '$lib/server/workos-security.js';
+import { getValidatedWorkosEnv } from '$lib/server/workos-security.ts';
 import {
 	getErrorLogContext,
 	shouldIncludeErrorMessage
-} from '$lib/server/error-diagnostics.js';
-import { normalizeRequestId } from '$lib/auth/log-context.js';
+} from '$lib/server/error-diagnostics.ts';
+import { normalizeRequestId } from '$lib/auth/log-context.ts';
 import {
 	AUTH_ERROR_MESSAGE,
 	readVerifiedAuthError
-} from '$lib/auth/auth-error-query.js';
-import { normalizeTrustedRedirectLocation } from '$lib/auth/safe-redirect.js';
-import { isTrustedAvatarHost } from '$lib/server/trusted-hosts.js';
-import { getTrustedAuthOriginSet } from '$lib/server/auth-origin-policy.js';
+} from '$lib/auth/auth-error-query.ts';
+import { normalizeTrustedRedirectLocation } from '$lib/auth/safe-redirect.ts';
+import { isTrustedAvatarHost } from '$lib/server/trusted-hosts.ts';
+import { getTrustedAuthOriginSet } from '$lib/server/auth-origin-policy.ts';
 import { authKit } from '@workos/authkit-sveltekit';
 
 const TRUSTED_SIGN_IN_PATH_PREFIXES = [

@@ -1,7 +1,7 @@
 import { execSync } from 'node:child_process';
 import { existsSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { clearNewestMtimeCache, getNewestMtimeMs } from './build-freshness.js';
+import { clearNewestMtimeCache, getNewestMtimeMs } from './build-freshness.ts';
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const HUB_DIR = join(ROOT, 'apps', 'hub');

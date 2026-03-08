@@ -1,7 +1,7 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert';
 import { JSDOM } from 'jsdom';
-import { httpGet, startHubPreview } from './helpers/hub-preview.js';
+import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 
 describe('hub og image', () => {
 	let preview;

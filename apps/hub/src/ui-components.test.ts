@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRawSnippet } from 'svelte';
 import { render } from '@testing-library/svelte';
-import Button from '../../../packages/ui/Button.svelte';
-import Badge from '../../../packages/ui/Badge.svelte';
-import Card from '../../../packages/ui/Card.svelte';
-import Container from '../../../packages/ui/Container.svelte';
+import { Badge, Button, Card, Container } from '@kaivalo/ui';
 
 const snippet = createRawSnippet(() => ({
 	render: () => '<span>Rendered child</span>'

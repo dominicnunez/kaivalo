@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import http from 'node:http';
 import { createSignOutPostHandler } from '../apps/hub/src/lib/auth/sign-out-handler.ts';
 import { isHttpError, isRedirect } from '@sveltejs/kit';
-import { startHubPreview } from './helpers/hub-preview.js';
+import { startHubPreview } from './helpers/hub-preview.ts';
 
 /**
  * @param {string} url

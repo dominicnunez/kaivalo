@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalizeIpAddress } from './ip-address.js';
+import { canonicalizeIpAddress } from './ip-address.ts';
 
 describe('canonicalizeIpAddress', () => {
 	it.each([

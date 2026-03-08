@@ -29,7 +29,7 @@ WORKDIR /app
 COPY --from=build --chown=node:node /app/package.json /app/package-lock.json ./
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/apps/hub/package.json ./apps/hub/package.json
-COPY --from=build --chown=node:node /app/apps/hub/server.js ./apps/hub/server.js
+COPY --from=build --chown=node:node /app/apps/hub/server.ts ./apps/hub/server.ts
 COPY --from=build --chown=node:node /app/apps/hub/build ./apps/hub/build
 
 WORKDIR /app/apps/hub
@@ -37,4 +37,4 @@ USER node
 
 EXPOSE 3100
 
-CMD ["node", "server.js"]
+CMD ["node", "server.ts"]

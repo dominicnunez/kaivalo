@@ -182,7 +182,7 @@ describe('deployment runtime guardrails', () => {
 		assert.deepStrictEqual(runtimeCopies.sort(), [
 			'/app/apps/hub/build -> ./apps/hub/build',
 			'/app/apps/hub/package.json -> ./apps/hub/package.json',
-			'/app/apps/hub/server.js -> ./apps/hub/server.js',
+			'/app/apps/hub/server.ts -> ./apps/hub/server.ts',
 			'/app/node_modules -> ./node_modules',
 			'/app/package-lock.json -> ./',
 			'/app/package.json -> ./'

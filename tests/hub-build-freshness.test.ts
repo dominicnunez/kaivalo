@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { getHubBuildInputPaths } from './helpers/hub-build.js';
+import { getHubBuildInputPaths } from './helpers/hub-build.ts';
 
 describe('hub build freshness inputs', () => {
 	it('tracks shared workspace packages that feed the hub build', () => {
@@ -38,12 +38,11 @@ describe('hub build freshness inputs', () => {
 				'apps',
 				'hub',
 				'scripts',
-				'prepare-runtime.mjs'
+				'prepare-runtime.ts'
 			),
 			'utf8'
 		);
 
-		assert.match(prepareRuntimeScript, /'authkit-config\.js'/);
 		assert.match(prepareRuntimeScript, /'authkit-config\.ts'/);
 	});
 });

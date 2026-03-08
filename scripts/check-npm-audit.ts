@@ -37,8 +37,8 @@ const ALLOWLIST_PATH = resolve(
  * @returns {AuditAllowlistEntry[]}
  */
 export function readAllowlist(filePath = ALLOWLIST_PATH) {
-	return /** @type {AuditAllowlistEntry[]} */ (
-		JSON.parse(readFileSync(filePath, 'utf8'))
+	return /** @type {AuditAllowlistEntry[]} */ JSON.parse(
+		readFileSync(filePath, 'utf8')
 	);
 }
 

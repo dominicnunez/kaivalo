@@ -1,5 +1,5 @@
-import { canonicalizeIpAddress } from './ip-address.js';
-import { SENSITIVE_AUTH_COOKIE_NAMES } from './auth-cookie-names.js';
+import { canonicalizeIpAddress } from './ip-address.ts';
+import { SENSITIVE_AUTH_COOKIE_NAMES } from './auth-cookie-names.ts';
 import type { Handle, RequestEvent } from '@sveltejs/kit';
 import type http from 'node:http';
 

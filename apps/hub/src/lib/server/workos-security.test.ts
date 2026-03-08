@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AUTHKIT_COOKIE_NAME } from './authkit-config.js';
+import { AUTHKIT_COOKIE_NAME } from './authkit-config.ts';
 import {
 	createSecurityHeadersHandle,
 	getStaticAssetCacheControl,
@@ -7,7 +7,7 @@ import {
 	getTrustedForwardedProto,
 	getValidatedWorkosEnv,
 	shouldApplyStaticAssetHeaders
-} from './workos-security.js';
+} from './workos-security.ts';
 
 const validLocalEnv = {
 	WORKOS_CLIENT_ID: 'client_fixture',

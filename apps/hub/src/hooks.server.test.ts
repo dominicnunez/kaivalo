@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AUTHKIT_COOKIE_NAME } from '$lib/server/authkit-config.js';
+import { AUTHKIT_COOKIE_NAME } from '$lib/server/authkit-config.ts';
 
 type HookInput = {
 	event: unknown;

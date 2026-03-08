@@ -1,14 +1,14 @@
 import { error, isHttpError, isRedirect, redirect } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
-import { getErrorLogContext } from '../server/error-diagnostics.js';
-import { normalizeRequestId } from './log-context.js';
+import { getErrorLogContext } from '../server/error-diagnostics.ts';
+import { normalizeRequestId } from './log-context.ts';
 import {
 	isRedirectLikeObject,
 	normalizeTrustedRedirectLocation,
 	REDIRECT_RESPONSE_STATUSES,
 	type RedirectLikeObject
-} from './safe-redirect.js';
+} from './safe-redirect.ts';
 
 type SignOutLogContext = ReturnType<typeof getErrorLogContext> & {
 	requestId: string;

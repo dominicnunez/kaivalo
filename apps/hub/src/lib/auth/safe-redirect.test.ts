@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	normalizeSameOriginRedirectLocation,
 	normalizeTrustedRedirectLocation
-} from './safe-redirect.js';
+} from './safe-redirect.ts';
 
 const REQUEST_ORIGIN = 'https://kaivalo.test';
 

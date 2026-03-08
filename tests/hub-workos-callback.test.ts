@@ -10,7 +10,7 @@ import {
 	readVerifiedAuthError
 } from '../apps/hub/src/lib/auth/auth-error-query.ts';
 import { isHttpError, isRedirect } from '@sveltejs/kit';
-import { httpGet, startHubPreview } from './helpers/hub-preview.js';
+import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 
 const cookiePassword = 'ab'.repeat(32);
 

@@ -2,8 +2,8 @@ import http from 'node:http';
 import https from 'node:https';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { ensureHubBuild } from './hub-build.js';
-import { reserveLocalPort } from './network.js';
+import { ensureHubBuild } from './hub-build.ts';
+import { reserveLocalPort } from './network.ts';
 
 const REQUEST_TIMEOUT_MS = 5000;
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
@@ -230,7 +230,7 @@ async function startPreviewProcess(
 		}
 	};
 
-	const server = spawn('node', ['server.js'], {
+	const server = spawn('node', ['server.ts'], {
 		cwd: hubDir,
 		stdio: ['ignore', 'pipe', 'pipe'],
 		detached: true,

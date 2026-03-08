@@ -1,6 +1,6 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
-import { httpGet, startHubPreview } from './helpers/hub-preview.js';
+import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 
 const MIN_STYLESHEET_BYTES = 1024;
 

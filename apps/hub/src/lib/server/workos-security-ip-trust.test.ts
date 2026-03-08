@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSecurityHeadersHandle } from './workos-security.js';
+import { createSecurityHeadersHandle } from './workos-security.ts';
 
 describe('proxy ip trust canonicalization', () => {
 	it('trusts bracketed and zone-suffixed IPv6 client addresses for forwarded proto', async () => {

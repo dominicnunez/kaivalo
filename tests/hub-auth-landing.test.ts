@@ -1,7 +1,7 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import { JSDOM } from 'jsdom';
-import { startHubPreview, httpGet } from './helpers/hub-preview.js';
+import { startHubPreview, httpGet } from './helpers/hub-preview.ts';
 
 describe('auth landing page behavior', () => {
 	const trustedPathPrefixes = ['/auth/sign-in', '/user_management/authorize'];

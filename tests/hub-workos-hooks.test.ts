@@ -9,7 +9,7 @@ import {
 	PROXY_HSTS_CONFIGURATION_ERROR_MESSAGE,
 	LOOPBACK_PROXY_TRUST_ERROR_MESSAGE
 } from '../apps/hub/src/lib/server/workos-security.ts';
-import { httpGet, startHubPreview } from './helpers/hub-preview.js';
+import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 
 const validEnv = {
 	WORKOS_CLIENT_ID: 'client_123',

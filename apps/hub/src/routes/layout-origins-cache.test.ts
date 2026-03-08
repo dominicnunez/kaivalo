@@ -12,7 +12,7 @@ const { mockGetValidatedWorkosEnv, mockGetUser, mockGetSignInUrl } = vi.hoisted(
 	})
 );
 
-vi.mock('$lib/server/workos-security.js', () => ({
+vi.mock('$lib/server/workos-security.ts', () => ({
 	getValidatedWorkosEnv: mockGetValidatedWorkosEnv
 }));
 

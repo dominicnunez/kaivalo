@@ -10,7 +10,7 @@ import {
 	buildAuthErrorRedirectQuery,
 	clearAuthErrorQuery,
 	readVerifiedAuthError
-} from './auth-error-query.js';
+} from './auth-error-query.ts';
 
 const cookiePassword = 'ab'.repeat(32);
 const incidentId = 'authcb_123e4567-e89b-12d3-a456-426614174000';

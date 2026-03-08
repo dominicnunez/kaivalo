@@ -1,15 +1,15 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
-import { getErrorLogContext } from '../server/error-diagnostics.js';
-import { normalizeRequestId } from './log-context.js';
-import { buildAuthErrorRedirectQuery } from './auth-error-query.js';
+import { getErrorLogContext } from '../server/error-diagnostics.ts';
+import { normalizeRequestId } from './log-context.ts';
+import { buildAuthErrorRedirectQuery } from './auth-error-query.ts';
 import {
 	isRedirectLikeObject,
 	normalizeSameOriginRedirectLocation,
 	REDIRECT_RESPONSE_STATUSES,
 	type RedirectLikeObject
-} from './safe-redirect.js';
+} from './safe-redirect.ts';
 
 type CallbackLogContext = ReturnType<typeof getErrorLogContext> & {
 	requestId: string;

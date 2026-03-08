@@ -5,7 +5,7 @@ import {
 	collectAuditAdvisories,
 	findUnallowlistedAdvisories,
 	runAudit
-} from '../scripts/check-npm-audit.mjs';
+} from '../scripts/check-npm-audit.ts';
 
 describe('npm audit gate', () => {
 	it('collects concrete advisory records from npm audit output', () => {

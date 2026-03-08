@@ -2,9 +2,9 @@
 	"name": "@kaivalo/ui",
 	"version": "0.0.1",
 	"type": "module",
-	"main": "./index.js",
+	"main": "./index.ts",
 	"exports": {
-		".": "./index.js",
+		".": "./index.ts",
 		"./Button.svelte": "./Button.svelte",
 		"./Card.svelte": "./Card.svelte",
 		"./Badge.svelte": "./Badge.svelte",

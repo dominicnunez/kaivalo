@@ -23,7 +23,7 @@ jobs:
 
       - name: Check upstream SvelteKit release
         id: check
-        run: node scripts/check-sveltekit-upstream.mjs --github-output
+        run: node scripts/check-sveltekit-upstream.ts --github-output
 
       - name: Write workflow summary
         run: printf '%s\n' "${{ steps.check.outputs.summary }}" >> "$GITHUB_STEP_SUMMARY"

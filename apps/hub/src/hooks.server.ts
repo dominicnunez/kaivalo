@@ -7,13 +7,13 @@ import {
 	createSecurityHeadersHandle,
 	getProxyTrustConfiguration,
 	getValidatedWorkosEnv
-} from '$lib/server/workos-security.js';
-import { AUTHKIT_COOKIE_NAME } from '$lib/server/authkit-config.js';
+} from '$lib/server/workos-security.ts';
+import { AUTHKIT_COOKIE_NAME } from '$lib/server/authkit-config.ts';
 import {
 	getErrorLogContext,
 	shouldIncludeErrorMessage
-} from '$lib/server/error-diagnostics.js';
-import { normalizeRequestId } from '$lib/auth/log-context.js';
+} from '$lib/server/error-diagnostics.ts';
+import { normalizeRequestId } from '$lib/auth/log-context.ts';
 
 const workosEnv = getValidatedWorkosEnv(env);
 const { trustForwardedProto, trustedProxyIps } = getProxyTrustConfiguration(

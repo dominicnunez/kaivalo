@@ -3,13 +3,13 @@ import assert from 'node:assert';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import http from 'node:http';
-import { ensureHubBuild } from './helpers/hub-build.js';
-import { httpGet } from './helpers/hub-preview.js';
-import { reserveLocalPort } from './helpers/network.js';
+import { ensureHubBuild } from './helpers/hub-build.ts';
+import { httpGet } from './helpers/hub-preview.ts';
+import { reserveLocalPort } from './helpers/network.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const HUB_DIR = path.join(ROOT, 'apps', 'hub');
-const BUILD_ENTRY = path.join(HUB_DIR, 'server.js');
+const BUILD_ENTRY = path.join(HUB_DIR, 'server.ts');
 const STARTUP_RETRY_COUNT = 40;
 const STARTUP_DELAY_MS = 250;
 const STARTUP_TIMEOUT_MS = STARTUP_RETRY_COUNT * STARTUP_DELAY_MS;

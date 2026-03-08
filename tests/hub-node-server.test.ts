@@ -13,7 +13,7 @@ import {
 	getProxyTrustConfiguration,
 	LOOPBACK_PROXY_TRUST_ERROR_MESSAGE
 } from '../apps/hub/src/lib/server/workos-security.ts';
-import { reserveLocalPort } from './helpers/network.js';
+import { reserveLocalPort } from './helpers/network.ts';
 
 const baseEnv = {
 	NODE_ENV: 'test',

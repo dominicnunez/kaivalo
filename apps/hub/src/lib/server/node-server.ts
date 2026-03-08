@@ -1,10 +1,10 @@
 import http from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { canonicalizeIpAddress } from './ip-address.js';
+import { canonicalizeIpAddress } from './ip-address.ts';
 import {
 	getErrorDiagnostics,
 	type ErrorDiagnostics
-} from './error-diagnostics.js';
+} from './error-diagnostics.ts';
 import {
 	applyBaselineSecurityHeaders,
 	applyStaticAssetHeaders,
@@ -13,7 +13,7 @@ import {
 	getProxyTrustConfiguration,
 	getValidatedWorkosEnv,
 	shouldApplyStaticAssetHeaders
-} from './workos-security.js';
+} from './workos-security.ts';
 
 const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_PORT = 3000;
@@ -29,7 +29,7 @@ const MAX_TIMER_DELAY_MS = 2_147_483_647;
 const MIN_PORT = 1;
 const MAX_PORT = 65_535;
 
-export { getErrorDiagnostics } from './error-diagnostics.js';
+export { getErrorDiagnostics } from './error-diagnostics.ts';
 
 type Env = Record<string, string | undefined>;
 

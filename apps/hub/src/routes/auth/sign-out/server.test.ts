@@ -25,7 +25,7 @@ vi.mock('@workos/authkit-sveltekit', () => ({
 	authKit: mockAuthKit
 }));
 
-vi.mock('$lib/server/error-diagnostics.js', async (importOriginal) => {
+vi.mock('$lib/server/error-diagnostics.ts', async (importOriginal) => {
 	const actual = (await importOriginal()) as Record<string, unknown>;
 	return {
 		...actual,

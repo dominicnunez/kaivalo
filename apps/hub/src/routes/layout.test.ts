@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { buildAuthErrorRedirectQuery } from '$lib/auth/auth-error-query.js';
+import { buildAuthErrorRedirectQuery } from '$lib/auth/auth-error-query.ts';
 
 const { mockEnv } = vi.hoisted(() => ({
 	mockEnv: {
