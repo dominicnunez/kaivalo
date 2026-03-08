@@ -48,7 +48,9 @@ export function getAuthRouteHandlers() {
 	};
 }
 
-export async function getAuthUser(event: Parameters<typeof authKit.getUser>[0]) {
+export async function getAuthUser(
+	event: Parameters<typeof authKit.getUser>[0]
+) {
 	const testUser = readTestAuthUser(
 		event.request.headers.get(TEST_AUTH_USER_HEADER)
 	);
