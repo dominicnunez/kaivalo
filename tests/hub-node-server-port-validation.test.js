@@ -1,6 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { startHubServer } from '../apps/hub/src/lib/server/node-server.js';
+import {
+	LOOPBACK_PROXY_TRUST_ERROR_MESSAGE,
+	PROXY_HSTS_CONFIGURATION_ERROR_MESSAGE
+} from '../apps/hub/src/lib/server/workos-security.js';
 
 const baseEnv = {
 	NODE_ENV: 'test',
@@ -127,7 +131,10 @@ describe('node server port validation', () => {
 		assert.strictEqual(fatalEvents[0].reason, 'startup-error');
 		assert.strictEqual(fatalEvents[0].exitCode, 1);
 		assert.strictEqual(fatalEvents[0].error?.type, 'Error');
-		assert.strictEqual(fatalEvents[0].error?.message, undefined);
+		assert.strictEqual(
+			fatalEvents[0].error?.message,
+			'TRUSTED_PROXY_IPS must be configured when TRUST_X_FORWARDED_PROTO=true'
+		);
 	});
 
 	it('reports production https origins that skip trusted forwarded proto handling', () => {
@@ -146,7 +153,10 @@ describe('node server port validation', () => {
 		assert.strictEqual(fatalEvents[0].reason, 'startup-error');
 		assert.strictEqual(fatalEvents[0].exitCode, 1);
 		assert.strictEqual(fatalEvents[0].error?.type, 'Error');
-		assert.strictEqual(fatalEvents[0].error?.message, undefined);
+		assert.strictEqual(
+			fatalEvents[0].error?.message,
+			PROXY_HSTS_CONFIGURATION_ERROR_MESSAGE
+		);
 	});
 
 	it('reports loopback-only trusted proxies for production https origins', () => {
@@ -165,6 +175,9 @@ describe('node server port validation', () => {
 		assert.strictEqual(fatalEvents[0].reason, 'startup-error');
 		assert.strictEqual(fatalEvents[0].exitCode, 1);
 		assert.strictEqual(fatalEvents[0].error?.type, 'Error');
-		assert.strictEqual(fatalEvents[0].error?.message, undefined);
+		assert.strictEqual(
+			fatalEvents[0].error?.message,
+			LOOPBACK_PROXY_TRUST_ERROR_MESSAGE
+		);
 	});
 });

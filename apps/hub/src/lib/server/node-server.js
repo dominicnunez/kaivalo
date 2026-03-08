@@ -109,7 +109,7 @@ function getListeningLogMessage(env, host, port) {
 
 /**
  * @param {unknown} error
- * @param {{ includeSensitiveDetails?: boolean }} [options]
+ * @param {{ includeSensitiveDetails?: boolean; includeMessage?: boolean }} [options]
  * @returns {{
  *   type: string;
  *   code?: string;
@@ -121,6 +121,8 @@ function getListeningLogMessage(env, host, port) {
  */
 export function getErrorDiagnostics(error, options = {}) {
 	const includeSensitiveDetails = options.includeSensitiveDetails === true;
+	const includeMessage =
+		includeSensitiveDetails || options.includeMessage === true;
 
 	if (error instanceof Error) {
 		/** @type {{
@@ -140,8 +142,11 @@ export function getErrorDiagnostics(error, options = {}) {
 			details.code = errorCode;
 		}
 
-		if (includeSensitiveDetails) {
+		if (includeMessage) {
 			details.message = redactSensitiveText(error.message);
+		}
+
+		if (includeSensitiveDetails) {
 			if (typeof error.stack === 'string' && error.stack.trim()) {
 				details.stack = redactSensitiveText(error.stack);
 			}
@@ -166,7 +171,7 @@ export function getErrorDiagnostics(error, options = {}) {
 	const details = {
 		type: 'NonErrorThrown'
 	};
-	if (includeSensitiveDetails) {
+	if (includeMessage) {
 		details.message = redactSensitiveText(String(error));
 	}
 	return details;
@@ -692,7 +697,8 @@ export function startHubServer(options) {
 	const handleStartupError = (error) => {
 		cleanupProcessListeners();
 		const diagnostics = getErrorDiagnostics(error, {
-			includeSensitiveDetails: shouldIncludeSensitiveErrorDetails(env)
+			includeSensitiveDetails: shouldIncludeSensitiveErrorDetails(env),
+			includeMessage: true
 		});
 		logger.error('Failed to start hub server', {
 			host,
