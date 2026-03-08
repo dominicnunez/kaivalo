@@ -400,6 +400,10 @@ describe('sign-out route integration behavior', () => {
 		assert.ok(varyHeader.includes('cookie'));
 		assert.ok(varyHeader.includes('authorization'));
 		assertHardenedCookies(getSetCookieHeaders(response.headers));
+		assert.match(
+			getSetCookieHeaders(response.headers).join('\n'),
+			/\bwos-session=;.*\bmax-age=0\b/i
+		);
 	});
 
 	it('accepts route-level POST requests without origin when same-origin referer is present', async () => {
@@ -424,6 +428,10 @@ describe('sign-out route integration behavior', () => {
 		assert.ok(varyHeader.includes('cookie'));
 		assert.ok(varyHeader.includes('authorization'));
 		assertHardenedCookies(getSetCookieHeaders(response.headers));
+		assert.match(
+			getSetCookieHeaders(response.headers).join('\n'),
+			/\bwos-session=;.*\bmax-age=0\b/i
+		);
 	});
 
 	it('rejects route-level POST requests with an opaque null origin', async () => {

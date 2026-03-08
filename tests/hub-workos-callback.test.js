@@ -328,5 +328,36 @@ describe('WorkOS Auth Callback Route', () => {
 				await preview.stop();
 			}
 		});
+
+		it('returns a hardened redirect response when callback handling succeeds', async () => {
+			const preview = await startHubPreview({
+				callbackMode: 'success',
+				callbackReturnTo: '/workspace'
+			});
+
+			try {
+				const response = await httpGet(
+					`${preview.baseUrl}/auth/callback?code=test-code&state=test-state`,
+					{ accept: 'text/html' }
+				);
+
+				assert.strictEqual(response.statusCode, 302);
+				assert.strictEqual(response.headers.location, '/workspace');
+				assert.strictEqual(
+					response.headers['cache-control'],
+					'private, no-store'
+				);
+				const varyHeader = (response.headers['vary'] ?? '').toLowerCase();
+				assert.ok(varyHeader.includes('cookie'));
+				assert.ok(varyHeader.includes('authorization'));
+				assertHardenedCookies(getSetCookieHeaders(response.headers));
+				assert.match(
+					getSetCookieHeaders(response.headers).join('\n'),
+					/\bwos-session=fixture-session\b/i
+				);
+			} finally {
+				await preview.stop();
+			}
+		});
 	});
 });
