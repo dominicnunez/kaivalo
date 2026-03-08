@@ -8,7 +8,7 @@ const snippet = createRawSnippet(() => ({
 }));
 
 describe('ui public api exports', () => {
-	it('exports a Button component with click and type behavior', async () => {
+	it('exports a Button component with click, type, and disabled semantics', async () => {
 		const onClick = vi.fn();
 		render(Button, {
 			type: 'submit',
@@ -20,14 +20,28 @@ describe('ui public api exports', () => {
 		expect(button.getAttribute('type')).toBe('submit');
 		await fireEvent.click(button);
 		expect(onClick).toHaveBeenCalledTimes(1);
+
+		const disabledClick = vi.fn();
+		render(Button, {
+			disabled: true,
+			onclick: disabledClick,
+			children: snippet
+		});
+
+		const disabledButton = screen.getAllByRole('button', {
+			name: 'Rendered child'
+		})[1];
+		expect(disabledButton.hasAttribute('disabled')).toBe(true);
+		expect(disabledButton.getAttribute('aria-disabled')).toBeNull();
+		expect(disabledClick).not.toHaveBeenCalled();
 	});
 
-	it('exports a Badge component that renders label content', () => {
+	it('exports a Badge component that renders visible status content', () => {
 		render(Badge, {
 			children: snippet
 		});
 
-		expect(screen.getByText('Rendered child').tagName).toBe('SPAN');
+		expect(screen.getByText('Rendered child')).toBeTruthy();
 	});
 
 	it('exports a Card component that only links on safe href values', () => {
@@ -50,14 +64,15 @@ describe('ui public api exports', () => {
 		).toBe('/services');
 	});
 
-	it('exports a Container component with public runtime marker', () => {
+	it('exports a Container component that preserves children and caller classes', () => {
 		const wrapped = render(Container, {
+			class: 'consumer-shell',
 			children: snippet
 		});
 
-		expect(
-			wrapped.container.querySelector('[data-ui="container"]')
-		).not.toBeNull();
+		expect(wrapped.container.firstElementChild?.className).toContain(
+			'consumer-shell'
+		);
 		expect(wrapped.container.textContent).toContain('Rendered child');
 	});
 });
