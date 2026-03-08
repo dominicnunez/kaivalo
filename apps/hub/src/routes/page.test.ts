@@ -20,6 +20,7 @@ function createPageData(overrides: Partial<PageData> = {}): PageData {
 			imageAlt: 'Kaivalo test image',
 			twitterCard: 'summary_large_image'
 		},
+		currentYear: Number(currentYear),
 		user: null,
 		signInUrl: null,
 		authError: null,

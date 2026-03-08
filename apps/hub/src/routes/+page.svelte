@@ -40,7 +40,7 @@
 	let mounted = $state(false);
 	let pageVisible = $state(true);
 	let reducedMotion = $state(false);
-	let currentYear = $state(new Date().getFullYear());
+	let currentYear = $derived(data.currentYear);
 
 	onMount(() => {
 		mounted = true;
@@ -54,7 +54,6 @@
 
 		updateReducedMotion();
 		updateVisibility();
-		currentYear = new Date().getFullYear();
 
 		let yearRefreshTimeout: ReturnType<typeof setTimeout> | undefined;
 		let yearRefreshInterval: ReturnType<typeof setInterval> | undefined;

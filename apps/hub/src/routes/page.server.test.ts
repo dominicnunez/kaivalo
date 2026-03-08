@@ -29,7 +29,8 @@ describe('home page load', () => {
 				image: 'https://kaivalo.test/og-image.png',
 				imageAlt: 'Kaivalo — tools that cut through complexity',
 				twitterCard: 'summary_large_image'
-			}
+			},
+			currentYear: new Date().getFullYear()
 		});
 	});
 });

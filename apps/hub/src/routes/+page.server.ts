@@ -5,6 +5,7 @@ import { getValidatedWorkosEnv } from '$lib/server/workos-security.js';
 
 export const load: PageServerLoad = () => {
 	return {
-		meta: getHomeMeta(getValidatedWorkosEnv(env).origin)
+		meta: getHomeMeta(getValidatedWorkosEnv(env).origin),
+		currentYear: new Date().getFullYear()
 	};
 };
