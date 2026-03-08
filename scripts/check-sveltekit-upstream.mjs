@@ -1,8 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const ISSUE_TITLE = 'Track upstream @sveltejs/kit updates for cookie advisory';
 const REGISTRY_LATEST_URL = 'https://registry.npmjs.org/@sveltejs%2fkit/latest';
+export const FETCH_TIMEOUT_MS = 10_000;
 
 function parseArgs(argv) {
 	const options = {
@@ -119,12 +121,31 @@ async function readCurrentVersion() {
 	return currentVersion;
 }
 
-async function readLatestMetadata() {
-	const response = await fetch(REGISTRY_LATEST_URL, {
-		headers: {
-			accept: 'application/json'
-		}
-	});
+export function createFetchErrorMessage(error) {
+	if (
+		error instanceof DOMException &&
+		(error.name === 'TimeoutError' || error.name === 'AbortError')
+	) {
+		return `Timed out fetching latest @sveltejs/kit metadata after ${FETCH_TIMEOUT_MS}ms`;
+	}
+
+	const message =
+		error instanceof Error && error.message ? error.message : String(error);
+	return `Failed to fetch latest @sveltejs/kit metadata: ${message}`;
+}
+
+export async function readLatestMetadata({ fetchImpl = fetch } = {}) {
+	let response;
+	try {
+		response = await fetchImpl(REGISTRY_LATEST_URL, {
+			headers: {
+				accept: 'application/json'
+			},
+			signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
+		});
+	} catch (error) {
+		throw new Error(createFetchErrorMessage(error), { cause: error });
+	}
 
 	if (!response.ok) {
 		throw new Error(
@@ -217,7 +238,9 @@ async function main() {
 	process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 
-main().catch((error) => {
-	console.error(error instanceof Error ? error.message : error);
-	process.exitCode = 1;
-});
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+	main().catch((error) => {
+		console.error(error instanceof Error ? error.message : error);
+		process.exitCode = 1;
+	});
+}
