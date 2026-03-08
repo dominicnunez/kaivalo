@@ -185,7 +185,40 @@ describe('layout server load', () => {
 		});
 	});
 
-	it('accepts signed auth callback query errors and surfaces their incident id', async () => {
+	it('surfaces signed auth callback query errors only while auth remains unavailable', async () => {
+		mockedAuthKit.getUser.mockResolvedValue(null as never);
+		mockedAuthKit.getSignInUrl.mockResolvedValue(null as never);
+		const setHeaders = vi.fn();
+		const event = {
+			url: new URL(
+				`https://kaivalo.test/?${buildAuthErrorRedirectQuery({
+					incidentId: 'authcb_123e4567-e89b-12d3-a456-426614174000',
+					secret: mockEnv.WORKOS_COOKIE_PASSWORD,
+					now: Date.now()
+				})}`
+			),
+			request: new Request('https://kaivalo.test/'),
+			setHeaders
+		} as never;
+
+		const result = await load(event);
+
+		expect(result).toEqual({
+			user: null,
+			signInUrl: null,
+			authError: {
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
+				incidentId: 'authcb_123e4567-e89b-12d3-a456-426614174000'
+			}
+		});
+		expect(setHeaders).toHaveBeenCalledWith({
+			'cache-control': 'private, no-store',
+			vary: 'Cookie, Authorization'
+		});
+	});
+
+	it('ignores signed auth callback query errors once sign-in has recovered', async () => {
 		mockedAuthKit.getUser.mockResolvedValue(null as never);
 		mockedAuthKit.getSignInUrl.mockResolvedValue('/auth/sign-in' as never);
 		const setHeaders = vi.fn();
@@ -206,15 +239,36 @@ describe('layout server load', () => {
 		expect(result).toEqual({
 			user: null,
 			signInUrl: '/auth/sign-in',
-			authError: {
-				message:
-					'Sign-in is temporarily unavailable. Please try again shortly.',
-				incidentId: 'authcb_123e4567-e89b-12d3-a456-426614174000'
-			}
+			authError: null
 		});
-		expect(setHeaders).toHaveBeenCalledWith({
-			'cache-control': 'private, no-store',
-			vary: 'Cookie, Authorization'
+		expect(setHeaders).not.toHaveBeenCalled();
+	});
+
+	it('ignores signed auth callback query errors once the user is authenticated', async () => {
+		mockedAuthKit.getUser.mockResolvedValue({
+			firstName: 'Kai',
+			email: 'kai@example.com',
+			profilePictureUrl: 'https://avatars.githubusercontent.com/u/1'
+		} as never);
+
+		const result = await load(
+			createEvent(
+				`https://kaivalo.test/?${buildAuthErrorRedirectQuery({
+					incidentId: 'authcb_123e4567-e89b-12d3-a456-426614174000',
+					secret: mockEnv.WORKOS_COOKIE_PASSWORD,
+					now: Date.now()
+				})}`
+			)
+		);
+
+		expect(result).toEqual({
+			user: {
+				firstName: 'Kai',
+				email: 'kai@example.com',
+				profilePictureUrl: 'https://avatars.githubusercontent.com/u/1'
+			},
+			signInUrl: null,
+			authError: null
 		});
 	});
 

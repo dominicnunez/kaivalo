@@ -1,4 +1,3 @@
-import { authKit } from '@workos/authkit-sveltekit';
 import { env } from '$env/dynamic/private';
 import { randomUUID } from 'node:crypto';
 import type { LayoutServerLoad } from './$types';
@@ -14,8 +13,8 @@ import {
 } from '$lib/auth/auth-error-query.js';
 import { normalizeTrustedRedirectLocation } from '$lib/auth/safe-redirect.js';
 import { isTrustedAvatarHost } from '$lib/server/trusted-hosts.js';
-import { getAuthUser } from '$lib/server/authkit-runtime.js';
 import { getTrustedAuthOriginSet } from '$lib/server/auth-origin-policy.js';
+import { authKit } from '@workos/authkit-sveltekit';
 
 const TRUSTED_SIGN_IN_PATH_PREFIXES = [
 	'/auth/sign-in',
@@ -122,7 +121,7 @@ export const load: LayoutServerLoad = async (event) => {
 		const authErrorFromQuery = readVerifiedAuthError(event.url.searchParams, {
 			secret: env.WORKOS_COOKIE_PASSWORD ?? ''
 		});
-		const user = await getAuthUser(event);
+		const user = await authKit.getUser(event);
 		let signInUrl = null;
 		if (!user) {
 			const workosEnv = getValidatedWorkosEnv(env);
@@ -134,10 +133,9 @@ export const load: LayoutServerLoad = async (event) => {
 			);
 		}
 		const authError =
-			authErrorFromQuery ??
-			(user || signInUrl
+			user || signInUrl
 				? null
-				: {
+				: (authErrorFromQuery ?? {
 						message: AUTH_ERROR_MESSAGE,
 						incidentId: null
 					});
