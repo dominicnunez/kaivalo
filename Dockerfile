@@ -28,8 +28,10 @@ WORKDIR /app
 
 COPY --from=build --chown=node:node /app/package.json /app/package-lock.json ./
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
-COPY --from=build --chown=node:node /app/packages/ui ./packages/ui
-COPY --from=build --chown=node:node /app/apps/hub ./apps/hub
+COPY --from=build --chown=node:node /app/apps/hub/package.json ./apps/hub/package.json
+COPY --from=build --chown=node:node /app/apps/hub/server.js ./apps/hub/server.js
+COPY --from=build --chown=node:node /app/apps/hub/build ./apps/hub/build
+COPY --from=build --chown=node:node /app/apps/hub/src/lib/server ./apps/hub/src/lib/server
 
 WORKDIR /app/apps/hub
 USER node
