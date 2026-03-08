@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
+export const AUDIT_TIMEOUT_MS = 30_000;
 const ALLOWLIST_PATH = resolve(
 	ROOT,
 	'audit',
@@ -89,7 +90,9 @@ export function collectAuditAdvisories(report) {
 			}
 
 			const advisoryPackage =
-				'name' in item && typeof item.name === 'string' ? item.name : packageName;
+				'name' in item && typeof item.name === 'string'
+					? item.name
+					: packageName;
 			const advisoryUrl =
 				'url' in item && typeof item.url === 'string' ? item.url : undefined;
 
@@ -129,7 +132,8 @@ function matchesAllowlist(advisory, allowlistEntry) {
 	return (
 		advisory.package === allowlistEntry.package &&
 		advisory.source === allowlistEntry.source &&
-		(allowlistEntry.path === undefined || advisory.path === allowlistEntry.path) &&
+		(allowlistEntry.path === undefined ||
+			advisory.path === allowlistEntry.path) &&
 		(allowlistEntry.url === undefined || advisory.url === allowlistEntry.url)
 	);
 }
@@ -161,22 +165,69 @@ function formatAdvisories(advisories) {
 		.join('\n');
 }
 
-function runAudit() {
-	const auditResult = spawnSync('npm', ['audit', '--omit=dev', '--json'], {
+function buildAuditFailureMessage(auditResult) {
+	const stderr = auditResult.stderr?.trim();
+	if (stderr) {
+		return `npm audit failed: ${stderr}`;
+	}
+
+	if (auditResult.signal) {
+		return `npm audit failed: terminated by ${auditResult.signal}`;
+	}
+
+	if (typeof auditResult.status === 'number') {
+		return `npm audit failed with exit status ${auditResult.status}`;
+	}
+
+	return 'npm audit failed';
+}
+
+/**
+ * @param {string} output
+ * @returns {unknown}
+ */
+function parseAuditReport(output) {
+	try {
+		return JSON.parse(output);
+	} catch (error) {
+		throw new Error('npm audit returned invalid JSON', { cause: error });
+	}
+}
+
+export function runAudit({
+	spawnSyncImpl = spawnSync,
+	timeoutMs = AUDIT_TIMEOUT_MS
+} = {}) {
+	const auditResult = spawnSyncImpl('npm', ['audit', '--omit=dev', '--json'], {
 		cwd: ROOT,
-		encoding: 'utf8'
+		encoding: 'utf8',
+		timeout: timeoutMs
 	});
 
+	if (auditResult.error) {
+		if (auditResult.error.code === 'ETIMEDOUT') {
+			throw new Error(`npm audit exceeded ${timeoutMs}ms timeout`);
+		}
+
+		throw new Error(`npm audit failed: ${auditResult.error.message}`, {
+			cause: auditResult.error
+		});
+	}
+
+	const stdout = auditResult.stdout ?? '';
 	if (
 		auditResult.status !== 0 &&
 		auditResult.status !== 1 &&
-		(auditResult.stdout ?? '').trim() === ''
+		stdout.trim() === ''
 	) {
-		const stderr = auditResult.stderr?.trim();
-		throw new Error(stderr ? `npm audit failed: ${stderr}` : 'npm audit failed');
+		throw new Error(buildAuditFailureMessage(auditResult));
 	}
 
-	return JSON.parse(auditResult.stdout);
+	if (stdout.trim() === '') {
+		throw new Error('npm audit did not return JSON output');
+	}
+
+	return parseAuditReport(stdout);
 }
 
 export function main() {

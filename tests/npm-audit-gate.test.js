@@ -1,8 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import {
+	AUDIT_TIMEOUT_MS,
 	collectAuditAdvisories,
-	findUnallowlistedAdvisories
+	findUnallowlistedAdvisories,
+	runAudit
 } from '../scripts/check-npm-audit.mjs';
 
 describe('npm audit gate', () => {
@@ -70,5 +72,49 @@ describe('npm audit gate', () => {
 		]);
 
 		assert.deepStrictEqual(unallowlisted, [advisories[1]]);
+	});
+
+	it('fails fast when npm audit exceeds the configured timeout', () => {
+		assert.throws(
+			() =>
+				runAudit({
+					spawnSyncImpl: () => ({
+						error: Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' })
+					})
+				}),
+			new Error(`npm audit exceeded ${AUDIT_TIMEOUT_MS}ms timeout`)
+		);
+	});
+
+	it('rejects malformed JSON output from npm audit', () => {
+		assert.throws(
+			() =>
+				runAudit({
+					spawnSyncImpl: () => ({
+						status: 1,
+						stdout: '{not json}',
+						stderr: ''
+					})
+				}),
+			(error) => {
+				assert.match(error.message, /npm audit returned invalid JSON/);
+				return true;
+			}
+		);
+	});
+
+	it('surfaces abnormal npm audit exits when no report is returned', () => {
+		assert.throws(
+			() =>
+				runAudit({
+					spawnSyncImpl: () => ({
+						status: null,
+						signal: 'SIGTERM',
+						stdout: '',
+						stderr: ''
+					})
+				}),
+			new Error('npm audit failed: terminated by SIGTERM')
+		);
 	});
 });
