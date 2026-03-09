@@ -43,13 +43,19 @@ import { load } from './+layout.server';
 type MockLayoutEvent = {
 	url: URL;
 	request: Request;
+	getClientAddress: () => string;
 	setHeaders?: ReturnType<typeof vi.fn>;
 };
 
-function createEvent(origin: string, headers: HeadersInit = {}) {
+function createEvent(
+	origin: string,
+	headers: HeadersInit = {},
+	clientAddress = '127.0.0.1'
+) {
 	return {
 		url: new URL(origin),
-		request: new Request(origin, { headers })
+		request: new Request(origin, { headers }),
+		getClientAddress: () => clientAddress
 	} satisfies MockLayoutEvent;
 }
 
@@ -86,7 +92,7 @@ describe('layout server load', () => {
 		mockEnv.ORIGIN = 'http://localhost:4173';
 		mockEnv.WORKOS_REDIRECT_URI = 'http://127.0.0.1:4173/auth/callback';
 
-		const result = await load(baseEvent as never);
+		const result = await load(createEvent('http://localhost:4173/') as never);
 
 		expect(mockGetUser).not.toHaveBeenCalled();
 		expect(result).toEqual({
@@ -176,6 +182,64 @@ describe('layout server load', () => {
 			);
 		}
 	);
+
+	it('rejects development auth bypass when the live request hostname is not loopback', async () => {
+		mockEnv.NODE_ENV = 'development';
+		mockEnv.DEV_AUTH_BYPASS = 'true';
+		mockEnv.ORIGIN = 'http://localhost:4173';
+		mockEnv.WORKOS_REDIRECT_URI = 'http://127.0.0.1:4173/auth/callback';
+
+		const result = await load(
+			createEvent('http://staging.kaivalo.test:4173/') as never
+		);
+
+		expect(mockGetUser).not.toHaveBeenCalled();
+		expect(result).toMatchObject({
+			user: null,
+			signInUrl: null,
+			authError: {
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
+				incidentId: expect.stringMatching(/^authlayout_/)
+			}
+		});
+		expect(errorSpy).toHaveBeenCalledWith(
+			'Auth layout load failed',
+			expect.objectContaining({
+				errorMessage:
+					'DEV_AUTH_BYPASS only serves requests from loopback hosts and loopback clients.'
+			})
+		);
+	});
+
+	it('rejects development auth bypass when the client is not loopback', async () => {
+		mockEnv.NODE_ENV = 'development';
+		mockEnv.DEV_AUTH_BYPASS = 'true';
+		mockEnv.ORIGIN = 'http://localhost:4173';
+		mockEnv.WORKOS_REDIRECT_URI = 'http://127.0.0.1:4173/auth/callback';
+
+		const result = await load(
+			createEvent('http://localhost:4173/', {}, '203.0.113.25') as never
+		);
+
+		expect(mockGetUser).not.toHaveBeenCalled();
+		expect(result).toMatchObject({
+			user: null,
+			signInUrl: null,
+			authError: {
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
+				incidentId: expect.stringMatching(/^authlayout_/)
+			}
+		});
+		expect(errorSpy).toHaveBeenCalledWith(
+			'Auth layout load failed',
+			expect.objectContaining({
+				errorMessage:
+					'DEV_AUTH_BYPASS only serves requests from loopback hosts and loopback clients.'
+			})
+		);
+	});
 
 	it('returns normalized user data for authenticated requests', async () => {
 		mockGetValidatedWorkosEnv.mockImplementation(() => {

@@ -12,12 +12,17 @@ import {
 	readVerifiedAuthError
 } from '$lib/auth/auth-error-query.ts';
 import { toAvatarProxyUrl } from '$lib/server/avatar-url.ts';
-import { isLoopbackHostname as isLoopbackHost } from '$lib/server/ip-address.ts';
+import {
+	isLoopbackHostname as isLoopbackHost,
+	isLoopbackIpAddress
+} from '$lib/server/ip-address.ts';
 import { authKit } from '@workos/authkit-sveltekit';
 
 const LOCAL_SIGN_IN_PATH = '/auth/sign-in';
 const DEV_AUTH_BYPASS_CONFIGURATION_ERROR_MESSAGE =
 	'DEV_AUTH_BYPASS requires NODE_ENV=development with loopback-only ORIGIN and WORKOS_REDIRECT_URI callback URL.';
+const DEV_AUTH_BYPASS_REQUEST_ERROR_MESSAGE =
+	'DEV_AUTH_BYPASS only serves requests from loopback hosts and loopback clients.';
 const DEV_AUTH_BYPASS_EMAIL = 'dev@kaivalo.local';
 const DEV_AUTH_BYPASS_FIRST_NAME = 'Dev';
 
@@ -135,13 +140,36 @@ function hasValidLocalDevelopmentAuthBypassConfiguration(): boolean {
 	);
 }
 
-function getDevelopmentAuthBypassUser(): LayoutUser | null {
+function hasValidLocalDevelopmentAuthBypassRequest(
+	event: Parameters<LayoutServerLoad>[0]
+): boolean {
+	if (!isLoopbackHostname(event.url.hostname)) {
+		return false;
+	}
+
+	if (typeof event.getClientAddress !== 'function') {
+		return false;
+	}
+
+	try {
+		return isLoopbackIpAddress(event.getClientAddress());
+	} catch {
+		return false;
+	}
+}
+
+function getDevelopmentAuthBypassUser(
+	event: Parameters<LayoutServerLoad>[0]
+): LayoutUser | null {
 	if (env.DEV_AUTH_BYPASS?.trim().toLowerCase() !== 'true') {
 		return null;
 	}
 
 	if (!hasValidLocalDevelopmentAuthBypassConfiguration()) {
 		throw new Error(DEV_AUTH_BYPASS_CONFIGURATION_ERROR_MESSAGE);
+	}
+	if (!hasValidLocalDevelopmentAuthBypassRequest(event)) {
+		throw new Error(DEV_AUTH_BYPASS_REQUEST_ERROR_MESSAGE);
 	}
 
 	return {
@@ -205,7 +233,7 @@ export const load: LayoutServerLoad = async (event) => {
 		const authErrorFromQuery = readVerifiedAuthError(event.url.searchParams, {
 			secret: env.AUTH_ERROR_SIGNING_SECRET ?? ''
 		});
-		const developmentBypassUser = getDevelopmentAuthBypassUser();
+		const developmentBypassUser = getDevelopmentAuthBypassUser(event);
 		let user: LayoutUser | null = developmentBypassUser;
 		if (!user) {
 			try {
