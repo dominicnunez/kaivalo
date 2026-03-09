@@ -83,6 +83,21 @@ describe('auth sign-in route', () => {
 		});
 	});
 
+	it('preserves trusted same-origin destinations as absolute URLs when the request host is poisoned', async () => {
+		mockGetSignInUrl.mockResolvedValue(
+			'https://kaivalo.test/services?welcome=1#hero' as never
+		);
+
+		const { GET } = await import('./+server');
+
+		await expect(
+			GET(createEvent({}, 'https://attacker.test/auth/sign-in'))
+		).rejects.toMatchObject({
+			status: 303,
+			location: 'https://kaivalo.test/services?welcome=1#hero'
+		});
+	});
+
 	it('rejects same-origin sign-in destinations that loop back to the route itself', async () => {
 		mockGetSignInUrl.mockResolvedValue(
 			'https://kaivalo.test/auth/sign-in?screen_hint=sign-up#hero' as never

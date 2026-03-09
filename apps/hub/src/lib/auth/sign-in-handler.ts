@@ -85,11 +85,11 @@ export function createSignInGetHandler({
 	return async (event: RequestEvent) => {
 		try {
 			const signInUrl = await getSignInUrl({ returnTo: defaultReturnTo });
-			const safeLocation = normalizeTrustedRedirectLocation(
-				signInUrl,
+			const safeLocation = normalizeTrustedRedirectLocation(signInUrl, {
+				requestOrigin: event.url.origin,
 				trustedOrigin,
-				trustedRedirectOrigins
-			);
+				allowedOrigins: trustedRedirectOrigins
+			});
 			if (!safeLocation) {
 				throw new Error('Sign-in produced an invalid redirect location');
 			}

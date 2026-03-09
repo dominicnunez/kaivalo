@@ -531,11 +531,11 @@ describe('sign-out handler unit behavior', () => {
 		});
 
 		const result = await postHandler({
-			request: new Request('https://kaivalo.test/auth/sign-out', {
+			request: new Request('https://kaivalo.com/auth/sign-out', {
 				method: 'POST',
 				headers: { origin: 'https://kaivalo.com' }
 			}),
-			url: new URL('https://kaivalo.test/auth/sign-out')
+			url: new URL('https://kaivalo.com/auth/sign-out')
 		});
 
 		assert.strictEqual(result.status, 302);
@@ -560,16 +560,74 @@ describe('sign-out handler unit behavior', () => {
 		await assert.rejects(
 			() =>
 				postHandler({
-					request: new Request('https://kaivalo.test/auth/sign-out', {
+					request: new Request('https://kaivalo.com/auth/sign-out', {
 						method: 'POST',
 						headers: { origin: 'https://kaivalo.com' }
 					}),
-					url: new URL('https://kaivalo.test/auth/sign-out')
+					url: new URL('https://kaivalo.com/auth/sign-out')
 				}),
 			(caught) => {
 				assert.ok(isRedirect(caught));
 				assert.strictEqual(caught.status, 302);
 				assert.strictEqual(caught.location, '/account?from=sign-out#done');
+				return true;
+			}
+		);
+	});
+
+	it('preserves same-origin redirect-like responses as absolute URLs when the request host is poisoned', async () => {
+		const postHandler = createSignOutPostHandler({
+			signOut: async () =>
+				Response.redirect(
+					'https://kaivalo.com/account?from=sign-out#done',
+					302
+				),
+			expectedOrigin: 'https://kaivalo.com'
+		});
+
+		const result = await postHandler({
+			request: new Request('https://attacker.test/auth/sign-out', {
+				method: 'POST',
+				headers: { origin: 'https://kaivalo.com' }
+			}),
+			url: new URL('https://attacker.test/auth/sign-out')
+		});
+
+		assert.strictEqual(result.status, 302);
+		assert.strictEqual(
+			result.headers.get('location'),
+			'https://kaivalo.com/account?from=sign-out#done'
+		);
+	});
+
+	it('preserves same-origin redirect-like throws as absolute URLs when the request host is poisoned', async () => {
+		const redirectLike = {
+			status: 302,
+			location: 'https://kaivalo.com/account?from=sign-out#done'
+		};
+		const postHandler = createSignOutPostHandler({
+			signOut: async () => {
+				throw redirectLike;
+			},
+			expectedOrigin: 'https://kaivalo.com'
+		});
+
+		await assert.rejects(
+			() =>
+				postHandler({
+					request: new Request('https://attacker.test/auth/sign-out', {
+						method: 'POST',
+						headers: { origin: 'https://kaivalo.com' }
+					}),
+					url: new URL('https://attacker.test/auth/sign-out')
+				}),
+			(caught) => {
+				assert.ok(isRedirect(caught));
+				assert.strictEqual(caught.status, 302);
+				assert.strictEqual(
+					caught.location,
+					'https://kaivalo.com/account?from=sign-out#done'
+				);
 				return true;
 			}
 		);

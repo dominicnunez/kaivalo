@@ -125,6 +125,7 @@ function cloneRedirectResponse(response: Response, location: string): Response {
 
 function normalizeSignOutResponse(
 	response: Response,
+	requestOrigin: string,
 	expectedOrigin: string,
 	allowedRedirectOrigins: Iterable<string>
 ): Response {
@@ -137,11 +138,11 @@ function normalizeSignOutResponse(
 		return response;
 	}
 
-	const safeLocation = normalizeTrustedRedirectLocation(
-		location,
-		expectedOrigin,
-		allowedRedirectOrigins
-	);
+	const safeLocation = normalizeTrustedRedirectLocation(location, {
+		requestOrigin,
+		trustedOrigin: expectedOrigin,
+		allowedOrigins: allowedRedirectOrigins
+	});
 	if (!safeLocation) {
 		throw new Error('Sign-out produced an invalid redirect location');
 	}
@@ -171,6 +172,7 @@ export function createSignOutPostHandler({
 		try {
 			return normalizeSignOutResponse(
 				await signOut(event),
+				event.url.origin,
 				trustedOrigin,
 				trustedRedirectOrigins
 			);
@@ -180,8 +182,11 @@ export function createSignOutPostHandler({
 				const redirectError: RedirectLikeObject = err;
 				const safeLocation = normalizeTrustedRedirectLocation(
 					redirectError.location,
-					trustedOrigin,
-					trustedRedirectOrigins
+					{
+						requestOrigin: event.url.origin,
+						trustedOrigin,
+						allowedOrigins: trustedRedirectOrigins
+					}
 				);
 				if (safeLocation) {
 					if (

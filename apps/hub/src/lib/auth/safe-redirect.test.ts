@@ -16,7 +16,10 @@ describe('normalizeTrustedRedirectLocation', () => {
 		'/%252F%252Fevil.example/path'
 	])('rejects unsafe encoded relative redirect variant %s', (location) => {
 		expect(
-			normalizeTrustedRedirectLocation(location, REQUEST_ORIGIN)
+			normalizeTrustedRedirectLocation(location, {
+				requestOrigin: REQUEST_ORIGIN,
+				trustedOrigin: REQUEST_ORIGIN
+			})
 		).toBeNull();
 	});
 
@@ -29,17 +32,41 @@ describe('normalizeTrustedRedirectLocation', () => {
 		'rejects same-origin absolute redirects that decode into unsafe paths: %s',
 		(location) => {
 			expect(
-				normalizeSameOriginRedirectLocation(location, REQUEST_ORIGIN)
+				normalizeSameOriginRedirectLocation(location, {
+					requestOrigin: REQUEST_ORIGIN,
+					trustedOrigin: REQUEST_ORIGIN
+				})
 			).toBeNull();
 		}
 	);
 
 	it('preserves ordinary same-origin paths', () => {
 		expect(
-			normalizeTrustedRedirectLocation(
-				'/account?from=auth#done',
-				REQUEST_ORIGIN
-			)
+			normalizeTrustedRedirectLocation('/account?from=auth#done', {
+				requestOrigin: REQUEST_ORIGIN,
+				trustedOrigin: REQUEST_ORIGIN
+			})
 		).toBe('/account?from=auth#done');
+	});
+
+	it('pins relative paths to the trusted origin when the request host is poisoned', () => {
+		expect(
+			normalizeTrustedRedirectLocation('/account?from=auth#done', {
+				requestOrigin: 'https://attacker.test',
+				trustedOrigin: REQUEST_ORIGIN
+			})
+		).toBe('https://kaivalo.test/account?from=auth#done');
+	});
+
+	it('preserves absolute redirects to the trusted origin when the request host is poisoned', () => {
+		expect(
+			normalizeSameOriginRedirectLocation(
+				'https://kaivalo.test/services?welcome=1#shell',
+				{
+					requestOrigin: 'https://attacker.test',
+					trustedOrigin: REQUEST_ORIGIN
+				}
+			)
+		).toBe('https://kaivalo.test/services?welcome=1#shell');
 	});
 });

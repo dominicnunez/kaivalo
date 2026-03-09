@@ -49,6 +49,7 @@ function cloneRedirectResponse(response: Response, location: string): Response {
 
 function normalizeCallbackResponse(
 	response: Response,
+	requestOrigin: string,
 	expectedOrigin: string
 ): Response {
 	if (!REDIRECT_RESPONSE_STATUSES.has(response.status)) {
@@ -60,10 +61,10 @@ function normalizeCallbackResponse(
 		return response;
 	}
 
-	const safeLocation = normalizeSameOriginRedirectLocation(
-		location,
-		expectedOrigin
-	);
+	const safeLocation = normalizeSameOriginRedirectLocation(location, {
+		requestOrigin,
+		trustedOrigin: expectedOrigin
+	});
 	if (!safeLocation) {
 		throw new Error('Auth callback produced an invalid redirect location');
 	}
@@ -113,9 +114,14 @@ export function createAuthCallbackGetHandler({
 	}
 
 	return async (event: RequestEvent) => {
+		const requestOrigin = event.url.origin;
 		try {
 			const handler = handleCallback();
-			return normalizeCallbackResponse(await handler(event), trustedOrigin);
+			return normalizeCallbackResponse(
+				await handler(event),
+				requestOrigin,
+				trustedOrigin
+			);
 		} catch (err) {
 			let normalizedError = err;
 
@@ -124,10 +130,10 @@ export function createAuthCallbackGetHandler({
 					throw err;
 				}
 
-				const safeLocation = normalizeSameOriginRedirectLocation(
-					err.location,
+				const safeLocation = normalizeSameOriginRedirectLocation(err.location, {
+					requestOrigin,
 					trustedOrigin
-				);
+				});
 				if (safeLocation) {
 					if (safeLocation === err.location) {
 						throw err;
@@ -138,10 +144,10 @@ export function createAuthCallbackGetHandler({
 					'Auth callback produced an invalid redirect location'
 				);
 			} else if (isRedirectLike(err)) {
-				const safeLocation = normalizeSameOriginRedirectLocation(
-					err.location,
+				const safeLocation = normalizeSameOriginRedirectLocation(err.location, {
+					requestOrigin,
 					trustedOrigin
-				);
+				});
 				if (safeLocation) {
 					throw redirect(err.status, safeLocation);
 				}

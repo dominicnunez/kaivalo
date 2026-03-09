@@ -99,7 +99,7 @@ describe('auth callback route', () => {
 			GET(createEvent({}, 'https://attacker.test/auth/callback'))
 		).rejects.toMatchObject({
 			status: 303,
-			location: '/services#shell'
+			location: 'https://kaivalo.test/services#shell'
 		});
 		expect(mockHandleCallback).toHaveBeenCalledOnce();
 	});

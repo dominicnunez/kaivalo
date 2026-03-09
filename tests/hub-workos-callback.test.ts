@@ -150,7 +150,10 @@ describe('WorkOS Auth Callback Route', () => {
 				createEvent({}, 'https://attacker.test/auth/callback')
 			);
 			assert.strictEqual(result.status, 303);
-			assert.strictEqual(result.headers.get('location'), '/services');
+			assert.strictEqual(
+				result.headers.get('location'),
+				'https://kaivalo.test/services'
+			);
 		});
 
 		it('rejects redirects that target the poisoned request host instead of the configured origin', async () => {

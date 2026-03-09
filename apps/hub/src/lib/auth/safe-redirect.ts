@@ -6,6 +6,15 @@ export type RedirectLikeObject = {
 	location: string;
 };
 
+type SameOriginRedirectOptions = {
+	requestOrigin: string;
+	trustedOrigin: string;
+};
+
+type TrustedRedirectOptions = SameOriginRedirectOptions & {
+	allowedOrigins?: Iterable<string>;
+};
+
 function decodePercentEscapes(value: string): string {
 	let decoded = value;
 	for (let index = 0; index < MAX_PERCENT_DECODING_PASSES; index += 1) {
@@ -87,24 +96,24 @@ export function isRedirectLikeObject(
 
 export function normalizeSameOriginRedirectLocation(
 	location: string,
-	requestOrigin: string
+	options: SameOriginRedirectOptions
 ): string | null {
-	return normalizeTrustedRedirectLocation(location, requestOrigin);
+	return normalizeTrustedRedirectLocation(location, options);
 }
 
 export function normalizeTrustedRedirectLocation(
 	location: string,
-	requestOrigin: string,
-	trustedOrigins: Iterable<string> = []
+	{ requestOrigin, trustedOrigin, allowedOrigins = [] }: TrustedRedirectOptions
 ): string | null {
 	if (location.trim() !== location || location.length === 0) {
 		return null;
 	}
 
 	const normalizedRequestOrigin = normalizeTrustedOrigin(requestOrigin);
-	const allowedOrigins = new Set([normalizedRequestOrigin]);
-	for (const origin of trustedOrigins) {
-		allowedOrigins.add(normalizeTrustedOrigin(origin));
+	const normalizedTrustedOrigin = normalizeTrustedOrigin(trustedOrigin);
+	const allowedOriginSet = new Set([normalizedTrustedOrigin]);
+	for (const origin of allowedOrigins) {
+		allowedOriginSet.add(normalizeTrustedOrigin(origin));
 	}
 
 	if (location.startsWith('/')) {
@@ -112,8 +121,8 @@ export function normalizeTrustedRedirectLocation(
 			return null;
 		}
 
-		const parsedRelative = new URL(location, normalizedRequestOrigin);
-		if (parsedRelative.origin !== normalizedRequestOrigin) {
+		const parsedRelative = new URL(location, normalizedTrustedOrigin);
+		if (parsedRelative.origin !== normalizedTrustedOrigin) {
 			return null;
 		}
 
@@ -121,9 +130,13 @@ export function normalizeTrustedRedirectLocation(
 			return null;
 		}
 
-		return (
-			parsedRelative.pathname + parsedRelative.search + parsedRelative.hash
-		);
+		if (parsedRelative.origin === normalizedRequestOrigin) {
+			return (
+				parsedRelative.pathname + parsedRelative.search + parsedRelative.hash
+			);
+		}
+
+		return parsedRelative.toString();
 	}
 
 	let parsed;
@@ -136,7 +149,7 @@ export function normalizeTrustedRedirectLocation(
 	if (
 		parsed.username ||
 		parsed.password ||
-		!allowedOrigins.has(parsed.origin)
+		!allowedOriginSet.has(parsed.origin)
 	) {
 		return null;
 	}
