@@ -39,11 +39,17 @@ vi.mock('$lib/server/workos-security.ts', async () => {
 
 import { load } from './+layout.server';
 
+type MockLayoutEvent = {
+	url: URL;
+	request: Request;
+	setHeaders?: ReturnType<typeof vi.fn>;
+};
+
 function createEvent(origin: string, headers: HeadersInit = {}) {
 	return {
 		url: new URL(origin),
 		request: new Request(origin, { headers })
-	} as never;
+	} satisfies MockLayoutEvent;
 }
 
 const baseEvent = createEvent('https://kaivalo.test/');
@@ -79,7 +85,7 @@ describe('layout server load', () => {
 		mockEnv.ORIGIN = 'http://localhost:4173';
 		mockEnv.WORKOS_REDIRECT_URI = 'http://127.0.0.1:4173/auth/callback';
 
-		const result = await load(baseEvent);
+		const result = await load(baseEvent as never);
 
 		expect(mockGetUser).not.toHaveBeenCalled();
 		expect(result).toEqual({
@@ -142,7 +148,7 @@ describe('layout server load', () => {
 			mockEnv.ORIGIN = origin;
 			mockEnv.WORKOS_REDIRECT_URI = redirectUri;
 
-			const result = await load(baseEvent);
+			const result = await load(baseEvent as never);
 
 			expect(mockGetUser).not.toHaveBeenCalled();
 			expect(result).toMatchObject({
@@ -180,7 +186,28 @@ describe('layout server load', () => {
 			profilePictureUrl: 'https://avatars.githubusercontent.com/u/1'
 		} as never);
 
-		const result = await load(baseEvent);
+		const result = await load(baseEvent as never);
+
+		expect(result).toEqual({
+			user: {
+				firstName: 'Kai',
+				email: 'kai@example.com',
+				profilePictureUrl: 'https://avatars.githubusercontent.com/u/1'
+			},
+			signInUrl: null,
+			authError: null
+		});
+	});
+
+	it('drops query strings and fragments from trusted avatar urls', async () => {
+		mockGetUser.mockResolvedValue({
+			firstName: 'Kai',
+			email: 'kai@example.com',
+			profilePictureUrl:
+				'https://avatars.githubusercontent.com/u/1?token=signed#tracker'
+		} as never);
+
+		const result = await load(baseEvent as never);
 
 		expect(result).toEqual({
 			user: {
@@ -211,7 +238,7 @@ describe('layout server load', () => {
 			profilePictureUrl: candidate
 		} as never);
 
-		const result = await load(baseEvent);
+		const result = await load(baseEvent as never);
 
 		expect(result).toEqual({
 			user: {
@@ -227,7 +254,7 @@ describe('layout server load', () => {
 	it('returns the local sign-in route for unauthenticated requests', async () => {
 		mockGetUser.mockResolvedValue(null as never);
 
-		const result = await load(baseEvent);
+		const result = await load(baseEvent as never);
 
 		expect(mockGetValidatedWorkosEnv).toHaveBeenCalledOnce();
 		expect(result).toEqual({
@@ -243,7 +270,7 @@ describe('layout server load', () => {
 			throw new Error('Missing required environment variable: WORKOS_API_KEY');
 		});
 
-		const result = await load(baseEvent);
+		const result = await load(baseEvent as never);
 
 		expect(result).toMatchObject({
 			user: null,
@@ -259,6 +286,46 @@ describe('layout server load', () => {
 			expect.objectContaining({
 				errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
 				errorMessage: 'Missing required environment variable: WORKOS_API_KEY',
+				errorName: 'Error',
+				method: 'GET',
+				pathname: '/',
+				requestId: 'missing',
+				incidentId: expect.stringMatching(/^authlayout_/)
+			})
+		);
+	});
+
+	it('preserves the local sign-in route when AuthKit lookup fails', async () => {
+		const setHeaders = vi.fn();
+		mockGetUser.mockRejectedValue(
+			new Error('AuthKit upstream timeout') as never
+		);
+		const event = createEvent('https://kaivalo.test/');
+
+		const result = await load({
+			...event,
+			setHeaders
+		} as never);
+
+		expect(mockGetValidatedWorkosEnv).toHaveBeenCalledOnce();
+		expect(result).toMatchObject({
+			user: null,
+			signInUrl: '/auth/sign-in',
+			authError: {
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
+				incidentId: expect.stringMatching(/^authlayout_/)
+			}
+		});
+		expect(setHeaders).toHaveBeenCalledWith({
+			'cache-control': 'private, no-store',
+			vary: 'Cookie, Authorization'
+		});
+		expect(errorSpy).toHaveBeenCalledWith(
+			'Auth layout load failed',
+			expect.objectContaining({
+				errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
+				errorMessage: 'AuthKit upstream timeout',
 				errorName: 'Error',
 				method: 'GET',
 				pathname: '/',
@@ -349,7 +416,7 @@ describe('layout server load', () => {
 					secret: mockEnv.WORKOS_COOKIE_PASSWORD,
 					now: Date.now()
 				})}`
-			)
+			) as never
 		);
 
 		expect(result).toEqual({
@@ -369,7 +436,7 @@ describe('layout server load', () => {
 		const result = await load(
 			createEvent(
 				'https://kaivalo.test/?error=auth&incident=authcb_123e4567-e89b-12d3-a456-426614174000&ts=1710000000000&sig=forged'
-			)
+			) as never
 		);
 
 		expect(result).toEqual({

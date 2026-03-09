@@ -21,6 +21,12 @@ const DEV_AUTH_BYPASS_CONFIGURATION_ERROR_MESSAGE =
 const DEV_AUTH_BYPASS_EMAIL = 'dev@kaivalo.local';
 const DEV_AUTH_BYPASS_FIRST_NAME = 'Dev';
 
+type LayoutUser = {
+	firstName: string | null;
+	email: string;
+	profilePictureUrl: string | null;
+};
+
 function isLoopbackHostname(hostname: string): boolean {
 	return isLoopbackHost(hostname);
 }
@@ -81,7 +87,7 @@ function hasValidLocalDevelopmentAuthBypassConfiguration(): boolean {
 	);
 }
 
-function getDevelopmentAuthBypassUser() {
+function getDevelopmentAuthBypassUser(): LayoutUser | null {
 	if (env.DEV_AUTH_BYPASS?.trim().toLowerCase() !== 'true') {
 		return null;
 	}
@@ -116,7 +122,13 @@ function sanitizeAvatarUrl(
 			return null;
 		}
 
-		return isTrustedAvatarHost(parsed.hostname) ? parsed.toString() : null;
+		if (!isTrustedAvatarHost(parsed.hostname)) {
+			return null;
+		}
+
+		const sanitized = new URL(parsed.origin);
+		sanitized.pathname = parsed.pathname;
+		return sanitized.toString();
 	} catch {
 		return null;
 	}
@@ -133,13 +145,68 @@ function markAuthFailureNoStore(event: Parameters<LayoutServerLoad>[0]): void {
 	});
 }
 
+function logAuthLayoutFailure(
+	event: Parameters<LayoutServerLoad>[0],
+	err: unknown,
+	incidentId: string
+): void {
+	const requestId = normalizeRequestId(
+		event.request.headers.get('x-request-id')
+	);
+	console.error('Auth layout load failed', {
+		requestId,
+		incidentId,
+		pathname: event.url.pathname,
+		method: event.request.method,
+		errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
+		...getErrorLogContext(err, {
+			includeMessage: shouldIncludeErrorMessage(env)
+		})
+	});
+}
+
+function createAuthFailureResponse(
+	event: Parameters<LayoutServerLoad>[0],
+	incidentId: string,
+	signInUrl: string | null
+) {
+	markAuthFailureNoStore(event);
+
+	return {
+		user: null,
+		signInUrl,
+		authError: {
+			message: AUTH_ERROR_MESSAGE,
+			incidentId
+		}
+	};
+}
+
 export const load: LayoutServerLoad = async (event) => {
 	try {
 		const authErrorFromQuery = readVerifiedAuthError(event.url.searchParams, {
 			secret: env.WORKOS_COOKIE_PASSWORD ?? ''
 		});
 		const developmentBypassUser = getDevelopmentAuthBypassUser();
-		const user = developmentBypassUser ?? (await authKit.getUser(event));
+		let user: LayoutUser | null = developmentBypassUser;
+		if (!user) {
+			try {
+				user = (await authKit.getUser(event)) as LayoutUser | null;
+			} catch (err) {
+				const incidentId = `authlayout_${randomUUID()}`;
+				let signInUrl: string | null = null;
+				try {
+					getValidatedWorkosEnv(env);
+					signInUrl = LOCAL_SIGN_IN_PATH;
+				} catch {
+					signInUrl = null;
+				}
+
+				logAuthLayoutFailure(event, err, incidentId);
+				return createAuthFailureResponse(event, incidentId, signInUrl);
+			}
+		}
+
 		let signInUrl = null;
 		if (!user) {
 			getValidatedWorkosEnv(env);
@@ -171,28 +238,7 @@ export const load: LayoutServerLoad = async (event) => {
 		};
 	} catch (err) {
 		const incidentId = `authlayout_${randomUUID()}`;
-		const requestId = normalizeRequestId(
-			event.request.headers.get('x-request-id')
-		);
-		console.error('Auth layout load failed', {
-			requestId,
-			incidentId,
-			pathname: event.url.pathname,
-			method: event.request.method,
-			errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
-			...getErrorLogContext(err, {
-				includeMessage: shouldIncludeErrorMessage(env)
-			})
-		});
-		markAuthFailureNoStore(event);
-
-		return {
-			user: null,
-			signInUrl: null,
-			authError: {
-				message: AUTH_ERROR_MESSAGE,
-				incidentId
-			}
-		};
+		logAuthLayoutFailure(event, err, incidentId);
+		return createAuthFailureResponse(event, incidentId, null);
 	}
 };
