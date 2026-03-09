@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { getMarketingServices } from '$lib/services/registry.ts';
 
-const { mockEnv, mockMarketingServices } = vi.hoisted(() => ({
+const { mockEnv } = vi.hoisted(() => ({
 	mockEnv: {
 		WORKOS_CLIENT_ID: 'client_123',
 		WORKOS_API_KEY: 'sk_test_123',
@@ -8,35 +9,17 @@ const { mockEnv, mockMarketingServices } = vi.hoisted(() => ({
 		WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
 		AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
 		ORIGIN: 'https://kaivalo.test'
-	} as Record<string, string>,
-	mockMarketingServices: [
-		{
-			id: 'sweep',
-			name: 'Sweep',
-			tagline: 'Stay on schedule',
-			description: 'Smart scheduling for chimney professionals.',
-			icon: 'calendar',
-			lifecycle: 'active',
-			marketingVisible: true,
-			launcherVisible: true,
-			enabled: true,
-			appUrl: 'https://sweep.kaivalo.com'
-		}
-	]
+	} as Record<string, string>
 }));
 
 vi.mock('$env/dynamic/private', () => ({
 	env: mockEnv
 }));
 
-vi.mock('$lib/services/registry.ts', () => ({
-	getMarketingServices: vi.fn(() => mockMarketingServices)
-}));
-
 import { load } from './+page.server';
 
 describe('home page load', () => {
-	it('builds metadata from the validated public origin', () => {
+	it('builds metadata from the validated public origin and real marketing registry', () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date('2030-07-04T12:00:00Z'));
 		try {
@@ -50,7 +33,7 @@ describe('home page load', () => {
 					twitterCard: string;
 				};
 				currentYear: number;
-				marketingServices: typeof mockMarketingServices;
+				marketingServices: ReturnType<typeof getMarketingServices>;
 			};
 
 			expect(result.meta).toEqual({
@@ -63,7 +46,9 @@ describe('home page load', () => {
 				twitterCard: 'summary_large_image'
 			});
 			expect(result.currentYear).toBe(2030);
-			expect(result.marketingServices).toBe(mockMarketingServices);
+			expect(result.marketingServices.map((service) => service.id)).toEqual(
+				getMarketingServices().map((service) => service.id)
+			);
 		} finally {
 			vi.useRealTimers();
 		}

@@ -1,43 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { isRedirect } from '@sveltejs/kit';
-
-const { mockLauncherServices } = vi.hoisted(() => ({
-	mockLauncherServices: {
-		activeServices: [
-			{
-				id: 'sweep',
-				name: 'Sweep',
-				tagline: 'Stay on schedule',
-				description: 'Smart scheduling for chimney professionals.',
-				icon: 'calendar',
-				lifecycle: 'active',
-				marketingVisible: true,
-				launcherVisible: true,
-				enabled: true,
-				appUrl: 'https://sweep.kaivalo.com'
-			}
-		],
-		plannedServices: [
-			{
-				id: 'podstudio',
-				name: 'PodStudio',
-				tagline: 'Podcast management',
-				description:
-					'Equipment tracking and session scheduling for podcast studios.',
-				icon: 'mic',
-				lifecycle: 'planned',
-				marketingVisible: true,
-				launcherVisible: true,
-				enabled: false,
-				appUrl: 'https://podcast.kaivalo.com'
-			}
-		]
-	}
-}));
-
-vi.mock('$lib/services/registry.ts', () => ({
-	getLauncherServices: vi.fn(() => mockLauncherServices)
-}));
+import { getLauncherServices } from '$lib/services/registry.ts';
 
 import { load } from './+page.server';
 
@@ -92,10 +55,11 @@ describe('services page load', () => {
 		});
 	});
 
-	it('returns active and planned services for authenticated users', async () => {
+	it('returns active and planned services from the real launcher registry', async () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date('2031-01-15T12:00:00Z'));
 		try {
+			const expectedServices = getLauncherServices();
 			const result = (await load({
 				parent: async () => createParentData()
 			} as never)) as {
@@ -114,8 +78,12 @@ describe('services page load', () => {
 					'Open the Kaivalo services available on your account from one authenticated launcher.'
 			});
 			expect(result.currentYear).toBe(2031);
-			expect(result.activeServices).toBe(mockLauncherServices.activeServices);
-			expect(result.plannedServices).toBe(mockLauncherServices.plannedServices);
+			expect(result.activeServices.map((service) => service.id)).toEqual(
+				expectedServices.activeServices.map((service) => service.id)
+			);
+			expect(result.plannedServices.map((service) => service.id)).toEqual(
+				expectedServices.plannedServices.map((service) => service.id)
+			);
 		} finally {
 			vi.useRealTimers();
 		}
