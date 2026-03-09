@@ -432,27 +432,41 @@ describe('deployment runtime guardrails', () => {
 
 	it('passes required auth configuration into the image build as secrets', () => {
 		const workflow = readFileSync(DEPLOY_WORKFLOW_PATH, 'utf8');
+		const buildStepMatch = workflow.match(
+			/- name: Build and push image[\s\S]*?(?=\n\s*- name: |\n\s{2}[a-z]+:\n|\n\}$)/
+		);
+
+		assert.ok(
+			buildStepMatch,
+			'expected build and push image step in deploy workflow'
+		);
+
+		const buildStep = buildStepMatch[0];
 
 		assert.match(
-			workflow,
-			/WORKOS_CLIENT_ID: \$\{\{ secrets\.WORKOS_CLIENT_ID \}\}/
+			buildStep,
+			/"workos_client_id=\$\{\{ secrets\.WORKOS_CLIENT_ID \}\}"/
 		);
 		assert.match(
-			workflow,
-			/WORKOS_API_KEY: \$\{\{ secrets\.WORKOS_API_KEY \}\}/
+			buildStep,
+			/"workos_api_key=\$\{\{ secrets\.WORKOS_API_KEY \}\}"/
 		);
 		assert.match(
-			workflow,
-			/AUTH_ERROR_SIGNING_SECRET: \$\{\{ secrets\.AUTH_ERROR_SIGNING_SECRET \}\}/
+			buildStep,
+			/"auth_error_signing_secret=\$\{\{ secrets\.AUTH_ERROR_SIGNING_SECRET \}\}"/
 		);
-		assert.match(workflow, /ORIGIN: \$\{\{ secrets\.ORIGIN \}\}/);
+		assert.match(buildStep, /"origin=\$\{\{ secrets\.ORIGIN \}\}"/);
 		assert.match(
-			workflow,
-			/WORKOS_REDIRECT_URI: \$\{\{ secrets\.WORKOS_REDIRECT_URI \}\}/
+			buildStep,
+			/"workos_redirect_uri=\$\{\{ secrets\.WORKOS_REDIRECT_URI \}\}"/
 		);
 		assert.match(
-			workflow,
-			/WORKOS_COOKIE_PASSWORD: \$\{\{ secrets\.WORKOS_COOKIE_PASSWORD \}\}/
+			buildStep,
+			/"workos_cookie_password=\$\{\{ secrets\.WORKOS_COOKIE_PASSWORD \}\}"/
+		);
+		assert.doesNotMatch(
+			buildStep,
+			/\n\s+env:\n(?:\s+[A-Z0-9_]+: \$\{\{ secrets\.[A-Z0-9_]+ \}\}\n)+/
 		);
 	});
 });
