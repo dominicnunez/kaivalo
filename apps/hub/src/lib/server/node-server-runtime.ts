@@ -19,7 +19,7 @@ import {
 } from './node-server-request.ts';
 
 const DEFAULT_HOST = '127.0.0.1';
-const DEFAULT_PORT = 3000;
+const DEFAULT_PORT = 3100;
 const SHUTDOWN_TIMEOUT_MS = 30_000;
 const KEEP_ALIVE_TIMEOUT_MS = 5_000;
 const HEADERS_TIMEOUT_MS = 60_000;

@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { normalizeRequestId } from '../auth/log-context.ts';
 import { canonicalizeIpAddress } from './ip-address.ts';
 import {
 	getErrorDiagnostics,
@@ -20,6 +21,18 @@ type SecureRequestEvaluation = {
 
 function shouldIncludeSensitiveErrorDetails(env: Env): boolean {
 	return env.NODE_ENV?.trim().toLowerCase() !== PRODUCTION_NODE_ENV;
+}
+
+function readSingleHeaderValue(
+	value: string | string[] | undefined
+): string | null {
+	if (typeof value === 'string') {
+		return value;
+	}
+	if (Array.isArray(value)) {
+		return value[0] ?? null;
+	}
+	return null;
 }
 
 export function getRequestPathname(req: http.IncomingMessage): string {
@@ -82,6 +95,8 @@ export function buildRequestFailureLog(
 	incidentId: string;
 	method?: string;
 	pathname: string;
+	requestId: string;
+	remoteAddress: string;
 	error: ErrorDiagnostics;
 } {
 	const incidentId = randomUUID();
@@ -89,6 +104,11 @@ export function buildRequestFailureLog(
 		incidentId,
 		method: req.method,
 		pathname: getRequestPathname(req),
+		requestId: normalizeRequestId(
+			readSingleHeaderValue(req.headers?.['x-request-id'])
+		),
+		remoteAddress:
+			canonicalizeIpAddress(req.socket?.remoteAddress) ?? 'unknown',
 		error: getErrorDiagnostics(error, {
 			includeSensitiveDetails: shouldIncludeSensitiveErrorDetails(env)
 		})

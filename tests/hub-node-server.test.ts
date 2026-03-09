@@ -224,7 +224,13 @@ describe('node server diagnostics', () => {
 	it('builds request failure logs with a sanitized pathname and incident id', () => {
 		const req = {
 			method: 'GET',
-			url: '/auth/callback?code=supersecret&state=sensitive'
+			url: '/auth/callback?code=supersecret&state=sensitive',
+			headers: {
+				'x-request-id': 'bad request id + trace'
+			},
+			socket: {
+				remoteAddress: '::ffff:203.0.113.10'
+			}
 		};
 		const logRecord = buildRequestFailureLog(req, new Error('boom'), {
 			...baseEnv,
@@ -233,6 +239,8 @@ describe('node server diagnostics', () => {
 
 		assert.strictEqual(logRecord.pathname, '/auth/callback');
 		assert.strictEqual(logRecord.method, 'GET');
+		assert.strictEqual(logRecord.requestId, 'bad_request_id___trace');
+		assert.strictEqual(logRecord.remoteAddress, '203.0.113.10');
 		assert.strictEqual(logRecord.error.type, 'Error');
 		assert.ok(!('message' in logRecord.error));
 		assert.ok(!('stack' in logRecord.error));
@@ -721,5 +729,46 @@ describe('node server lifecycle', () => {
 		assert.deepStrictEqual(logs, [
 			`Listening on internal http://127.0.0.1:${reservation.port} (public https://kaivalo.test)`
 		]);
+	});
+
+	it('uses port 3100 when PORT is unset', async () => {
+		const logs = [];
+		const originalListen = http.Server.prototype.listen;
+		let server = null;
+		let capturedPort;
+		let capturedHost;
+
+		http.Server.prototype.listen = function listen(port, host) {
+			capturedPort = port;
+			capturedHost = host;
+			process.nextTick(() => {
+				this.emit('listening');
+			});
+			return this;
+		};
+
+		try {
+			server = await startHubServer({
+				handler: (_req, res) => res.end('ok'),
+				env: {
+					...baseEnv,
+					HOST: '127.0.0.1',
+					PORT: undefined
+				},
+				logger: {
+					log: /** @param {string} message */ (message) => logs.push(message),
+					warn: () => {},
+					error: () => {}
+				}
+			});
+
+			assert.ok(server);
+			assert.strictEqual(capturedPort, 3100);
+			assert.strictEqual(capturedHost, '127.0.0.1');
+			assert.deepStrictEqual(logs, ['Listening on http://127.0.0.1:3100']);
+		} finally {
+			http.Server.prototype.listen = originalListen;
+			server?.emit('close');
+		}
 	});
 });
