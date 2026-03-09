@@ -303,7 +303,7 @@ describe('layout server load', () => {
 		});
 	});
 
-	it('ignores signed auth callback query errors once sign-in has recovered', async () => {
+	it('preserves signed auth callback query errors for unauthenticated users', async () => {
 		mockGetUser.mockResolvedValue(null as never);
 		const setHeaders = vi.fn();
 		const event = {
@@ -323,9 +323,16 @@ describe('layout server load', () => {
 		expect(result).toEqual({
 			user: null,
 			signInUrl: '/auth/sign-in',
-			authError: null
+			authError: {
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
+				incidentId: 'authcb_123e4567-e89b-12d3-a456-426614174000'
+			}
 		});
-		expect(setHeaders).not.toHaveBeenCalled();
+		expect(setHeaders).toHaveBeenCalledWith({
+			'cache-control': 'private, no-store',
+			vary: 'Cookie, Authorization'
+		});
 	});
 
 	it('ignores signed auth callback query errors once the user is authenticated', async () => {

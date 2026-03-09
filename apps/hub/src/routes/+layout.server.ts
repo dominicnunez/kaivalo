@@ -158,13 +158,15 @@ export const load: LayoutServerLoad = async (event) => {
 			getValidatedWorkosEnv(env);
 			signInUrl = LOCAL_SIGN_IN_PATH;
 		}
-		const authError =
-			user || signInUrl
-				? null
-				: (authErrorFromQuery ?? {
-						message: AUTH_ERROR_MESSAGE,
-						incidentId: null
-					});
+		const authError = user
+			? null
+			: (authErrorFromQuery ??
+				(signInUrl
+					? null
+					: {
+							message: AUTH_ERROR_MESSAGE,
+							incidentId: null
+						}));
 		if (authError) {
 			markAuthFailureNoStore(event);
 		}
