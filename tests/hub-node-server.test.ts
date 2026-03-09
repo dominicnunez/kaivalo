@@ -791,6 +791,45 @@ describe('node server lifecycle', () => {
 		}
 	});
 
+	it('formats IPv6 bind origins correctly in startup logs', async () => {
+		const logs = [];
+		const originalListen = http.Server.prototype.listen;
+		let server = null;
+
+		http.Server.prototype.listen = function listen(port, host) {
+			void port;
+			void host;
+			process.nextTick(() => {
+				this.emit('listening');
+			});
+			return this;
+		};
+
+		try {
+			server = await startHubServer({
+				handler: (_req, res) => res.end('ok'),
+				env: {
+					...baseEnv,
+					HOST: '::1',
+					PORT: '3100',
+					ORIGIN: 'http://[::1]:3100',
+					WORKOS_REDIRECT_URI: 'http://[::1]:3100/auth/callback'
+				},
+				logger: {
+					log: /** @param {string} message */ (message) => logs.push(message),
+					warn: () => {},
+					error: () => {}
+				}
+			});
+
+			assert.ok(server);
+			assert.deepStrictEqual(logs, ['Listening on http://[::1]:3100']);
+		} finally {
+			http.Server.prototype.listen = originalListen;
+			server?.emit('close');
+		}
+	});
+
 	it('trims HOST before binding the server', async () => {
 		const originalListen = http.Server.prototype.listen;
 		let server = null;

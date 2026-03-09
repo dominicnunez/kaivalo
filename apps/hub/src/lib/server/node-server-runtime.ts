@@ -184,8 +184,13 @@ function parseHost(hostValue: string | undefined): string {
 	throw new Error('HOST must be a valid IP address or hostname');
 }
 
+function formatInternalHttpOrigin(host: string, port: number): string {
+	const normalizedHost = isIP(host) === 6 ? `[${host}]` : host;
+	return new URL(`http://${normalizedHost}:${port}`).origin;
+}
+
 function getListeningLogMessage(env: Env, host: string, port: number): string {
-	const internalOrigin = `http://${host}:${port}`;
+	const internalOrigin = formatInternalHttpOrigin(host, port);
 	const publicOrigin = getValidatedWorkosEnv(env).origin;
 	if (publicOrigin === internalOrigin) {
 		return `Listening on ${publicOrigin}`;
