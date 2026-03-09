@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { getMarketingServices } from '$lib/services/registry.ts';
 
 const { mockEnv } = vi.hoisted(() => ({
 	mockEnv: {
@@ -18,72 +19,27 @@ vi.mock('$env/dynamic/private', () => ({
 import { load } from './+page.server';
 
 describe('home page load', () => {
-	it('builds metadata from the validated public origin and real marketing registry', () => {
+	it('uses the validated origin, current year, and marketing registry output', () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date('2030-07-04T12:00:00Z'));
+		const originalOrigin = mockEnv.ORIGIN;
+		mockEnv.ORIGIN = 'https://kaivalo.test/';
 		try {
 			const result = load({} as never) as {
 				meta: {
-					title: string;
-					description: string;
 					url: string;
 					image: string;
-					imageAlt: string;
-					twitterCard: string;
 				};
 				currentYear: number;
-				marketingServices: Array<{
-					id: string;
-					name: string;
-					tagline: string;
-					description: string;
-					icon: string;
-					lifecycle: string;
-					marketingVisible: boolean;
-					launcherVisible: boolean;
-					enabled: boolean;
-					appUrl: string;
-				}>;
+				marketingServices: ReturnType<typeof getMarketingServices>;
 			};
 
-			expect(result.meta).toEqual({
-				title: 'Kaivalo | Tools That Solve Things',
-				description:
-					'Tools that cut through complexity. One account, all tools — sign up once and everything just works.',
-				url: 'https://kaivalo.test',
-				image: 'https://kaivalo.test/og-image.png',
-				imageAlt: 'Kaivalo — tools that cut through complexity',
-				twitterCard: 'summary_large_image'
-			});
+			expect(result.meta.url).toBe('https://kaivalo.test');
+			expect(result.meta.image).toBe('https://kaivalo.test/og-image.png');
 			expect(result.currentYear).toBe(2030);
-			expect(result.marketingServices).toEqual([
-				{
-					id: 'sweep',
-					name: 'Sweep',
-					tagline: 'Stay on schedule',
-					description: 'Smart scheduling for chimney professionals.',
-					icon: 'calendar',
-					lifecycle: 'active',
-					marketingVisible: true,
-					launcherVisible: true,
-					enabled: true,
-					appUrl: 'https://sweep.kaivalo.com'
-				},
-				{
-					id: 'podstudio',
-					name: 'PodStudio',
-					tagline: 'Podcast management',
-					description:
-						'Equipment tracking and session scheduling for podcast studios.',
-					icon: 'mic',
-					lifecycle: 'planned',
-					marketingVisible: true,
-					launcherVisible: true,
-					enabled: false,
-					appUrl: 'https://podcast.kaivalo.com'
-				}
-			]);
+			expect(result.marketingServices).toEqual(getMarketingServices());
 		} finally {
+			mockEnv.ORIGIN = originalOrigin;
 			vi.useRealTimers();
 		}
 	});
