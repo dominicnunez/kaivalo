@@ -8,6 +8,8 @@ const LOCKFILE_PATH = resolve(REPO_ROOT, 'package-lock.json');
 const ISSUE_TITLE = 'Track upstream @sveltejs/kit updates for cookie advisory';
 const REGISTRY_LATEST_URL = 'https://registry.npmjs.org/@sveltejs%2fkit/latest';
 export const FETCH_TIMEOUT_MS = 10_000;
+const REGISTRY_METADATA_VALIDATION_ERROR_MESSAGE =
+	'Failed to parse latest @sveltejs/kit metadata: expected a valid semver version string';
 
 function parseArgs(argv) {
 	const options = {
@@ -41,6 +43,15 @@ function parseVersion(version) {
 		patch: Number(match[3]),
 		prerelease: match[4] ? match[4].split('.') : []
 	};
+}
+
+function isValidSemverVersion(version) {
+	try {
+		parseVersion(version);
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 function compareIdentifiers(left, right) {
@@ -205,9 +216,16 @@ export async function readLatestMetadata({ fetchImpl = fetch } = {}) {
 	}
 
 	const latestMetadata = await response.json();
+	if (!isValidSemverVersion(latestMetadata?.version)) {
+		throw new Error(REGISTRY_METADATA_VALIDATION_ERROR_MESSAGE);
+	}
+
 	return {
 		version: latestMetadata.version,
-		cookieRange: latestMetadata.dependencies?.cookie ?? 'not declared'
+		cookieRange:
+			typeof latestMetadata?.dependencies?.cookie === 'string'
+				? latestMetadata.dependencies.cookie
+				: 'not declared'
 	};
 }
 

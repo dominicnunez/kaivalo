@@ -118,6 +118,31 @@ describe('check-sveltekit-upstream', () => {
 		);
 	});
 
+	it('rejects malformed successful registry payloads with a validation error', async () => {
+		await assert.rejects(
+			() =>
+				readLatestMetadata({
+					fetchImpl: async () => ({
+						ok: true,
+						async json() {
+							return {
+								dependencies: {
+									cookie: '^0.6.0'
+								}
+							};
+						}
+					})
+				}),
+			(error) => {
+				assert.strictEqual(
+					error.message,
+					'Failed to parse latest @sveltejs/kit metadata: expected a valid semver version string'
+				);
+				return true;
+			}
+		);
+	});
+
 	it('reads the resolved version from the repository lockfile outside the cwd', async () => {
 		const originalCwd = process.cwd();
 		const tempCwd = mkdtempSync(join(tmpdir(), 'kaivalo-upstream-check-'));
