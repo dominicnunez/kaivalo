@@ -184,3 +184,11 @@ That underlying `stopServer()` sends `SIGTERM` to the detached process group syn
 That misses the surrounding `try`/`catch`: if `parseHost(env.HOST)` throws, control jumps to `handleStartupError(error)` before the second assignment completes.
 In that failure path, `handleStartupError()` logs and reports the current `host` value, so the trim step preserves the caller-supplied HOST for fatal diagnostics instead of falling back to the default `127.0.0.1`.
 The assignment may be debatable style, but it is not dead code and the behavior described by the audit does not match the actual control flow.
+
+### The shared UI package declares Tailwind as a required peer without using it
+
+**Location:** `packages/ui/package.json:21` — Tailwind peer dependency for `@kaivalo/ui`
+
+**Reason:** The package does rely on Tailwind-generated output.
+`packages/ui/Container.svelte` renders utility classes such as `w-full`, `mx-auto`, `px-4`, `sm:px-6`, `lg:px-8`, and `max-w-screen-*`, so consumers need Tailwind available for that component to render correctly.
+Because the source itself ships Tailwind utility class names, the `tailwindcss` peer dependency is not dead or unnecessary configuration.
