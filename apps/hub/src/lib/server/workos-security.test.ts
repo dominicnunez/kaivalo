@@ -129,6 +129,16 @@ describe('static asset security policy', () => {
 });
 
 describe('workos environment protocols', () => {
+	it('accepts http loopback redirect URIs across the full ipv4 loopback range', () => {
+		expect(() =>
+			getValidatedWorkosEnv({
+				...validLocalEnv,
+				WORKOS_REDIRECT_URI: 'http://127.0.0.2:3100/auth/callback',
+				ORIGIN: 'http://127.0.0.2:3100'
+			})
+		).not.toThrow();
+	});
+
 	it('rejects non-http redirect URI schemes for localhost', () => {
 		expect(() =>
 			getValidatedWorkosEnv({

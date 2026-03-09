@@ -1,4 +1,8 @@
-import { canonicalizeIpAddress } from './ip-address.ts';
+import {
+	canonicalizeIpAddress,
+	isLoopbackHostname,
+	isLoopbackIpAddress
+} from './ip-address.ts';
 
 const REQUIRED_ENV_VARS = [
 	'WORKOS_CLIENT_ID',
@@ -7,7 +11,6 @@ const REQUIRED_ENV_VARS = [
 	'WORKOS_COOKIE_PASSWORD'
 ];
 const HEX_64_PATTERN = /^[a-f0-9]{64}$/i;
-const LOCAL_REDIRECT_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 const DEFAULT_WORKOS_API_HOSTNAME = 'api.workos.com';
 const WORKOS_REDIRECT_PATHNAME = '/auth/callback';
 
@@ -107,11 +110,7 @@ function parseWorkosApiHostname(value: string | undefined): string {
 }
 
 function isLocalRedirectUrl(redirectUrl: URL): boolean {
-	const hostname =
-		redirectUrl.hostname.startsWith('[') && redirectUrl.hostname.endsWith(']')
-			? redirectUrl.hostname.slice(1, -1)
-			: redirectUrl.hostname;
-	return LOCAL_REDIRECT_HOSTS.has(hostname);
+	return isLoopbackHostname(redirectUrl.hostname);
 }
 
 function getEffectivePort(url: URL): string {
@@ -166,11 +165,6 @@ function parseTrustedProxyIps(
 		}
 		return canonical;
 	});
-}
-
-function isLoopbackIpAddress(ipAddress: string): boolean {
-	const canonical = canonicalizeIpAddress(ipAddress);
-	return canonical === '127.0.0.1' || canonical === '::1';
 }
 
 function isLocalOrigin(origin: string): boolean {

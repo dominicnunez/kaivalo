@@ -60,3 +60,16 @@ export function isLoopbackIpAddress(value: string | undefined | null): boolean {
 
 	return octets[0] === '127';
 }
+
+export function isLoopbackHostname(value: string | undefined | null): boolean {
+	const candidate = value?.trim().toLowerCase() ?? '';
+	if (!candidate) {
+		return false;
+	}
+
+	return (
+		candidate === 'localhost' ||
+		candidate.endsWith('.localhost') ||
+		isLoopbackIpAddress(candidate)
+	);
+}

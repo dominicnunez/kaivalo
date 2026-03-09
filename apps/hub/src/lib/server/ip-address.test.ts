@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalizeIpAddress, isLoopbackIpAddress } from './ip-address.ts';
+import {
+	canonicalizeIpAddress,
+	isLoopbackHostname,
+	isLoopbackIpAddress
+} from './ip-address.ts';
 
 describe('canonicalizeIpAddress', () => {
 	it.each([
@@ -45,5 +49,18 @@ describe('isLoopbackIpAddress', () => {
 		['rejects malformed values', 'localhost', false]
 	])('%s', (_label, candidate, expected) => {
 		expect(isLoopbackIpAddress(candidate)).toBe(expected);
+	});
+});
+
+describe('isLoopbackHostname', () => {
+	it.each([
+		['matches localhost', 'localhost', true],
+		['matches localhost subdomains', 'api.localhost', true],
+		['matches ipv4 loopback hosts', '127.0.0.2', true],
+		['matches ipv6 loopback hosts', '[::1]', true],
+		['rejects private network hosts', '192.168.1.25', false],
+		['rejects public hostnames', 'kaivalo.test', false]
+	])('%s', (_label, candidate, expected) => {
+		expect(isLoopbackHostname(candidate)).toBe(expected);
 	});
 });

@@ -12,7 +12,7 @@ import {
 	readVerifiedAuthError
 } from '$lib/auth/auth-error-query.ts';
 import { isTrustedAvatarHost } from '$lib/server/trusted-hosts.ts';
-import { isLoopbackIpAddress } from '$lib/server/ip-address.ts';
+import { isLoopbackHostname as isLoopbackHost } from '$lib/server/ip-address.ts';
 import { authKit } from '@workos/authkit-sveltekit';
 
 const LOCAL_SIGN_IN_PATH = '/auth/sign-in';
@@ -22,16 +22,7 @@ const DEV_AUTH_BYPASS_EMAIL = 'dev@kaivalo.local';
 const DEV_AUTH_BYPASS_FIRST_NAME = 'Dev';
 
 function isLoopbackHostname(hostname: string): boolean {
-	const normalizedHostname = hostname.trim().toLowerCase();
-	if (!normalizedHostname) {
-		return false;
-	}
-
-	return (
-		normalizedHostname === 'localhost' ||
-		normalizedHostname.endsWith('.localhost') ||
-		isLoopbackIpAddress(normalizedHostname)
-	);
+	return isLoopbackHost(hostname);
 }
 
 function readUrl(candidate: string | undefined): URL | null {
