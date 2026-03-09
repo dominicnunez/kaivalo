@@ -1,9 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { getHubBuildInputPaths } from './helpers/hub-build.ts';
+import {
+	getHubBuildInputPaths,
+	getHubRuntimeServerBuildPaths
+} from './helpers/hub-build.ts';
 
 describe('hub build freshness inputs', () => {
 	it('tracks shared workspace packages that feed the hub build', () => {
@@ -31,18 +33,21 @@ describe('hub build freshness inputs', () => {
 		);
 	});
 
-	it('copies shared server auth config into the runtime bundle', () => {
-		const prepareRuntimeScript = readFileSync(
-			path.resolve(
-				process.cwd(),
-				'apps',
-				'hub',
-				'scripts',
-				'prepare-runtime.ts'
-			),
-			'utf8'
+	it('tracks the shared server auth config runtime artifact', () => {
+		const runtimeArtifactPaths = getHubRuntimeServerBuildPaths();
+		const expectedRuntimeArtifactPath = path.resolve(
+			process.cwd(),
+			'apps',
+			'hub',
+			'build',
+			'runtime',
+			'server',
+			'authkit-config.ts'
 		);
 
-		assert.match(prepareRuntimeScript, /'authkit-config\.ts'/);
+		assert.ok(
+			runtimeArtifactPaths.includes(expectedRuntimeArtifactPath),
+			'shared auth config must remain part of the packaged runtime artifact set'
+		);
 	});
 });

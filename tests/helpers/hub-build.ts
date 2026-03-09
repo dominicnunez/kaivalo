@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process';
 import { existsSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { RUNTIME_SERVER_FILES } from '../../apps/hub/scripts/runtime-server-files.ts';
 import { clearNewestMtimeCache, getNewestMtimeMs } from './build-freshness.ts';
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
@@ -21,6 +22,12 @@ export function getHubBuildInputPaths() {
 		join(HUB_DIR, 'tsconfig.json'),
 		join(HUB_DIR, 'vite.config.ts')
 	];
+}
+
+export function getHubRuntimeServerBuildPaths() {
+	return RUNTIME_SERVER_FILES.map((fileName) =>
+		join(HUB_DIR, 'build', 'runtime', 'server', fileName)
+	);
 }
 
 let didCheckBuild = false;
