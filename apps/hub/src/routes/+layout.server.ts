@@ -98,10 +98,6 @@ function getDevelopmentAuthBypassUser() {
 	};
 }
 
-if (env.DEV_AUTH_BYPASS?.trim().toLowerCase() === 'true') {
-	getDevelopmentAuthBypassUser();
-}
-
 function sanitizeAvatarUrl(
 	candidate: string | null | undefined
 ): string | null {
