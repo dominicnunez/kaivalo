@@ -193,7 +193,8 @@ describe('layout server load', () => {
 			user: {
 				firstName: 'Kai',
 				email: 'kai@example.com',
-				profilePictureUrl: 'https://avatars.githubusercontent.com/u/1'
+				profilePictureUrl:
+					'/avatar?source=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F1'
 			},
 			signInUrl: null,
 			authError: null
@@ -214,7 +215,8 @@ describe('layout server load', () => {
 			user: {
 				firstName: 'Kai',
 				email: 'kai@example.com',
-				profilePictureUrl: 'https://avatars.githubusercontent.com/u/1'
+				profilePictureUrl:
+					'/avatar?source=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F1'
 			},
 			signInUrl: null,
 			authError: null
@@ -424,7 +426,8 @@ describe('layout server load', () => {
 			user: {
 				firstName: 'Kai',
 				email: 'kai@example.com',
-				profilePictureUrl: 'https://avatars.githubusercontent.com/u/1'
+				profilePictureUrl:
+					'/avatar?source=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F1'
 			},
 			signInUrl: null,
 			authError: null

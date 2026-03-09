@@ -1013,12 +1013,13 @@ describe('Security headers on preview responses', () => {
 		assert.ok(contentSecurityPolicy.includes("script-src 'self'"));
 		assert.ok(contentSecurityPolicy.includes("style-src 'self'"));
 		assert.ok(contentSecurityPolicy.includes("font-src 'self'"));
-		assert.ok(contentSecurityPolicy.includes('https://images.workoscdn.com'));
+		assert.ok(contentSecurityPolicy.includes("img-src 'self' data:"));
+		assert.ok(!contentSecurityPolicy.includes('https://images.workoscdn.com'));
 		assert.ok(
-			contentSecurityPolicy.includes('https://avatars.githubusercontent.com')
+			!contentSecurityPolicy.includes('https://avatars.githubusercontent.com')
 		);
 		assert.ok(
-			contentSecurityPolicy.includes('https://*.googleusercontent.com')
+			!contentSecurityPolicy.includes('https://*.googleusercontent.com')
 		);
 		assert.ok(contentSecurityPolicy.includes("object-src 'none'"));
 		assert.ok(contentSecurityPolicy.includes("frame-ancestors 'none'"));

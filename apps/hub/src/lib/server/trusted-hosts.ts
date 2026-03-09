@@ -5,11 +5,6 @@ const TRUSTED_AVATAR_EXACT_HOSTS = [
 ];
 const TRUSTED_AVATAR_HOSTNAME_SET = new Set(TRUSTED_AVATAR_EXACT_HOSTS);
 
-export const TRUSTED_AVATAR_CSP_SOURCES = [
-	...TRUSTED_AVATAR_EXACT_HOSTS.map((host) => `https://${host}`),
-	'https://*.googleusercontent.com'
-];
-
 export function isTrustedAvatarHost(hostname: string): boolean {
 	return (
 		TRUSTED_AVATAR_HOSTNAME_SET.has(hostname) ||

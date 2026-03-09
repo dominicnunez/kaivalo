@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-	TRUSTED_AVATAR_CSP_SOURCES,
-	isTrustedAvatarHost
-} from './trusted-hosts.ts';
+import { isTrustedAvatarHost } from './trusted-hosts.ts';
 
 describe('trusted avatar hosts', () => {
 	it.each([
@@ -24,13 +21,5 @@ describe('trusted avatar hosts', () => {
 		'lh3.googleusercontents.com'
 	])('rejects untrusted or lookalike avatar host %s', (hostname) => {
 		expect(isTrustedAvatarHost(hostname)).toBe(false);
-	});
-
-	it('publishes CSP sources that match the trusted avatar policy', () => {
-		expect(TRUSTED_AVATAR_CSP_SOURCES).toEqual([
-			'https://images.workoscdn.com',
-			'https://avatars.githubusercontent.com',
-			'https://*.googleusercontent.com'
-		]);
 	});
 });

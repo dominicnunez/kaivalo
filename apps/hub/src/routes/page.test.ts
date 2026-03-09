@@ -196,7 +196,8 @@ describe('home page content', () => {
 			user: {
 				firstName: 'Kai',
 				email: 'kai@example.com',
-				profilePictureUrl: 'https://avatars.githubusercontent.com/u/1'
+				profilePictureUrl:
+					'/avatar?source=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F1'
 			}
 		});
 
@@ -209,6 +210,13 @@ describe('home page content', () => {
 		expect(
 			within(controls as HTMLElement).getByRole('img', { name: 'Kai' })
 		).toBeTruthy();
+		expect(
+			within(controls as HTMLElement)
+				.getByRole('img', { name: 'Kai' })
+				.getAttribute('src')
+		).toBe(
+			'/avatar?source=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F1'
+		);
 		expect(within(controls as HTMLElement).getByText('Kai')).toBeTruthy();
 		expect(
 			within(controls as HTMLElement)

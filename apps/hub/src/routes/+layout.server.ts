@@ -11,7 +11,7 @@ import {
 	AUTH_ERROR_MESSAGE,
 	readVerifiedAuthError
 } from '$lib/auth/auth-error-query.ts';
-import { isTrustedAvatarHost } from '$lib/server/trusted-hosts.ts';
+import { toAvatarProxyUrl } from '$lib/server/avatar-url.ts';
 import { isLoopbackHostname as isLoopbackHost } from '$lib/server/ip-address.ts';
 import { authKit } from '@workos/authkit-sveltekit';
 
@@ -102,36 +102,6 @@ function getDevelopmentAuthBypassUser(): LayoutUser | null {
 		email: env.DEV_AUTH_BYPASS_EMAIL?.trim() || DEV_AUTH_BYPASS_EMAIL,
 		profilePictureUrl: null
 	};
-}
-
-function sanitizeAvatarUrl(
-	candidate: string | null | undefined
-): string | null {
-	if (!candidate) {
-		return null;
-	}
-
-	try {
-		const parsed = new URL(candidate);
-		if (
-			parsed.protocol !== 'https:' ||
-			parsed.username ||
-			parsed.password ||
-			parsed.port
-		) {
-			return null;
-		}
-
-		if (!isTrustedAvatarHost(parsed.hostname)) {
-			return null;
-		}
-
-		const sanitized = new URL(parsed.origin);
-		sanitized.pathname = parsed.pathname;
-		return sanitized.toString();
-	} catch {
-		return null;
-	}
 }
 
 function markAuthFailureNoStore(event: Parameters<LayoutServerLoad>[0]): void {
@@ -230,7 +200,7 @@ export const load: LayoutServerLoad = async (event) => {
 				? {
 						firstName: user.firstName,
 						email: user.email,
-						profilePictureUrl: sanitizeAvatarUrl(user.profilePictureUrl)
+						profilePictureUrl: toAvatarProxyUrl(user.profilePictureUrl)
 					}
 				: null,
 			signInUrl: user ? null : signInUrl,

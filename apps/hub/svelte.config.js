@@ -1,6 +1,5 @@
 import adapter from '@sveltejs/adapter-node';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
-import { TRUSTED_AVATAR_CSP_SOURCES } from './src/lib/server/trusted-hosts.ts';
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
@@ -14,7 +13,7 @@ const config = {
 				'script-src': ['self'],
 				'style-src': ['self'],
 				'font-src': ['self'],
-				'img-src': ['self', 'data:', ...TRUSTED_AVATAR_CSP_SOURCES],
+				'img-src': ['self', 'data:'],
 				'connect-src': ['self'],
 				'form-action': ['self'],
 				'base-uri': ['self'],
