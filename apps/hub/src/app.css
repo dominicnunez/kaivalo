@@ -155,6 +155,15 @@
 	.footer-shell {
 		border-color: var(--border);
 	}
+
+	.shell-header {
+		border-color: var(--border);
+		background: linear-gradient(
+			180deg,
+			rgba(6, 6, 10, 0.96) 0%,
+			rgba(6, 6, 10, 0.88) 100%
+		);
+	}
 }
 
 /* Grain overlay */

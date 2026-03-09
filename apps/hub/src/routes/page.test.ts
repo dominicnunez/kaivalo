@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/svelte';
+import { cleanup, render, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 
 vi.mock('lucide-svelte', async () => {
@@ -165,10 +165,10 @@ describe('home page content', () => {
 		expect(
 			within(servicesSection as HTMLElement)
 				.getByRole('link', {
-					name: /open from your dashboard/i
+					name: /open from your services/i
 				})
 				.getAttribute('href')
-		).toBe('/app');
+		).toBe('/services');
 
 		const aboutSection = container.querySelector('#about');
 		expect(aboutSection).not.toBeNull();
@@ -187,7 +187,7 @@ describe('home page content', () => {
 		).toBeTruthy();
 	});
 
-	it('renders footer contact information and the current year', () => {
+	it('renders the shared footer mark and the current year', () => {
 		const { container } = renderPage();
 
 		const footer = container.querySelector('footer');
@@ -195,9 +195,7 @@ describe('home page content', () => {
 		expect(
 			within(footer as HTMLElement).getByText(`© ${currentYear}`)
 		).toBeTruthy();
-
-		const contactLink = screen.getByRole('link', { name: /contact/i });
-		expect(contactLink.getAttribute('href')).toBe('mailto:kaivalo@proton.me');
+		expect(within(footer as HTMLElement).getByText('Kaivalo')).toBeTruthy();
 	});
 
 	it('renders signed-in controls with the user profile image and sign-out action', () => {
@@ -222,10 +220,10 @@ describe('home page content', () => {
 		expect(
 			within(controls as HTMLElement)
 				.getByRole('link', {
-					name: /open dashboard/i
+					name: /open services/i
 				})
 				.getAttribute('href')
-		).toBe('/app');
+		).toBe('/services');
 		expect(
 			within(signOutForm as HTMLFormElement).getByRole('button', {
 				name: /sign out/i
@@ -261,7 +259,7 @@ describe('home page content', () => {
 	});
 
 	it('renders a disabled fallback control when sign-in is unavailable', () => {
-		renderPage({
+		const { container } = renderPage({
 			signInUrl: null,
 			authError: {
 				message:
@@ -270,11 +268,13 @@ describe('home page content', () => {
 			}
 		});
 
-		const button = screen.getByRole('button', {
-			name: /sign in unavailable/i
-		});
-		expect(button.getAttribute('disabled')).toBe('');
-		expect(button.getAttribute('title')).toBe(
+		const button = container.querySelector(
+			'button[title="Sign-in is temporarily unavailable"]'
+		);
+		expect(button).not.toBeNull();
+		const disabledButton = button as HTMLButtonElement;
+		expect(disabledButton.getAttribute('disabled')).toBe('');
+		expect(disabledButton.getAttribute('title')).toBe(
 			'Sign-in is temporarily unavailable'
 		);
 	});

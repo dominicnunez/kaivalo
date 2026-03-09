@@ -8,7 +8,10 @@ vi.mock('lucide-svelte', async () => {
 	return {
 		Calendar: IconStub,
 		ExternalLink: IconStub,
+		LayoutDashboard: IconStub,
+		LogIn: IconStub,
 		LogOut: IconStub,
+		Mail: IconStub,
 		Mic: IconStub
 	};
 });
@@ -19,9 +22,10 @@ import type { PageData } from './$types';
 function createPageData(overrides: Partial<PageData> = {}): PageData {
 	return {
 		meta: {
-			title: 'Kaivalo | Service Launcher',
+			title: 'Kaivalo | Services',
 			description: 'Launcher test description'
 		},
+		currentYear: new Date().getFullYear(),
 		user: {
 			firstName: 'Kai',
 			email: 'kai@example.com',
@@ -68,7 +72,7 @@ function createPageData(overrides: Partial<PageData> = {}): PageData {
 	};
 }
 
-describe('launcher page content', () => {
+describe('services page content', () => {
 	it('renders active services with launch actions', () => {
 		render(Page, {
 			data: createPageData()
@@ -76,7 +80,7 @@ describe('launcher page content', () => {
 
 		const activeSection = screen.getByTestId('active-services');
 		expect(
-			within(activeSection).getByRole('heading', { name: 'Available now' })
+			within(activeSection).getByRole('heading', { name: 'Available' })
 		).toBeTruthy();
 		expect(
 			within(activeSection).getByRole('heading', { name: 'Sweep' })
@@ -107,15 +111,32 @@ describe('launcher page content', () => {
 	});
 
 	it('renders the signed-in identity context and sign-out action', () => {
-		render(Page, {
+		const { container } = render(Page, {
 			data: createPageData()
 		});
 
-		expect(screen.getByText(/signed in as kai/i)).toBeTruthy();
+		const signOutForm = container.querySelector(
+			'form[action="/auth/sign-out"]'
+		);
+		expect(signOutForm).not.toBeNull();
+		const controls = signOutForm?.parentElement;
+		expect(controls).not.toBeNull();
+		expect(within(controls as HTMLElement).getByText('Kai')).toBeTruthy();
+		expect(within(controls as HTMLElement).getByText('K')).toBeTruthy();
 		expect(
-			screen.getByRole('button', {
+			within(controls as HTMLElement).getByRole('button', {
 				name: /sign out/i
 			})
+		).toBeTruthy();
+		expect(
+			screen.getByRole('heading', {
+				name: /tools dashboard/i
+			})
+		).toBeTruthy();
+		expect(
+			screen.getByText(
+				/services linked to your kaivalo account live here first/i
+			)
 		).toBeTruthy();
 	});
 });

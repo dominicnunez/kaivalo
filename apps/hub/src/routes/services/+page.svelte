@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { Container } from '@kaivalo/ui';
-	import { Calendar, ExternalLink, LogOut, Mic } from 'lucide-svelte';
+	import { Calendar, ExternalLink, Mic } from 'lucide-svelte';
 	import type { PageData } from './$types';
 	import type { ServiceIconKey } from '$lib/services/registry.ts';
+	import ShellHeader from '$lib/components/shell-header.svelte';
+	import ShellFooter from '$lib/components/shell-footer.svelte';
 
 	let { data }: { data: PageData } = $props();
 
@@ -17,40 +19,24 @@
 	<meta name="description" content={data.meta.description} />
 </svelte:head>
 
-<section class="relative overflow-hidden pt-12 pb-8 sm:pt-16 sm:pb-10">
+<ShellHeader user={data.user} />
+
+<section class="relative overflow-hidden pt-4 pb-8 sm:pt-5 sm:pb-10">
 	<div class="aurora"></div>
 
 	<Container size="lg" class="relative z-10">
-		<div
-			class="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between"
-		>
-			<div class="max-w-2xl">
-				<p class="text-muted font-mono text-xs uppercase tracking-[0.24em]">
-					Service launcher
-				</p>
-				<h1
-					class="font-display text-4xl sm:text-5xl md:text-6xl font-bold leading-[0.95] tracking-tight mt-3"
-				>
-					Launch the tools
-					<span class="text-accent">ready for your work.</span>
-				</h1>
-				<p
-					class="text-secondary text-sm sm:text-base leading-relaxed mt-4 max-w-xl"
-				>
-					Signed in as {data.user?.firstName ?? data.user?.email}. Open Sweep
-					now, and keep an eye on what is coming next.
-				</p>
-			</div>
-
-			<form method="POST" action="/auth/sign-out">
-				<button
-					type="submit"
-					class="signout-btn hover-border inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer"
-				>
-					<LogOut class="w-3.5 h-3.5" />
-					Sign out
-				</button>
-			</form>
+		<div class="max-w-3xl">
+			<h1
+				class="font-display mt-0 whitespace-nowrap text-4xl font-bold leading-[0.95] tracking-tight sm:text-5xl md:text-6xl"
+			>
+				Tools <span class="text-accent">Dashboard</span>
+			</h1>
+			<p
+				class="text-secondary text-sm sm:text-base leading-relaxed mt-4 max-w-xl"
+			>
+				Services linked to your Kaivalo account live here first. Open Sweep now,
+				and keep an eye on what is coming next.
+			</p>
 		</div>
 	</Container>
 </section>
@@ -61,11 +47,8 @@
 			<h2
 				class="font-display text-lg sm:text-xl md:text-2xl font-bold tracking-tight"
 			>
-				Available now
+				Available
 			</h2>
-			<p class="text-secondary text-sm sm:text-base leading-relaxed mt-2">
-				Active services available from your Kaivalo account.
-			</p>
 		</div>
 
 		<div class="grid grid-cols-1 gap-4 sm:gap-6">
@@ -113,7 +96,10 @@
 	</Container>
 </section>
 
-<section class="relative py-6 sm:py-8" data-testid="planned-services">
+<section
+	class="relative pt-6 pb-2 sm:pt-8 sm:pb-3"
+	data-testid="planned-services"
+>
 	<Container size="lg">
 		<div class="mb-8 sm:mb-10 max-w-xl">
 			<h2
@@ -121,9 +107,6 @@
 			>
 				Planned
 			</h2>
-			<p class="text-secondary text-sm sm:text-base leading-relaxed mt-2">
-				Services that are on the roadmap but not launchable yet.
-			</p>
 		</div>
 
 		<div class="grid grid-cols-1 gap-4 sm:gap-6">
@@ -169,3 +152,5 @@
 		</div>
 	</Container>
 </section>
+
+<ShellFooter currentYear={data.currentYear} />

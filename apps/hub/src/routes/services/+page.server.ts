@@ -14,10 +14,11 @@ export const load: PageServerLoad = async (event) => {
 
 	return {
 		meta: {
-			title: 'Kaivalo | Service Launcher',
+			title: 'Kaivalo | Services',
 			description:
-				'Launch the Kaivalo services available on your account from one authenticated dashboard.'
+				'Open the Kaivalo services available on your account from one authenticated launcher.'
 		},
+		currentYear: new Date().getFullYear(),
 		...getLauncherServices()
 	};
 };

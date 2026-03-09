@@ -1,16 +1,10 @@
 <script lang="ts">
 	import { Container } from '@kaivalo/ui';
-	import {
-		ArrowRight,
-		Calendar,
-		LayoutDashboard,
-		LogIn,
-		LogOut,
-		Mail,
-		Mic
-	} from 'lucide-svelte';
+	import { ArrowRight, Calendar, Mic } from 'lucide-svelte';
 	import type { PageData } from './$types';
 	import type { ServiceIconKey } from '$lib/services/registry.ts';
+	import ShellHeader from '$lib/components/shell-header.svelte';
+	import ShellFooter from '$lib/components/shell-footer.svelte';
 	import { onMount } from 'svelte';
 
 	let { data }: { data: PageData } = $props();
@@ -154,85 +148,25 @@
 	<meta name="twitter:image" content={data.meta.image} />
 </svelte:head>
 
+<ShellHeader
+	user={data.user}
+	signInUrl={data.signInUrl}
+	linkHref={data.user ? '/services' : null}
+	linkLabel={data.user ? 'Open services' : null}
+/>
+
 <!-- ════════ HERO ════════ -->
 <section
-	class="relative flex items-center overflow-hidden pt-12 pb-2 sm:pt-16 sm:pb-4 md:min-h-[30vh] md:py-0"
+	class="relative overflow-hidden pt-4 pb-2 sm:pt-5 sm:pb-4 md:min-h-[30vh]"
 >
 	<!-- Aurora background -->
 	<div class="aurora"></div>
 
-	<!-- Sign In — top right of section -->
-	<div
-		class="absolute top-4 right-4 sm:top-6 sm:right-8 z-20 animate-enter delay-1"
-	>
-		{#if data.user}
-			<div class="flex items-center gap-3">
-				{#if data.user.profilePictureUrl}
-					<img
-						src={data.user.profilePictureUrl}
-						alt={data.user.firstName ?? 'User'}
-						referrerpolicy="no-referrer"
-						crossorigin="anonymous"
-						class="avatar-border w-7 h-7 rounded-full object-cover"
-					/>
-				{:else}
-					<div
-						class="avatar-fallback w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium"
-					>
-						{(
-							data.user.firstName?.[0] ??
-							data.user.email?.[0] ??
-							'?'
-						).toUpperCase()}
-					</div>
-				{/if}
-				<span class="text-secondary text-xs hidden sm:inline">
-					{data.user.firstName ?? data.user.email}
-				</span>
-				<a
-					href="/app"
-					class="chasing-border signin-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium"
-				>
-					<LayoutDashboard class="w-3.5 h-3.5" />
-					Open dashboard
-				</a>
-				<form method="POST" action="/auth/sign-out">
-					<button
-						type="submit"
-						class="signout-btn hover-border inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer"
-					>
-						<LogOut class="w-3.5 h-3.5" />
-						Sign out
-					</button>
-				</form>
-			</div>
-		{:else if data.signInUrl}
-			<a
-				href={data.signInUrl}
-				class="chasing-border signin-btn inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-medium"
-			>
-				<LogIn class="w-3.5 h-3.5" />
-				Sign in
-			</a>
-		{:else}
-			<button
-				type="button"
-				class="signin-btn inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-medium opacity-60 cursor-not-allowed"
-				disabled
-				aria-disabled="true"
-				title="Sign-in is temporarily unavailable"
-			>
-				<LogIn class="w-3.5 h-3.5" />
-				Sign in unavailable
-			</button>
-		{/if}
-	</div>
-
 	<Container size="lg" class="relative z-10">
-		<div class="max-w-2xl">
+		<div class="max-w-3xl">
 			<!-- Headline -->
 			<h1
-				class="font-display text-4xl sm:text-5xl md:text-7xl font-bold leading-[0.95] tracking-tight mb-4 sm:mb-6 animate-enter delay-2"
+				class="font-display text-4xl sm:text-5xl md:text-6xl font-bold leading-[0.95] tracking-tight mb-4 sm:mb-6 animate-enter delay-2"
 			>
 				Tools that<br />
 				<span class="text-accent">solve things.</span>
@@ -304,10 +238,10 @@
 					{#if service.lifecycle === 'active'}
 						<div class="mt-5">
 							<a
-								href="/app"
+								href="/services"
 								class="text-secondary hover-text inline-flex items-center gap-1.5 text-xs font-medium"
 							>
-								Open from your dashboard
+								Open from your services
 								<ArrowRight class="w-3.5 h-3.5" />
 							</a>
 						</div>
@@ -319,7 +253,7 @@
 </section>
 
 <!-- ════════ ABOUT ════════ -->
-<section id="about" class="relative py-8 sm:py-12">
+<section id="about" class="relative pt-6 pb-2 sm:pt-8 sm:pb-3">
 	<Container size="lg">
 		<h2
 			class="font-display text-lg sm:text-xl md:text-2xl font-bold tracking-tight mb-6 sm:mb-8"
@@ -346,31 +280,4 @@
 	</Container>
 </section>
 
-<!-- ════════ FOOTER ════════ -->
-<footer class="footer-shell py-8 sm:py-10 border-t">
-	<Container size="lg">
-		<div
-			class="flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6"
-		>
-			<!-- Left: mark -->
-			<div class="flex items-center gap-3">
-				<span
-					class="text-accent font-display text-sm font-semibold tracking-tight"
-					>Kaivalo</span
-				>
-				<span class="text-muted font-mono text-xs">© {currentYear}</span>
-			</div>
-
-			<!-- Right: links -->
-			<div class="flex items-center gap-6">
-				<a
-					href="mailto:kaivalo@proton.me"
-					class="text-muted hover-text flex items-center gap-2 text-xs"
-				>
-					<Mail class="w-3.5 h-3.5" />
-					Contact
-				</a>
-			</div>
-		</div>
-	</Container>
-</footer>
+<ShellFooter {currentYear} />

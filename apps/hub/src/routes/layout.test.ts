@@ -39,6 +39,31 @@ describe('layout server load', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		delete mockEnv.WORKOS_API_HOSTNAME;
+		delete mockEnv.DEV_AUTH_BYPASS;
+		delete mockEnv.DEV_AUTH_BYPASS_EMAIL;
+		delete mockEnv.DEV_AUTH_BYPASS_FIRST_NAME;
+		delete mockEnv.NODE_ENV;
+	});
+
+	it('returns a development bypass user without calling WorkOS when enabled', async () => {
+		mockEnv.NODE_ENV = 'development';
+		mockEnv.DEV_AUTH_BYPASS = 'true';
+		mockEnv.DEV_AUTH_BYPASS_EMAIL = 'local-dev@kaivalo.test';
+		mockEnv.DEV_AUTH_BYPASS_FIRST_NAME = 'Local';
+
+		const result = await load(baseEvent);
+
+		expect(mockedAuthKit.getUser).not.toHaveBeenCalled();
+		expect(mockedAuthKit.getSignInUrl).not.toHaveBeenCalled();
+		expect(result).toEqual({
+			user: {
+				firstName: 'Local',
+				email: 'local-dev@kaivalo.test',
+				profilePictureUrl: null
+			},
+			signInUrl: null,
+			authError: null
+		});
 	});
 
 	it('returns normalized user data for authenticated requests', async () => {
@@ -143,7 +168,7 @@ describe('layout server load', () => {
 		const result = await load(baseEvent);
 
 		expect(mockedAuthKit.getSignInUrl).toHaveBeenCalledWith({
-			returnTo: '/app'
+			returnTo: '/services'
 		});
 		expect(mockedAuthKit.getSignInUrl).toHaveBeenCalledTimes(1);
 		expect(result).toEqual({
@@ -163,7 +188,7 @@ describe('layout server load', () => {
 		const result = await load(baseEvent);
 
 		expect(mockedAuthKit.getSignInUrl).toHaveBeenCalledWith({
-			returnTo: '/app'
+			returnTo: '/services'
 		});
 		expect(result).toEqual({
 			user: null,
@@ -243,7 +268,7 @@ describe('layout server load', () => {
 		const result = await load(event);
 
 		expect(mockedAuthKit.getSignInUrl).toHaveBeenCalledWith({
-			returnTo: '/app'
+			returnTo: '/services'
 		});
 		expect(result).toEqual({
 			user: null,

@@ -20,8 +20,26 @@ const TRUSTED_SIGN_IN_PATH_PREFIXES = [
 	'/auth/sign-in',
 	'/user_management/authorize'
 ];
+const DEV_AUTH_BYPASS_EMAIL = 'dev@kaivalo.local';
+const DEV_AUTH_BYPASS_FIRST_NAME = 'Dev';
 let trustedSignInOriginSetCache: Set<string> | null = null;
 let trustedSignInOriginCacheKey: string | null = null;
+
+function getDevelopmentAuthBypassUser() {
+	if (
+		env.NODE_ENV?.trim().toLowerCase() === 'production' ||
+		env.DEV_AUTH_BYPASS?.trim().toLowerCase() !== 'true'
+	) {
+		return null;
+	}
+
+	return {
+		firstName:
+			env.DEV_AUTH_BYPASS_FIRST_NAME?.trim() || DEV_AUTH_BYPASS_FIRST_NAME,
+		email: env.DEV_AUTH_BYPASS_EMAIL?.trim() || DEV_AUTH_BYPASS_EMAIL,
+		profilePictureUrl: null
+	};
+}
 
 function getTrustedSignInOriginSet(): Set<string> {
 	try {
@@ -121,13 +139,14 @@ export const load: LayoutServerLoad = async (event) => {
 		const authErrorFromQuery = readVerifiedAuthError(event.url.searchParams, {
 			secret: env.WORKOS_COOKIE_PASSWORD ?? ''
 		});
-		const user = await authKit.getUser(event);
+		const developmentBypassUser = getDevelopmentAuthBypassUser();
+		const user = developmentBypassUser ?? (await authKit.getUser(event));
 		let signInUrl = null;
 		if (!user) {
 			const workosEnv = getValidatedWorkosEnv(env);
 			const trustedSignInOrigins = getTrustedSignInOriginSet();
 			signInUrl = sanitizeSignInUrl(
-				await authKit.getSignInUrl({ returnTo: '/app' }),
+				await authKit.getSignInUrl({ returnTo: '/services' }),
 				workosEnv.origin,
 				trustedSignInOrigins
 			);

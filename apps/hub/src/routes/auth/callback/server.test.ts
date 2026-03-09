@@ -58,27 +58,27 @@ describe('auth callback route', () => {
 
 	it('normalizes successful shell callback redirects to the launcher route', async () => {
 		mockHandleCallback.mockReturnValue(async () =>
-			Response.redirect('https://kaivalo.test/app', 303)
+			Response.redirect('https://kaivalo.test/services', 303)
 		);
 
 		const { GET } = await import('./+server');
 		const response = await GET(createEvent());
 
 		expect(response.status).toBe(303);
-		expect(response.headers.get('location')).toBe('/app');
+		expect(response.headers.get('location')).toBe('/services');
 		expect(mockHandleCallback).toHaveBeenCalledOnce();
 	});
 
 	it('preserves launcher query parameters on successful shell callback redirects', async () => {
 		mockHandleCallback.mockReturnValue(async () =>
-			Response.redirect('https://kaivalo.test/app?welcome=1', 303)
+			Response.redirect('https://kaivalo.test/services?welcome=1', 303)
 		);
 
 		const { GET } = await import('./+server');
 		const response = await GET(createEvent());
 
 		expect(response.status).toBe(303);
-		expect(response.headers.get('location')).toBe('/app?welcome=1');
+		expect(response.headers.get('location')).toBe('/services?welcome=1');
 		expect(mockHandleCallback).toHaveBeenCalledOnce();
 	});
 

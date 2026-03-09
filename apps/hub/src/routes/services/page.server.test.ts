@@ -15,7 +15,7 @@ function createParentData(overrides: Record<string, unknown> = {}) {
 	};
 }
 
-describe('launcher page load', () => {
+describe('services page load', () => {
 	it('redirects unauthenticated users to the trusted sign-in flow', async () => {
 		try {
 			await load({
@@ -55,7 +55,7 @@ describe('launcher page load', () => {
 		});
 	});
 
-	it('returns active and planned launcher services for authenticated users', async () => {
+	it('returns active and planned services for authenticated users', async () => {
 		const result = (await load({
 			parent: async () => createParentData()
 		} as never)) as {
@@ -63,15 +63,17 @@ describe('launcher page load', () => {
 				title: string;
 				description: string;
 			};
+			currentYear: number;
 			activeServices: Array<{ id: string }>;
 			plannedServices: Array<{ id: string }>;
 		};
 
 		expect(result.meta).toEqual({
-			title: 'Kaivalo | Service Launcher',
+			title: 'Kaivalo | Services',
 			description:
-				'Launch the Kaivalo services available on your account from one authenticated dashboard.'
+				'Open the Kaivalo services available on your account from one authenticated launcher.'
 		});
+		expect(result.currentYear).toBe(new Date().getFullYear());
 		expect(result.activeServices.map((service) => service.id)).toEqual([
 			'sweep'
 		]);
