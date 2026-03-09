@@ -63,7 +63,7 @@ function parseOriginUrl(value: string): URL {
 		return parsed;
 	} catch {
 		throw new Error(
-			'ORIGIN must be a valid URL origin (for example: https://kaivalo.com)'
+			'ORIGIN must be a valid URL origin (for example: https://hub.kaivalo.com)'
 		);
 	}
 }
