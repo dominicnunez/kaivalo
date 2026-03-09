@@ -56,6 +56,18 @@ function shouldUseUserRedirect(event: RequestEvent): boolean {
 	return accept.includes('text/html') && !accept.includes('application/json');
 }
 
+function isSelfReferentialRedirect(
+	location: string,
+	expectedOrigin: string,
+	requestPathname: string
+): boolean {
+	const normalizedLocation = new URL(location, expectedOrigin);
+	return (
+		normalizedLocation.origin === expectedOrigin &&
+		normalizedLocation.pathname === requestPathname
+	);
+}
+
 export function createSignInGetHandler({
 	getSignInUrl,
 	expectedOrigin,
@@ -80,6 +92,17 @@ export function createSignInGetHandler({
 			);
 			if (!safeLocation) {
 				throw new Error('Sign-in produced an invalid redirect location');
+			}
+			if (
+				isSelfReferentialRedirect(
+					safeLocation,
+					trustedOrigin,
+					event.url.pathname
+				)
+			) {
+				throw new Error(
+					'Sign-in produced a self-referential redirect location'
+				);
 			}
 
 			throw redirect(303, safeLocation);

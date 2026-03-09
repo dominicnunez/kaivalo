@@ -70,17 +70,49 @@ describe('auth sign-in route', () => {
 		expect(mockGetSignInUrl).toHaveBeenCalledWith({ returnTo: '/services' });
 	});
 
-	it('normalizes trusted same-origin sign-in URLs to a relative path', async () => {
+	it('normalizes trusted same-origin destinations that do not point back to the sign-in route', async () => {
 		mockGetSignInUrl.mockResolvedValue(
-			'https://kaivalo.test/auth/sign-in?screen_hint=sign-up#hero' as never
+			'https://kaivalo.test/services?welcome=1#hero' as never
 		);
 
 		const { GET } = await import('./+server');
 
 		await expect(GET(createEvent())).rejects.toMatchObject({
 			status: 303,
-			location: '/auth/sign-in?screen_hint=sign-up#hero'
+			location: '/services?welcome=1#hero'
 		});
+	});
+
+	it('rejects same-origin sign-in destinations that loop back to the route itself', async () => {
+		mockGetSignInUrl.mockResolvedValue(
+			'https://kaivalo.test/auth/sign-in?screen_hint=sign-up#hero' as never
+		);
+
+		const { GET } = await import('./+server');
+
+		await expect(
+			GET(
+				createEvent({
+					accept: 'application/json'
+				})
+			)
+		).rejects.toMatchObject({
+			status: 503,
+			body: {
+				message: expect.stringMatching(/^Sign-in failed\. Reference: authsign_/)
+			}
+		});
+		expect(errorSpy).toHaveBeenCalledWith(
+			'Sign-in failed',
+			expect.objectContaining({
+				errorCode: 'AUTH_SIGN_IN_UNEXPECTED_FAILURE',
+				errorName: 'Error',
+				method: 'GET',
+				pathname: '/auth/sign-in',
+				requestId: 'missing',
+				incidentId: expect.stringMatching(/^authsign_/)
+			})
+		);
 	});
 
 	it('rejects sign-in URLs on untrusted origins', async () => {
