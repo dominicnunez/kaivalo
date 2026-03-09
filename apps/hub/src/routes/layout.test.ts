@@ -201,6 +201,27 @@ describe('layout server load', () => {
 		});
 	});
 
+	it('trims authenticated user fields before exposing them to the app shell', async () => {
+		mockGetUser.mockResolvedValue({
+			firstName: '  Kai  ',
+			email: '  kai@example.com  ',
+			profilePictureUrl: '  https://avatars.githubusercontent.com/u/1  '
+		} as never);
+
+		const result = await load(baseEvent as never);
+
+		expect(result).toEqual({
+			user: {
+				firstName: 'Kai',
+				email: 'kai@example.com',
+				profilePictureUrl:
+					'/avatar?source=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F1'
+			},
+			signInUrl: null,
+			authError: null
+		});
+	});
+
 	it('drops query strings and fragments from trusted avatar urls', async () => {
 		mockGetUser.mockResolvedValue({
 			firstName: 'Kai',
@@ -337,6 +358,82 @@ describe('layout server load', () => {
 			})
 		);
 	});
+
+	it.each([
+		[
+			'empty email',
+			{
+				firstName: 'Kai',
+				email: '   ',
+				profilePictureUrl: null
+			},
+			'AuthKit returned an empty email'
+		],
+		[
+			'non-string email',
+			{
+				firstName: 'Kai',
+				email: 42,
+				profilePictureUrl: null
+			},
+			'AuthKit returned a non-string email'
+		],
+		[
+			'non-string first name',
+			{
+				firstName: ['Kai'],
+				email: 'kai@example.com',
+				profilePictureUrl: null
+			},
+			'AuthKit returned a non-string firstName'
+		],
+		[
+			'non-string profile picture url',
+			{
+				firstName: 'Kai',
+				email: 'kai@example.com',
+				profilePictureUrl: 7
+			},
+			'AuthKit returned a non-string profilePictureUrl'
+		]
+	])(
+		'rejects malformed authenticated payloads from AuthKit: %s',
+		async (_label, payload, expectedMessage) => {
+			const setHeaders = vi.fn();
+			mockGetUser.mockResolvedValue(payload as never);
+
+			const result = await load({
+				...createEvent('https://kaivalo.test/'),
+				setHeaders
+			} as never);
+
+			expect(result).toMatchObject({
+				user: null,
+				signInUrl: '/auth/sign-in',
+				authError: {
+					message:
+						'Sign-in is temporarily unavailable. Please try again shortly.',
+					incidentId: expect.stringMatching(/^authlayout_/)
+				}
+			});
+			expect(setHeaders).toHaveBeenCalledWith({
+				'cache-control': 'private, no-store',
+				vary: 'Cookie, Authorization'
+			});
+			expect(errorSpy).toHaveBeenCalledWith(
+				'Auth layout load failed',
+				expect.objectContaining({
+					errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
+					errorMessage: expectedMessage,
+					errorName: 'Error',
+					method: 'GET',
+					pathname: '/',
+					requestId: 'missing',
+					incidentId: expect.stringMatching(/^authlayout_/)
+				})
+			);
+		}
+	);
 
 	it('surfaces signed auth callback query errors only while sign-in remains unavailable', async () => {
 		mockGetUser.mockResolvedValue(null as never);

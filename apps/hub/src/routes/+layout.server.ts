@@ -27,6 +27,54 @@ type LayoutUser = {
 	profilePictureUrl: string | null;
 };
 
+function readOptionalAuthStringField(
+	record: Record<string, unknown>,
+	fieldName: 'firstName' | 'profilePictureUrl'
+): string | null {
+	const value = record[fieldName];
+	if (value === undefined || value === null) {
+		return null;
+	}
+
+	if (typeof value !== 'string') {
+		throw new Error(`AuthKit returned a non-string ${fieldName}`);
+	}
+
+	const normalized = value.trim();
+	return normalized === '' ? null : normalized;
+}
+
+function readRequiredAuthEmail(record: Record<string, unknown>): string {
+	const value = record.email;
+	if (typeof value !== 'string') {
+		throw new Error('AuthKit returned a non-string email');
+	}
+
+	const normalized = value.trim();
+	if (normalized === '') {
+		throw new Error('AuthKit returned an empty email');
+	}
+
+	return normalized;
+}
+
+function parseLayoutUser(candidate: unknown): LayoutUser | null {
+	if (candidate === null) {
+		return null;
+	}
+
+	if (typeof candidate !== 'object') {
+		throw new Error('AuthKit returned an invalid user payload');
+	}
+
+	const record = candidate as Record<string, unknown>;
+	return {
+		firstName: readOptionalAuthStringField(record, 'firstName'),
+		email: readRequiredAuthEmail(record),
+		profilePictureUrl: readOptionalAuthStringField(record, 'profilePictureUrl')
+	};
+}
+
 function isLoopbackHostname(hostname: string): boolean {
 	return isLoopbackHost(hostname);
 }
@@ -161,7 +209,7 @@ export const load: LayoutServerLoad = async (event) => {
 		let user: LayoutUser | null = developmentBypassUser;
 		if (!user) {
 			try {
-				user = (await authKit.getUser(event)) as LayoutUser | null;
+				user = parseLayoutUser(await authKit.getUser(event));
 			} catch (err) {
 				const incidentId = `authlayout_${randomUUID()}`;
 				let signInUrl: string | null = null;
