@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { getHubBuildEnv } from '../apps/hub/scripts/build-env.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DEPLOY_WORKFLOW_PATH = path.join(
@@ -397,5 +398,19 @@ describe('deployment runtime guardrails', () => {
 				}
 			]
 		);
+	});
+
+	it('uses the shared hub build env defaults instead of ad hoc Docker placeholders', () => {
+		const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
+		const buildEnv = getHubBuildEnv({});
+
+		assert.match(dockerfile, /\bRUN npm --prefix apps\/hub run build\b/);
+		assert.ok(buildEnv.AUTH_ERROR_SIGNING_SECRET);
+		assert.ok(buildEnv.WORKOS_COOKIE_PASSWORD);
+		assert.strictEqual(
+			buildEnv.WORKOS_REDIRECT_URI,
+			'http://localhost:3100/auth/callback'
+		);
+		assert.strictEqual(buildEnv.ORIGIN, 'http://localhost:3100');
 	});
 });

@@ -3,6 +3,7 @@ import { execSync, spawn } from 'node:child_process';
 import path from 'node:path';
 import http from 'node:http';
 import net from 'node:net';
+import { getHubBuildEnv } from '../scripts/build-env.ts';
 
 const hubDir = process.cwd();
 const nodeEntrypoint = path.join(hubDir, 'server.ts');
@@ -58,19 +59,7 @@ function runBuildWithDiagnostics() {
 			stdio: 'pipe',
 			encoding: 'utf8',
 			maxBuffer: 10 * 1024 * 1024,
-			env: {
-				...process.env,
-				WORKOS_CLIENT_ID: process.env.WORKOS_CLIENT_ID ?? 'client_test_fixture',
-				WORKOS_API_KEY: process.env.WORKOS_API_KEY ?? 'sk_test_fixture',
-				WORKOS_REDIRECT_URI:
-					process.env.WORKOS_REDIRECT_URI ??
-					'http://localhost:3100/auth/callback',
-				WORKOS_COOKIE_PASSWORD:
-					process.env.WORKOS_COOKIE_PASSWORD ?? 'ab'.repeat(32),
-				AUTH_ERROR_SIGNING_SECRET:
-					process.env.AUTH_ERROR_SIGNING_SECRET ?? 'cd'.repeat(32),
-				ORIGIN: process.env.ORIGIN ?? 'http://localhost:3100'
-			}
+			env: getHubBuildEnv(process.env)
 		});
 	} catch (error) {
 		const execError = error as ExecErrorWithOutput;
@@ -149,11 +138,11 @@ async function startBuiltServer() {
 			NODE_ENV: 'test',
 			PORT: String(port),
 			HOST: '127.0.0.1',
-			WORKOS_CLIENT_ID: process.env.WORKOS_CLIENT_ID ?? 'client_test_fixture',
-			WORKOS_API_KEY: process.env.WORKOS_API_KEY ?? 'sk_test_fixture',
 			WORKOS_REDIRECT_URI:
 				process.env.WORKOS_REDIRECT_URI ??
 				`http://127.0.0.1:${port}/auth/callback`,
+			WORKOS_CLIENT_ID: process.env.WORKOS_CLIENT_ID ?? 'client_test_fixture',
+			WORKOS_API_KEY: process.env.WORKOS_API_KEY ?? 'sk_test_fixture',
 			WORKOS_COOKIE_PASSWORD:
 				process.env.WORKOS_COOKIE_PASSWORD ?? 'ab'.repeat(32),
 			AUTH_ERROR_SIGNING_SECRET:

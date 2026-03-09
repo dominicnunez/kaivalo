@@ -2,6 +2,7 @@ import { execSync } from 'node:child_process';
 import { existsSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { RUNTIME_SERVER_FILES } from '../../apps/hub/scripts/runtime-server-files.ts';
+import { getHubBuildEnv } from '../../apps/hub/scripts/build-env.ts';
 import { clearNewestMtimeCache, getNewestMtimeMs } from './build-freshness.ts';
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
@@ -63,20 +64,10 @@ export function ensureHubBuild() {
 		cwd: HUB_DIR,
 		timeout: 180000,
 		encoding: 'utf8',
-		env: {
+		env: getHubBuildEnv({
 			...process.env,
-			NODE_ENV: 'test',
-			WORKOS_CLIENT_ID: process.env.WORKOS_CLIENT_ID ?? 'client_test_fixture',
-			WORKOS_API_KEY: process.env.WORKOS_API_KEY ?? 'sk_test_fixture',
-			WORKOS_REDIRECT_URI:
-				process.env.WORKOS_REDIRECT_URI ??
-				'http://localhost:3100/auth/callback',
-			WORKOS_COOKIE_PASSWORD:
-				process.env.WORKOS_COOKIE_PASSWORD ?? 'ab'.repeat(32),
-			AUTH_ERROR_SIGNING_SECRET:
-				process.env.AUTH_ERROR_SIGNING_SECRET ?? 'cd'.repeat(32),
-			ORIGIN: process.env.ORIGIN ?? 'http://localhost:3100'
-		}
+			NODE_ENV: 'test'
+		})
 	});
 
 	shouldBuildCache = false;

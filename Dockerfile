@@ -11,12 +11,7 @@ RUN npm ci
 COPY apps/hub apps/hub
 COPY packages/ui packages/ui
 
-RUN WORKOS_CLIENT_ID=client_build_placeholder \
-    WORKOS_API_KEY=sk_build_placeholder \
-    WORKOS_REDIRECT_URI=http://localhost:3100/auth/callback \
-    WORKOS_COOKIE_PASSWORD=abababababababababababababababababababababababababababababababab \
-    ORIGIN=http://localhost:3100 \
-    npm --prefix apps/hub run build
+RUN npm --prefix apps/hub run build
 RUN npm prune --omit=dev
 
 FROM node:24.14.0-bookworm-slim@sha256:b4687aef2571c632a1953695ce4d61d6462a7eda471fe6e272eebf0418f276ba AS runtime
