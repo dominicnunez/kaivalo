@@ -18,8 +18,14 @@ export type ServiceRegistryEntry = {
 	appUrl: string;
 };
 
-const SERVICE_REGISTRY: ServiceRegistryEntry[] = [
-	{
+function cloneService(
+	service: Readonly<ServiceRegistryEntry>
+): ServiceRegistryEntry {
+	return { ...service };
+}
+
+const SERVICE_REGISTRY: ReadonlyArray<Readonly<ServiceRegistryEntry>> = [
+	Object.freeze({
 		id: 'sweep',
 		name: 'Sweep',
 		tagline: 'Stay on schedule',
@@ -33,8 +39,8 @@ const SERVICE_REGISTRY: ServiceRegistryEntry[] = [
 		enabled: true,
 		publicUrl: 'https://sweep.kaivalo.com',
 		appUrl: 'https://sweep.kaivalo.com'
-	},
-	{
+	}),
+	Object.freeze({
 		id: 'podstudio',
 		name: 'PodStudio',
 		tagline: 'Podcast management',
@@ -49,13 +55,13 @@ const SERVICE_REGISTRY: ServiceRegistryEntry[] = [
 		enabled: false,
 		publicUrl: 'https://podcast.kaivalo.com',
 		appUrl: 'https://podcast.kaivalo.com'
-	}
+	})
 ];
 
 export function getMarketingServices(): ServiceRegistryEntry[] {
 	return SERVICE_REGISTRY.filter(
 		(service) => service.marketingVisible && service.lifecycle !== 'retired'
-	);
+	).map(cloneService);
 }
 
 export function getLauncherServices(): {
@@ -70,11 +76,11 @@ export function getLauncherServices(): {
 	);
 
 	return {
-		activeServices: visibleServices.filter(
-			(service) => service.lifecycle === 'active' && service.enabled
-		),
-		plannedServices: visibleServices.filter(
-			(service) => service.lifecycle === 'planned'
-		)
+		activeServices: visibleServices
+			.filter((service) => service.lifecycle === 'active' && service.enabled)
+			.map(cloneService),
+		plannedServices: visibleServices
+			.filter((service) => service.lifecycle === 'planned')
+			.map(cloneService)
 	};
 }
