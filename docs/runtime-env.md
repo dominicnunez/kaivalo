@@ -4,6 +4,10 @@ This document covers the production runtime environment expected by the Kaivalo 
 
 For a development-oriented starting point, see `apps/hub/.env.example`.
 
+For a local smoke build that does not talk to real auth infrastructure, you can
+run `HUB_BUILD_ALLOW_PLACEHOLDERS=true npm --prefix apps/hub run build`.
+Deploy and CI-style builds should provide the real auth settings instead.
+
 ## Required Variables
 
 ### WorkOS

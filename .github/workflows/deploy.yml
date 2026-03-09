@@ -65,12 +65,26 @@ jobs:
 
       - name: Build and push image
         id: build_push
+        env:
+          WORKOS_CLIENT_ID: ${{ secrets.WORKOS_CLIENT_ID }}
+          WORKOS_API_KEY: ${{ secrets.WORKOS_API_KEY }}
+          WORKOS_REDIRECT_URI: ${{ secrets.WORKOS_REDIRECT_URI }}
+          WORKOS_COOKIE_PASSWORD: ${{ secrets.WORKOS_COOKIE_PASSWORD }}
+          AUTH_ERROR_SIGNING_SECRET: ${{ secrets.AUTH_ERROR_SIGNING_SECRET }}
+          ORIGIN: ${{ secrets.ORIGIN }}
         uses: docker/build-push-action@ca877d9245402d1537745e0e356eab47c3520991
         with:
           context: .
           file: ./Dockerfile
           push: true
           tags: ${{ steps.image.outputs.image_name }}:${{ github.sha }}
+          secrets: |
+            "workos_client_id=${{ secrets.WORKOS_CLIENT_ID }}"
+            "workos_api_key=${{ secrets.WORKOS_API_KEY }}"
+            "workos_redirect_uri=${{ secrets.WORKOS_REDIRECT_URI }}"
+            "workos_cookie_password=${{ secrets.WORKOS_COOKIE_PASSWORD }}"
+            "auth_error_signing_secret=${{ secrets.AUTH_ERROR_SIGNING_SECRET }}"
+            "origin=${{ secrets.ORIGIN }}"
 
       - name: Publish image reference
         id: image_ref

@@ -405,10 +405,22 @@ describe('deployment runtime guardrails', () => {
 
 	it('uses the shared hub build env defaults instead of ad hoc Docker placeholders', () => {
 		const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
-		const buildEnv = getHubBuildEnv({});
+		const buildEnv = getHubBuildEnv({ NODE_ENV: 'test' });
 
 		assert.match(dockerfile, /\bRUN npm ci --ignore-scripts\b/);
-		assert.match(dockerfile, /\bRUN npm --prefix apps\/hub run build\b/);
+		assert.match(dockerfile, /\bnpm --prefix apps\/hub run build\b/);
+		assert.match(
+			dockerfile,
+			/--mount=type=secret,id=workos_client_id,env=WORKOS_CLIENT_ID/
+		);
+		assert.match(
+			dockerfile,
+			/--mount=type=secret,id=workos_api_key,env=WORKOS_API_KEY/
+		);
+		assert.match(
+			dockerfile,
+			/--mount=type=secret,id=auth_error_signing_secret,env=AUTH_ERROR_SIGNING_SECRET/
+		);
 		assert.ok(buildEnv.AUTH_ERROR_SIGNING_SECRET);
 		assert.ok(buildEnv.WORKOS_COOKIE_PASSWORD);
 		assert.strictEqual(
@@ -416,5 +428,31 @@ describe('deployment runtime guardrails', () => {
 			'http://localhost:3100/auth/callback'
 		);
 		assert.strictEqual(buildEnv.ORIGIN, 'http://localhost:3100');
+	});
+
+	it('passes required auth configuration into the image build as secrets', () => {
+		const workflow = readFileSync(DEPLOY_WORKFLOW_PATH, 'utf8');
+
+		assert.match(
+			workflow,
+			/WORKOS_CLIENT_ID: \$\{\{ secrets\.WORKOS_CLIENT_ID \}\}/
+		);
+		assert.match(
+			workflow,
+			/WORKOS_API_KEY: \$\{\{ secrets\.WORKOS_API_KEY \}\}/
+		);
+		assert.match(
+			workflow,
+			/AUTH_ERROR_SIGNING_SECRET: \$\{\{ secrets\.AUTH_ERROR_SIGNING_SECRET \}\}/
+		);
+		assert.match(workflow, /ORIGIN: \$\{\{ secrets\.ORIGIN \}\}/);
+		assert.match(
+			workflow,
+			/WORKOS_REDIRECT_URI: \$\{\{ secrets\.WORKOS_REDIRECT_URI \}\}/
+		);
+		assert.match(
+			workflow,
+			/WORKOS_COOKIE_PASSWORD: \$\{\{ secrets\.WORKOS_COOKIE_PASSWORD \}\}/
+		);
 	});
 });

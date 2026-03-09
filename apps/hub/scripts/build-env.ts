@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { getValidatedWorkosEnv } from '../src/lib/server/workos-security-env.ts';
 
 const BUILD_ENV_DEFAULTS = {
 	WORKOS_CLIENT_ID: 'client_build_placeholder',
@@ -8,18 +9,43 @@ const BUILD_ENV_DEFAULTS = {
 	AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
 	ORIGIN: 'http://localhost:3100'
 } as const;
+const BUILD_PLACEHOLDER_FLAG = 'HUB_BUILD_ALLOW_PLACEHOLDERS';
+
+function shouldAllowBuildPlaceholders(baseEnv: NodeJS.ProcessEnv): boolean {
+	const nodeEnv = baseEnv.NODE_ENV?.trim();
+	const placeholderFlag = baseEnv[BUILD_PLACEHOLDER_FLAG]?.trim().toLowerCase();
+
+	return (
+		nodeEnv === 'test' ||
+		placeholderFlag === '1' ||
+		placeholderFlag === 'true' ||
+		placeholderFlag === 'yes'
+	);
+}
 
 export function getHubBuildEnv(
 	baseEnv: NodeJS.ProcessEnv = process.env
 ): NodeJS.ProcessEnv {
+	const buildEnv = shouldAllowBuildPlaceholders(baseEnv)
+		? {
+				...baseEnv,
+				...Object.fromEntries(
+					Object.entries(BUILD_ENV_DEFAULTS).map(([name, value]) => [
+						name,
+						baseEnv[name] ?? value
+					])
+				)
+			}
+		: { ...baseEnv };
+
+	getValidatedWorkosEnv({
+		...buildEnv,
+		NODE_ENV: buildEnv.NODE_ENV?.trim() || 'production'
+	});
+
 	return {
-		...baseEnv,
-		...Object.fromEntries(
-			Object.entries(BUILD_ENV_DEFAULTS).map(([name, value]) => [
-				name,
-				baseEnv[name] ?? value
-			])
-		)
+		...buildEnv,
+		[BUILD_PLACEHOLDER_FLAG]: buildEnv[BUILD_PLACEHOLDER_FLAG]
 	};
 }
 
