@@ -49,7 +49,8 @@ describe('apps/hub/.env.example behavior', () => {
 	const fixtureSecrets = {
 		WORKOS_CLIENT_ID: 'client_fixture',
 		WORKOS_API_KEY: 'sk_fixture',
-		WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32)
+		WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
+		AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32)
 	};
 
 	it('documents a local development configuration that validates with real secrets', () => {

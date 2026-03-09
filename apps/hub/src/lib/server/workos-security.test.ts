@@ -14,6 +14,7 @@ const validLocalEnv = {
 	WORKOS_API_KEY: 'sk_fixture',
 	WORKOS_REDIRECT_URI: 'http://localhost:3100/auth/callback',
 	WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
+	AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
 	ORIGIN: 'http://localhost:3100'
 };
 
@@ -164,6 +165,26 @@ describe('workos environment protocols', () => {
 				WORKOS_API_HOSTNAME: 'auth.kaivalo-login.test'
 			}).apiHostname
 		).toBe('auth.kaivalo-login.test');
+	});
+
+	it('requires a dedicated auth error signing secret', () => {
+		expect(() =>
+			getValidatedWorkosEnv({
+				...validLocalEnv,
+				AUTH_ERROR_SIGNING_SECRET: ''
+			})
+		).toThrow(
+			/Missing required environment variable: AUTH_ERROR_SIGNING_SECRET/
+		);
+	});
+
+	it('rejects malformed auth error signing secrets', () => {
+		expect(() =>
+			getValidatedWorkosEnv({
+				...validLocalEnv,
+				AUTH_ERROR_SIGNING_SECRET: 'not-hex'
+			})
+		).toThrow(/AUTH_ERROR_SIGNING_SECRET must be 64 hex characters/);
 	});
 
 	it('rejects malformed WorkOS api hostnames', () => {

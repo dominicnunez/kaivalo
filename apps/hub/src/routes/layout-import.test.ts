@@ -6,6 +6,7 @@ const { mockEnv, mockGetUser } = vi.hoisted(() => ({
 		WORKOS_API_KEY: 'sk_test_123',
 		WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback',
 		WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
+		AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
 		ORIGIN: 'https://kaivalo.test'
 	} as Record<string, string>,
 	mockGetUser: vi.fn()

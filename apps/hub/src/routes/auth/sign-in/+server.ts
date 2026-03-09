@@ -17,7 +17,7 @@ function getSignInHandler(): ReturnType<typeof createSignInGetHandler> {
 	getHandler = createSignInGetHandler({
 		getSignInUrl: authKit.getSignInUrl,
 		expectedOrigin: workosEnv.origin,
-		cookiePassword: workosEnv.cookiePassword,
+		authErrorSigningSecret: workosEnv.authErrorSigningSecret,
 		allowedRedirectOrigins: [getTrustedWorkosAuthOrigin(workosEnv)],
 		includeMessageInLogs: shouldIncludeErrorMessage(env)
 	});

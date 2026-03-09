@@ -23,7 +23,7 @@ type CreateAuthCallbackGetHandlerOptions = {
 	handleCallback: () => (event: RequestEvent) => Promise<Response>;
 	isRedirect: (error: unknown) => boolean;
 	isHttpError: (error: unknown) => boolean;
-	cookiePassword: string;
+	authErrorSigningSecret: string;
 	expectedOrigin: string;
 	includeMessageInLogs?: boolean;
 	logError?: (message: string, context: CallbackLogContext) => void;
@@ -73,7 +73,7 @@ export function createAuthCallbackGetHandler({
 	handleCallback,
 	isRedirect,
 	isHttpError,
-	cookiePassword,
+	authErrorSigningSecret,
 	expectedOrigin,
 	includeMessageInLogs = false,
 	logError = console.error
@@ -164,7 +164,7 @@ export function createAuthCallbackGetHandler({
 				303,
 				`/?${buildAuthErrorRedirectQuery({
 					incidentId,
-					secret: cookiePassword
+					secret: authErrorSigningSecret
 				})}`
 			);
 		}

@@ -38,6 +38,8 @@ function createFixtureEnv(port, overrides = {}) {
 		WORKOS_REDIRECT_URI: redirectUri,
 		WORKOS_COOKIE_PASSWORD:
 			process.env.WORKOS_COOKIE_PASSWORD ?? 'ab'.repeat(32),
+		AUTH_ERROR_SIGNING_SECRET:
+			process.env.AUTH_ERROR_SIGNING_SECRET ?? 'cd'.repeat(32),
 		ORIGIN: baseOrigin,
 		...overrides
 	};

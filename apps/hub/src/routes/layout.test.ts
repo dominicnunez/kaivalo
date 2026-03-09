@@ -7,6 +7,7 @@ const { mockEnv, mockGetUser, mockGetValidatedWorkosEnv } = vi.hoisted(() => ({
 		WORKOS_API_KEY: 'sk_test_123',
 		WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback',
 		WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
+		AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
 		ORIGIN: 'https://kaivalo.test'
 	} as Record<string, string>,
 	mockGetUser: vi.fn(),
@@ -345,7 +346,7 @@ describe('layout server load', () => {
 			url: new URL(
 				`https://kaivalo.test/?${buildAuthErrorRedirectQuery({
 					incidentId: 'authcb_123e4567-e89b-12d3-a456-426614174000',
-					secret: mockEnv.WORKOS_COOKIE_PASSWORD,
+					secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
 					now: Date.now()
 				})}`
 			),
@@ -377,7 +378,7 @@ describe('layout server load', () => {
 			url: new URL(
 				`https://kaivalo.test/?${buildAuthErrorRedirectQuery({
 					incidentId: 'authcb_123e4567-e89b-12d3-a456-426614174000',
-					secret: mockEnv.WORKOS_COOKIE_PASSWORD,
+					secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
 					now: Date.now()
 				})}`
 			),
@@ -413,7 +414,7 @@ describe('layout server load', () => {
 			createEvent(
 				`https://kaivalo.test/?${buildAuthErrorRedirectQuery({
 					incidentId: 'authcb_123e4567-e89b-12d3-a456-426614174000',
-					secret: mockEnv.WORKOS_COOKIE_PASSWORD,
+					secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
 					now: Date.now()
 				})}`
 			) as never

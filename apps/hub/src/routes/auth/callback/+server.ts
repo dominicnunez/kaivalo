@@ -18,7 +18,7 @@ function getCallbackHandler(): ReturnType<typeof createAuthCallbackGetHandler> {
 		handleCallback: () => authKit.handleCallback(),
 		isRedirect,
 		isHttpError,
-		cookiePassword: workosEnv.cookiePassword,
+		authErrorSigningSecret: workosEnv.authErrorSigningSecret,
 		expectedOrigin: workosEnv.origin,
 		includeMessageInLogs: shouldIncludeErrorMessage(env)
 	});

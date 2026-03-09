@@ -185,7 +185,7 @@ function createAuthFailureResponse(
 export const load: LayoutServerLoad = async (event) => {
 	try {
 		const authErrorFromQuery = readVerifiedAuthError(event.url.searchParams, {
-			secret: env.WORKOS_COOKIE_PASSWORD ?? ''
+			secret: env.AUTH_ERROR_SIGNING_SECRET ?? ''
 		});
 		const developmentBypassUser = getDevelopmentAuthBypassUser();
 		let user: LayoutUser | null = developmentBypassUser;

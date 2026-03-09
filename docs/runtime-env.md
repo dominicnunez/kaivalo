@@ -23,6 +23,11 @@ For a development-oriented starting point, see `apps/hub/.env.example`.
   Must be exactly 64 hex characters.
   Generate with `openssl rand -hex 32`.
 
+- `AUTH_ERROR_SIGNING_SECRET`
+  Must be exactly 64 hex characters.
+  Generate with `openssl rand -hex 32`.
+  Used only to sign browser-facing auth failure redirect queries.
+
 ### Origin
 
 - `ORIGIN`
@@ -78,6 +83,7 @@ WORKOS_REDIRECT_URI=https://hub.kaivalo.com/auth/callback
 WORKOS_CLIENT_ID=client_...
 WORKOS_API_KEY=sk_...
 WORKOS_COOKIE_PASSWORD=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+AUTH_ERROR_SIGNING_SECRET=fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
 TRUST_X_FORWARDED_PROTO=true
 TRUSTED_PROXY_IPS=203.0.113.10,2001:db8::10
 SHUTDOWN_TIMEOUT_MS=30000

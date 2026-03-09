@@ -67,6 +67,8 @@ function runBuildWithDiagnostics() {
 					'http://localhost:3100/auth/callback',
 				WORKOS_COOKIE_PASSWORD:
 					process.env.WORKOS_COOKIE_PASSWORD ?? 'ab'.repeat(32),
+				AUTH_ERROR_SIGNING_SECRET:
+					process.env.AUTH_ERROR_SIGNING_SECRET ?? 'cd'.repeat(32),
 				ORIGIN: process.env.ORIGIN ?? 'http://localhost:3100'
 			}
 		});
@@ -154,6 +156,8 @@ async function startBuiltServer() {
 				`http://127.0.0.1:${port}/auth/callback`,
 			WORKOS_COOKIE_PASSWORD:
 				process.env.WORKOS_COOKIE_PASSWORD ?? 'ab'.repeat(32),
+			AUTH_ERROR_SIGNING_SECRET:
+				process.env.AUTH_ERROR_SIGNING_SECRET ?? 'cd'.repeat(32),
 			ORIGIN: process.env.ORIGIN ?? `http://127.0.0.1:${port}`
 		}
 	});

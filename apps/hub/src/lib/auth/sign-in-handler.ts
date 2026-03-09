@@ -17,7 +17,7 @@ type SignInLogContext = ReturnType<typeof getErrorLogContext> & {
 type CreateSignInGetHandlerOptions = {
 	getSignInUrl: (options: { returnTo: string }) => Promise<string>;
 	expectedOrigin: string;
-	cookiePassword: string;
+	authErrorSigningSecret: string;
 	allowedRedirectOrigins?: Iterable<string>;
 	defaultReturnTo?: string;
 	includeMessageInLogs?: boolean;
@@ -59,7 +59,7 @@ function shouldUseUserRedirect(event: RequestEvent): boolean {
 export function createSignInGetHandler({
 	getSignInUrl,
 	expectedOrigin,
-	cookiePassword,
+	authErrorSigningSecret,
 	allowedRedirectOrigins = [],
 	defaultReturnTo = '/services',
 	includeMessageInLogs = false,
@@ -113,7 +113,7 @@ export function createSignInGetHandler({
 				303,
 				`/?${buildAuthErrorRedirectQuery({
 					incidentId,
-					secret: cookiePassword
+					secret: authErrorSigningSecret
 				})}`
 			);
 		}

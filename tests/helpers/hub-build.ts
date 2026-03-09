@@ -73,6 +73,8 @@ export function ensureHubBuild() {
 				'http://localhost:3100/auth/callback',
 			WORKOS_COOKIE_PASSWORD:
 				process.env.WORKOS_COOKIE_PASSWORD ?? 'ab'.repeat(32),
+			AUTH_ERROR_SIGNING_SECRET:
+				process.env.AUTH_ERROR_SIGNING_SECRET ?? 'cd'.repeat(32),
 			ORIGIN: process.env.ORIGIN ?? 'http://localhost:3100'
 		}
 	});

@@ -21,6 +21,7 @@ const baseEnv = {
 	WORKOS_API_KEY: 'sk_fixture',
 	WORKOS_REDIRECT_URI: 'http://127.0.0.1:3100/auth/callback',
 	WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
+	AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
 	ORIGIN: 'http://127.0.0.1:3100'
 };
 

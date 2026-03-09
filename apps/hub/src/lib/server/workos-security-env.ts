@@ -8,7 +8,8 @@ const REQUIRED_ENV_VARS = [
 	'WORKOS_CLIENT_ID',
 	'WORKOS_API_KEY',
 	'WORKOS_REDIRECT_URI',
-	'WORKOS_COOKIE_PASSWORD'
+	'WORKOS_COOKIE_PASSWORD',
+	'AUTH_ERROR_SIGNING_SECRET'
 ];
 const HEX_64_PATTERN = /^[a-f0-9]{64}$/i;
 const DEFAULT_WORKOS_API_HOSTNAME = 'api.workos.com';
@@ -26,6 +27,7 @@ type WorkosEnv = {
 	apiKey: string;
 	redirectUri: string;
 	cookiePassword: string;
+	authErrorSigningSecret: string;
 	origin: string;
 	apiHostname: string;
 };
@@ -200,11 +202,20 @@ export function getValidatedWorkosEnv(env: Env): WorkosEnv {
 		env,
 		'WORKOS_COOKIE_PASSWORD'
 	);
+	const authErrorSigningSecret = readRequiredTrimmedEnvValue(
+		env,
+		'AUTH_ERROR_SIGNING_SECRET'
+	);
 	const apiHostname = parseWorkosApiHostname(env.WORKOS_API_HOSTNAME);
 
 	if (!HEX_64_PATTERN.test(cookiePassword)) {
 		throw new Error(
 			'WORKOS_COOKIE_PASSWORD must be 64 hex characters (openssl rand -hex 32)'
+		);
+	}
+	if (!HEX_64_PATTERN.test(authErrorSigningSecret)) {
+		throw new Error(
+			'AUTH_ERROR_SIGNING_SECRET must be 64 hex characters (openssl rand -hex 32)'
 		);
 	}
 
@@ -228,6 +239,7 @@ export function getValidatedWorkosEnv(env: Env): WorkosEnv {
 			apiKey,
 			redirectUri: redirectUrl.toString(),
 			cookiePassword,
+			authErrorSigningSecret,
 			origin: localOrigin,
 			apiHostname
 		};
@@ -247,6 +259,7 @@ export function getValidatedWorkosEnv(env: Env): WorkosEnv {
 		apiKey,
 		redirectUri: redirectUrl.toString(),
 		cookiePassword,
+		authErrorSigningSecret,
 		origin: originUrl.origin,
 		apiHostname
 	};

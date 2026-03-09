@@ -28,6 +28,7 @@ function createPreviewEnv(previewPort) {
 		WORKOS_API_KEY: 'sk_test_fixture',
 		WORKOS_REDIRECT_URI: `${origin}/auth/callback`,
 		WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
+		AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
 		ORIGIN: origin,
 		HOST: '127.0.0.1',
 		PORT: String(previewPort)
