@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalizeIpAddress } from './ip-address.ts';
+import { canonicalizeIpAddress, isLoopbackIpAddress } from './ip-address.ts';
 
 describe('canonicalizeIpAddress', () => {
 	it.each([
@@ -30,5 +30,20 @@ describe('canonicalizeIpAddress', () => {
 		['rejects blank values', '   ', '']
 	])('%s', (_label, candidate, expected) => {
 		expect(canonicalizeIpAddress(candidate)).toBe(expected);
+	});
+});
+
+describe('isLoopbackIpAddress', () => {
+	it.each([
+		['matches localhost ipv4 loopback', '127.0.0.1', true],
+		['matches all ipv4 loopback addresses', '127.255.255.254', true],
+		['matches ipv6 loopback', '::1', true],
+		['matches ipv4-mapped ipv6 loopback', '::ffff:127.0.0.1', true],
+		['rejects unspecified ipv6', '::', false],
+		['rejects private ipv4 addresses', '192.168.1.25', false],
+		['rejects public ipv4 addresses', '203.0.113.9', false],
+		['rejects malformed values', 'localhost', false]
+	])('%s', (_label, candidate, expected) => {
+		expect(isLoopbackIpAddress(candidate)).toBe(expected);
 	});
 });

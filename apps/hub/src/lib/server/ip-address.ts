@@ -42,3 +42,21 @@ export function canonicalizeIpAddress(
 
 	return '';
 }
+
+export function isLoopbackIpAddress(value: string | undefined | null): boolean {
+	const candidate = canonicalizeIpAddress(value);
+	if (!candidate) {
+		return false;
+	}
+
+	if (candidate === '::1') {
+		return true;
+	}
+
+	const octets = candidate.split('.');
+	if (octets.length !== 4) {
+		return false;
+	}
+
+	return octets[0] === '127';
+}

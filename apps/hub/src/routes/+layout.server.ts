@@ -14,6 +14,7 @@ import {
 import { normalizeTrustedRedirectLocation } from '$lib/auth/safe-redirect.ts';
 import { isTrustedAvatarHost } from '$lib/server/trusted-hosts.ts';
 import { getTrustedAuthOriginSet } from '$lib/server/auth-origin-policy.ts';
+import { isLoopbackIpAddress } from '$lib/server/ip-address.ts';
 import { authKit } from '@workos/authkit-sveltekit';
 
 const TRUSTED_SIGN_IN_PATH_PREFIXES = [
@@ -25,12 +26,53 @@ const DEV_AUTH_BYPASS_FIRST_NAME = 'Dev';
 let trustedSignInOriginSetCache: Set<string> | null = null;
 let trustedSignInOriginCacheKey: string | null = null;
 
+function isLoopbackHostname(hostname: string): boolean {
+	const normalizedHostname = hostname.trim().toLowerCase();
+	if (!normalizedHostname) {
+		return false;
+	}
+
+	return (
+		normalizedHostname === 'localhost' ||
+		normalizedHostname.endsWith('.localhost') ||
+		isLoopbackIpAddress(normalizedHostname)
+	);
+}
+
+function isLoopbackOrigin(candidate: string | undefined): boolean {
+	if (!candidate?.trim()) {
+		return false;
+	}
+
+	try {
+		const parsed = new URL(candidate);
+		if (parsed.username || parsed.password) {
+			return false;
+		}
+
+		return isLoopbackHostname(parsed.hostname);
+	} catch {
+		return false;
+	}
+}
+
+function isLocalDevelopmentAuthBypassConfiguration(): boolean {
+	return (
+		env.NODE_ENV?.trim().toLowerCase() === 'development' &&
+		isLoopbackOrigin(env.ORIGIN) &&
+		isLoopbackOrigin(env.WORKOS_REDIRECT_URI)
+	);
+}
+
 function getDevelopmentAuthBypassUser() {
-	if (
-		env.NODE_ENV?.trim().toLowerCase() === 'production' ||
-		env.DEV_AUTH_BYPASS?.trim().toLowerCase() !== 'true'
-	) {
+	if (env.DEV_AUTH_BYPASS?.trim().toLowerCase() !== 'true') {
 		return null;
+	}
+
+	if (!isLocalDevelopmentAuthBypassConfiguration()) {
+		throw new Error(
+			'DEV_AUTH_BYPASS requires NODE_ENV=development with loopback-only ORIGIN and WORKOS_REDIRECT_URI.'
+		);
 	}
 
 	return {
@@ -39,6 +81,10 @@ function getDevelopmentAuthBypassUser() {
 		email: env.DEV_AUTH_BYPASS_EMAIL?.trim() || DEV_AUTH_BYPASS_EMAIL,
 		profilePictureUrl: null
 	};
+}
+
+if (env.DEV_AUTH_BYPASS?.trim().toLowerCase() === 'true') {
+	getDevelopmentAuthBypassUser();
 }
 
 function getTrustedSignInOriginSet(): Set<string> {

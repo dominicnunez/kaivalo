@@ -43,6 +43,8 @@ describe('layout server load', () => {
 		delete mockEnv.DEV_AUTH_BYPASS_EMAIL;
 		delete mockEnv.DEV_AUTH_BYPASS_FIRST_NAME;
 		delete mockEnv.NODE_ENV;
+		mockEnv.ORIGIN = 'https://kaivalo.test';
+		mockEnv.WORKOS_REDIRECT_URI = 'https://kaivalo.test/auth/callback';
 	});
 
 	it('returns a development bypass user without calling WorkOS when enabled', async () => {
@@ -50,6 +52,8 @@ describe('layout server load', () => {
 		mockEnv.DEV_AUTH_BYPASS = 'true';
 		mockEnv.DEV_AUTH_BYPASS_EMAIL = 'local-dev@kaivalo.test';
 		mockEnv.DEV_AUTH_BYPASS_FIRST_NAME = 'Local';
+		mockEnv.ORIGIN = 'http://localhost:4173';
+		mockEnv.WORKOS_REDIRECT_URI = 'http://127.0.0.1:4173/auth/callback';
 
 		const result = await load(baseEvent);
 
@@ -63,6 +67,46 @@ describe('layout server load', () => {
 			},
 			signInUrl: null,
 			authError: null
+		});
+	});
+
+	it('rejects development auth bypass when the configured origin is not loopback-only', async () => {
+		mockEnv.NODE_ENV = 'development';
+		mockEnv.DEV_AUTH_BYPASS = 'true';
+		mockEnv.ORIGIN = 'https://staging.kaivalo.com';
+		mockEnv.WORKOS_REDIRECT_URI = 'https://staging.kaivalo.com/auth/callback';
+
+		const result = await load(baseEvent);
+
+		expect(mockedAuthKit.getUser).not.toHaveBeenCalled();
+		expect(mockedAuthKit.getSignInUrl).not.toHaveBeenCalled();
+		expect(result).toMatchObject({
+			user: null,
+			signInUrl: null,
+			authError: {
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
+				incidentId: expect.stringMatching(/^authlayout_/)
+			}
+		});
+	});
+
+	it('rejects development auth bypass when node env is not development', async () => {
+		mockEnv.NODE_ENV = 'preview';
+		mockEnv.DEV_AUTH_BYPASS = 'true';
+
+		const result = await load(baseEvent);
+
+		expect(mockedAuthKit.getUser).not.toHaveBeenCalled();
+		expect(mockedAuthKit.getSignInUrl).not.toHaveBeenCalled();
+		expect(result).toMatchObject({
+			user: null,
+			signInUrl: null,
+			authError: {
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
+				incidentId: expect.stringMatching(/^authlayout_/)
+			}
 		});
 	});
 
