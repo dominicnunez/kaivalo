@@ -625,19 +625,13 @@ describe('WorkOS Auth Callback Route', () => {
 					{ accept: 'text/html' }
 				);
 
-				assert.strictEqual(response.statusCode, 303);
+				assert.strictEqual(response.statusCode, 302);
 				const location = new URL(
 					response.headers.location ?? '/',
 					preview.baseUrl
 				);
-				assert.strictEqual(
-					location.searchParams.get(AUTH_ERROR_QUERY_NAME),
-					AUTH_ERROR_QUERY_VALUE
-				);
-				assert.match(
-					location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME) ?? '',
-					/^authcb_[0-9a-f-]+$/
-				);
+				assert.strictEqual(location.pathname, '/auth/error');
+				assert.strictEqual(location.searchParams.get('code'), 'AUTH_FAILED');
 				assert.strictEqual(
 					response.headers['cache-control'],
 					'private, no-store'

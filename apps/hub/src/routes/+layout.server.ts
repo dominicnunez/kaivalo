@@ -6,7 +6,7 @@ import {
 	getErrorLogContext,
 	shouldIncludeErrorMessage
 } from '$lib/server/error-diagnostics.ts';
-import { normalizeRequestId } from '$lib/auth/log-context.ts';
+import { normalizeRequestId } from '$lib/server/request-id.ts';
 import {
 	AUTH_ERROR_MESSAGE,
 	readVerifiedAuthError

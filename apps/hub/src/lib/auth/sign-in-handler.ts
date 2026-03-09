@@ -2,7 +2,7 @@ import { error, isRedirect, redirect } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import { getErrorLogContext } from '../server/error-diagnostics.ts';
-import { normalizeRequestId } from './log-context.ts';
+import { normalizeRequestId } from '../server/request-id.ts';
 import { buildAuthErrorRedirectQuery } from './auth-error-query.ts';
 import { normalizeTrustedRedirectLocation } from './safe-redirect.ts';
 

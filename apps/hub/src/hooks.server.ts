@@ -13,7 +13,7 @@ import {
 	getErrorLogContext,
 	shouldIncludeErrorMessage
 } from '$lib/server/error-diagnostics.ts';
-import { normalizeRequestId } from '$lib/auth/log-context.ts';
+import { normalizeRequestId } from '$lib/server/request-id.ts';
 
 const workosEnv = getValidatedWorkosEnv(env);
 const { trustForwardedProto, trustedProxyIps } = getProxyTrustConfiguration(

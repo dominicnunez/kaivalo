@@ -247,6 +247,25 @@ describe('node server diagnostics', () => {
 		assert.ok(!('causeMessage' in logRecord.error));
 		assert.match(logRecord.incidentId, /^[0-9a-f-]{36}$/i);
 	});
+
+	it('falls back to an unknown remote address when the socket address is missing', () => {
+		const req = {
+			method: 'GET',
+			url: '/auth/callback?code=supersecret',
+			headers: {},
+			socket: {
+				remoteAddress: 'not-an-ip-address'
+			}
+		};
+
+		const logRecord = buildRequestFailureLog(req, new Error('boom'), {
+			...baseEnv,
+			NODE_ENV: 'production'
+		});
+
+		assert.strictEqual(logRecord.remoteAddress, 'unknown');
+		assert.strictEqual(logRecord.requestId, 'missing');
+	});
 });
 
 describe('node server proxy trust handling', () => {

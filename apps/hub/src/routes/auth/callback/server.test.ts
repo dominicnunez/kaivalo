@@ -1,3 +1,4 @@
+import { error, redirect } from '@sveltejs/kit';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	AUTH_ERROR_QUERY_NAME,
@@ -132,6 +133,54 @@ describe('auth callback route', () => {
 			}
 		});
 		expect(mockHandleCallback).toHaveBeenCalledOnce();
+	});
+
+	it('normalizes thrown redirects against the configured origin at the route boundary', async () => {
+		mockHandleCallback.mockReturnValue(async () => {
+			throw redirect(303, 'https://kaivalo.test/services?welcome=1');
+		});
+
+		const { GET } = await import('./+server');
+
+		await expect(
+			GET(createEvent({}, 'https://attacker.test/auth/callback'))
+		).rejects.toMatchObject({
+			status: 303,
+			location: '/services?welcome=1'
+		});
+	});
+
+	it('passes through upstream http errors from the route boundary', async () => {
+		mockHandleCallback.mockReturnValue(async () => {
+			throw error(429, 'Too many attempts');
+		});
+
+		const { GET } = await import('./+server');
+
+		await expect(GET(createEvent())).rejects.toMatchObject({
+			status: 429,
+			body: {
+				message: 'Too many attempts'
+			}
+		});
+	});
+
+	it('normalizes redirect-like objects through the real route entrypoint', async () => {
+		mockHandleCallback.mockReturnValue(async () => {
+			throw {
+				status: 303,
+				location: 'https://kaivalo.test/services#shell'
+			};
+		});
+
+		const { GET } = await import('./+server');
+
+		await expect(
+			GET(createEvent({}, 'https://attacker.test/auth/callback'))
+		).rejects.toMatchObject({
+			status: 303,
+			location: '/services#shell'
+		});
 	});
 
 	it('redirects browser callback failures with a verified signed auth error', async () => {

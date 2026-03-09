@@ -5,11 +5,10 @@ import {
 	getErrorDiagnostics,
 	type ErrorDiagnostics
 } from './error-diagnostics.ts';
+import { normalizeRequestId } from './request-id.ts';
 import { getTrustedForwardedProto } from './workos-security-cache.ts';
 
 const PRODUCTION_NODE_ENV = 'production';
-const REQUEST_ID_MAX_LENGTH = 64;
-const REQUEST_ID_ALLOWED_CHARS = /^[A-Za-z0-9_-]+$/;
 
 type Env = Record<string, string | undefined>;
 
@@ -22,29 +21,6 @@ type SecureRequestEvaluation = {
 
 function shouldIncludeSensitiveErrorDetails(env: Env): boolean {
 	return env.NODE_ENV?.trim().toLowerCase() !== PRODUCTION_NODE_ENV;
-}
-
-function normalizeRequestId(requestId: string | null): string {
-	if (!requestId) {
-		return 'missing';
-	}
-
-	const trimmed = requestId.trim();
-	if (!trimmed) {
-		return 'missing';
-	}
-
-	if (
-		trimmed.length <= REQUEST_ID_MAX_LENGTH &&
-		REQUEST_ID_ALLOWED_CHARS.test(trimmed)
-	) {
-		return trimmed;
-	}
-
-	const normalized = trimmed
-		.replace(/[^A-Za-z0-9_-]/g, '_')
-		.slice(0, REQUEST_ID_MAX_LENGTH);
-	return normalized || 'invalid';
 }
 
 function readSingleHeaderValue(
@@ -132,7 +108,7 @@ export function buildRequestFailureLog(
 			readSingleHeaderValue(req.headers?.['x-request-id'])
 		),
 		remoteAddress:
-			canonicalizeIpAddress(req.socket?.remoteAddress) ?? 'unknown',
+			canonicalizeIpAddress(req.socket?.remoteAddress) || 'unknown',
 		error: getErrorDiagnostics(error, {
 			includeSensitiveDetails: shouldIncludeSensitiveErrorDetails(env)
 		})
