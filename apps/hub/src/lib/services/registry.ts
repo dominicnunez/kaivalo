@@ -15,10 +15,41 @@ export type ServiceRegistryEntry = {
 	appUrl: string;
 };
 
+const TRUSTED_SERVICE_APP_HOST_SUFFIX = '.kaivalo.com';
+
 function cloneService(
 	service: Readonly<ServiceRegistryEntry>
 ): ServiceRegistryEntry {
 	return { ...service };
+}
+
+function isTrustedServiceAppHostname(hostname: string): boolean {
+	return hostname.toLowerCase().endsWith(TRUSTED_SERVICE_APP_HOST_SUFFIX);
+}
+
+function assertValidServiceAppUrl(
+	service: Readonly<ServiceRegistryEntry>
+): void {
+	let parsed: URL;
+	try {
+		parsed = new URL(service.appUrl);
+	} catch {
+		throw new Error(`Service "${service.id}" must use a valid absolute appUrl`);
+	}
+
+	if (
+		parsed.protocol !== 'https:' ||
+		parsed.username ||
+		parsed.password ||
+		parsed.port ||
+		parsed.search ||
+		parsed.hash ||
+		!isTrustedServiceAppHostname(parsed.hostname)
+	) {
+		throw new Error(
+			`Service "${service.id}" must use an https appUrl on a trusted Kaivalo host`
+		);
+	}
 }
 
 const SERVICE_REGISTRY: ReadonlyArray<Readonly<ServiceRegistryEntry>> = [
@@ -48,6 +79,10 @@ const SERVICE_REGISTRY: ReadonlyArray<Readonly<ServiceRegistryEntry>> = [
 		appUrl: 'https://podcast.kaivalo.com'
 	})
 ];
+
+for (const service of SERVICE_REGISTRY) {
+	assertValidServiceAppUrl(service);
+}
 
 export function getMarketingServices(): ServiceRegistryEntry[] {
 	return SERVICE_REGISTRY.filter(

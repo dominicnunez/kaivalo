@@ -32,4 +32,24 @@ describe('service registry helpers', () => {
 		expect(nextSnapshot.activeServices[0]?.enabled).toBe(true);
 		expect(nextSnapshot.plannedServices[0]?.name).toBe('PodStudio');
 	});
+
+	it('uses absolute https launcher urls on trusted Kaivalo hosts', () => {
+		const launcherServices = getLauncherServices();
+		const visibleServices = [
+			...launcherServices.activeServices,
+			...launcherServices.plannedServices
+		];
+
+		for (const service of visibleServices) {
+			const parsed = new URL(service.appUrl);
+
+			expect(parsed.protocol).toBe('https:');
+			expect(parsed.username).toBe('');
+			expect(parsed.password).toBe('');
+			expect(parsed.port).toBe('');
+			expect(parsed.search).toBe('');
+			expect(parsed.hash).toBe('');
+			expect(parsed.hostname.endsWith('.kaivalo.com')).toBe(true);
+		}
+	});
 });
