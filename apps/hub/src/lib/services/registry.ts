@@ -8,13 +8,10 @@ export type ServiceRegistryEntry = {
 	tagline: string;
 	description: string;
 	icon: ServiceIconKey;
-	category: 'operations' | 'media';
 	lifecycle: ServiceLifecycle;
 	marketingVisible: boolean;
 	launcherVisible: boolean;
-	requiresAuth: boolean;
 	enabled: boolean;
-	publicUrl: string;
 	appUrl: string;
 };
 
@@ -31,13 +28,10 @@ const SERVICE_REGISTRY: ReadonlyArray<Readonly<ServiceRegistryEntry>> = [
 		tagline: 'Stay on schedule',
 		description: 'Smart scheduling for chimney professionals.',
 		icon: 'calendar',
-		category: 'operations',
 		lifecycle: 'active',
 		marketingVisible: true,
 		launcherVisible: true,
-		requiresAuth: true,
 		enabled: true,
-		publicUrl: 'https://sweep.kaivalo.com',
 		appUrl: 'https://sweep.kaivalo.com'
 	}),
 	Object.freeze({
@@ -47,13 +41,10 @@ const SERVICE_REGISTRY: ReadonlyArray<Readonly<ServiceRegistryEntry>> = [
 		description:
 			'Equipment tracking and session scheduling for podcast studios.',
 		icon: 'mic',
-		category: 'media',
 		lifecycle: 'planned',
 		marketingVisible: true,
 		launcherVisible: true,
-		requiresAuth: true,
 		enabled: false,
-		publicUrl: 'https://podcast.kaivalo.com',
 		appUrl: 'https://podcast.kaivalo.com'
 	})
 ];
