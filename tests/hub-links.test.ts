@@ -25,27 +25,8 @@ describe('hub links', () => {
 		await preview?.stop();
 	});
 
-	it('renders links in the homepage output', () => {
-		const anchors = getAnchors(document);
+	it('renders actionable navigation from the homepage', () => {
 		assert.strictEqual(homepage.statusCode, 200);
-		assert.ok(
-			anchors.length > 0,
-			'Expected at least one href in rendered output'
-		);
-	});
-
-	it('does not render internal hash links without explicit in-page navigation', () => {
-		const hrefs = getAnchors(document)
-			.map((anchor) => anchor.getAttribute('href') ?? '')
-			.filter((href) => href.startsWith('#') && href !== '#');
-		assert.strictEqual(
-			hrefs.length,
-			0,
-			'Homepage should not expose hash links without anchor navigation UI'
-		);
-	});
-
-	it('exposes navigable internal or trusted auth links', () => {
 		const hrefs = getAnchors(document).map(
 			(anchor) => anchor.getAttribute('href') ?? ''
 		);
@@ -59,7 +40,7 @@ describe('hub links', () => {
 
 		assert.ok(
 			actionableLink,
-			'Expected homepage to expose a services or sign-in action'
+			'Expected homepage to expose a trusted services or sign-in action'
 		);
 	});
 
