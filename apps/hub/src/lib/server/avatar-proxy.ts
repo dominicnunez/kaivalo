@@ -1,0 +1,2 @@
+export const AVATAR_FETCH_TIMEOUT_MS = 5_000;
+export const AVATAR_MAX_RESPONSE_BYTES = 1_000_000;
