@@ -27,10 +27,14 @@ Production deployment remains in `.github/workflows/deploy.yml`.
 
 At a high level the two workflows do this:
 
-- CI runs linting, the full test suite, and the dependency audit gate
+- CI runs linting plus the fast verification lane on every push and pull request
 - deploy builds and pushes the production image to GHCR
+- deploy runs the full verification lane before build and deployment continue
 - deploy targets the `production` GitHub Environment
 - deploy calls the host-side deploy contract with `deploy-app kaivalo <image@sha256:...>`
+
+The scheduled full-suite workflow also runs the full verification lane outside
+the push and pull request path.
 
 ## GitHub Environment
 

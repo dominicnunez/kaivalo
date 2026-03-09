@@ -5,7 +5,7 @@ This repo uses shared Git hooks through Husky.
 ## Hook behavior
 
 - `pre-commit` runs `npm run check`, `npm run lint`, and `npm run format:check`
-- `pre-push` runs `npm test`
+- `pre-push` runs `npm run test:fast`
 
 The commit hook validates formatting but does not rewrite files for you. If formatting fails, run `npm run format` and recommit.
 
@@ -38,4 +38,6 @@ npm run test:ci
 `npm test` runs the full verification flow: core, build, production, and integration coverage.
 `npm run test:integration` runs the slower preview-backed integration coverage after the app is built.
 `npm run audit:deps` runs `npm audit --omit=dev` through the repo allowlist so accepted upstream-only production advisories stay documented and new ones fail fast.
-`npm run test:ci` runs the full test suite and then enforces the production dependency audit gate.
+`npm run test:fast` is the fast verification lane used by `pre-push` and regular CI.
+`npm run test:ci` runs the same fast verification lane for GitHub Actions push and pull request checks.
+`npm run test:deploy` runs the full verification lane, including the dependency audit gate, before deployment continues.
