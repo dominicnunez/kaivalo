@@ -146,6 +146,45 @@ describe('avatar proxy route', () => {
 		}
 	});
 
+	it('returns gateway timeout when the upstream body stalls after headers arrive', async () => {
+		const chunk = new Uint8Array([1, 2, 3]);
+		const fetch = vi.fn(async () => {
+			let readCount = 0;
+			const stream = new ReadableStream<Uint8Array>({
+				pull(controller) {
+					readCount += 1;
+					if (readCount === 1) {
+						controller.enqueue(chunk);
+						return;
+					}
+
+					throw new DOMException('Timed out', 'TimeoutError');
+				}
+			});
+
+			return new Response(stream, {
+				status: 200,
+				headers: {
+					'content-type': 'image/png'
+				}
+			});
+		});
+
+		const response = await GET({
+			request: new Request(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			url: new URL(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			fetch
+		} as never);
+
+		expect(response.status).toBe(504);
+		expect(response.headers.get('cache-control')).toBe('private, no-store');
+		await expect(response.text()).resolves.toBe('Gateway timeout');
+	});
+
 	it('passes client validators upstream and preserves successful 304 revalidation', async () => {
 		const fetch = vi.fn(
 			async () =>
