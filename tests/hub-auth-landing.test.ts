@@ -22,31 +22,13 @@ describe('auth landing page behavior', () => {
 		await preview?.stop();
 	});
 
-	it('renders a supported unauthenticated auth action', () => {
+	it('renders an interactive sign-in link for unauthenticated users', () => {
 		assert.strictEqual(homepage.statusCode, 200);
-		const signInControl = Array.from(
-			document.querySelectorAll('a[href], button, [role="button"]')
-		).find((control) =>
-			(control.textContent ?? '').toLowerCase().includes('sign in')
+		const signInControl = Array.from(document.querySelectorAll('a[href]')).find(
+			(control) => (control.textContent ?? '').toLowerCase().includes('sign in')
 		);
 
-		assert.ok(
-			signInControl,
-			'Expected an auth action for unauthenticated users'
-		);
-		if (signInControl.tagName !== 'A') {
-			assert.strictEqual(
-				signInControl.tagName,
-				'BUTTON',
-				'Expected unsupported auth state to render a button control'
-			);
-			assert.ok(
-				signInControl.hasAttribute('disabled') ||
-					signInControl.getAttribute('aria-disabled') === 'true',
-				'Expected unavailable auth action to be disabled'
-			);
-			return;
-		}
+		assert.ok(signInControl, 'Expected an interactive sign-in link');
 
 		const href = signInControl.getAttribute('href') ?? '';
 		assert.ok(href.length > 0, 'Expected a non-empty sign-in target');

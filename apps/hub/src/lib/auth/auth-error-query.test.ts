@@ -171,6 +171,25 @@ describe('readVerifiedAuthError', () => {
 		});
 		expect(AUTH_ERROR_QUERY_VALUE).toBe('auth');
 	});
+
+	it('accepts signed sign-in incident ids', () => {
+		const signInIncidentId = 'authsign_123e4567-e89b-12d3-a456-426614174000';
+		const query = buildAuthErrorRedirectQuery({
+			incidentId: signInIncidentId,
+			secret: cookiePassword,
+			now: issuedAt
+		});
+
+		expect(
+			readVerifiedAuthError(new URLSearchParams(query), {
+				secret: cookiePassword,
+				now: issuedAt
+			})
+		).toEqual({
+			message: AUTH_ERROR_MESSAGE,
+			incidentId: signInIncidentId
+		});
+	});
 });
 
 describe('clearAuthErrorQuery', () => {

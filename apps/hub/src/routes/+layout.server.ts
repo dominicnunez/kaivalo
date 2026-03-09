@@ -11,20 +11,15 @@ import {
 	AUTH_ERROR_MESSAGE,
 	readVerifiedAuthError
 } from '$lib/auth/auth-error-query.ts';
-import { normalizeTrustedRedirectLocation } from '$lib/auth/safe-redirect.ts';
 import { isTrustedAvatarHost } from '$lib/server/trusted-hosts.ts';
-import { getTrustedAuthOriginSet } from '$lib/server/auth-origin-policy.ts';
 import { isLoopbackIpAddress } from '$lib/server/ip-address.ts';
 import { authKit } from '@workos/authkit-sveltekit';
 
-const TRUSTED_SIGN_IN_PATH_PREFIXES = [
-	'/auth/sign-in',
-	'/user_management/authorize'
-];
+const LOCAL_SIGN_IN_PATH = '/auth/sign-in';
+const DEV_AUTH_BYPASS_CONFIGURATION_ERROR_MESSAGE =
+	'DEV_AUTH_BYPASS requires NODE_ENV=development with loopback-only ORIGIN and WORKOS_REDIRECT_URI callback URL.';
 const DEV_AUTH_BYPASS_EMAIL = 'dev@kaivalo.local';
 const DEV_AUTH_BYPASS_FIRST_NAME = 'Dev';
-let trustedSignInOriginSetCache: Set<string> | null = null;
-let trustedSignInOriginCacheKey: string | null = null;
 
 function isLoopbackHostname(hostname: string): boolean {
 	const normalizedHostname = hostname.trim().toLowerCase();
@@ -39,28 +34,59 @@ function isLoopbackHostname(hostname: string): boolean {
 	);
 }
 
-function isLoopbackOrigin(candidate: string | undefined): boolean {
+function readUrl(candidate: string | undefined): URL | null {
 	if (!candidate?.trim()) {
-		return false;
+		return null;
 	}
 
 	try {
-		const parsed = new URL(candidate);
-		if (parsed.username || parsed.password) {
-			return false;
-		}
-
-		return isLoopbackHostname(parsed.hostname);
+		return new URL(candidate);
 	} catch {
-		return false;
+		return null;
 	}
 }
 
-function isLocalDevelopmentAuthBypassConfiguration(): boolean {
+function isLoopbackOriginUrl(candidate: string | undefined): boolean {
+	const parsed = readUrl(candidate);
+	if (!parsed || parsed.username || parsed.password) {
+		return false;
+	}
+
+	if (
+		(parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
+		parsed.pathname !== '/' ||
+		parsed.search ||
+		parsed.hash
+	) {
+		return false;
+	}
+
+	return isLoopbackHostname(parsed.hostname);
+}
+
+function isLoopbackCallbackUrl(candidate: string | undefined): boolean {
+	const parsed = readUrl(candidate);
+	if (!parsed || parsed.username || parsed.password) {
+		return false;
+	}
+
+	if (
+		(parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
+		parsed.pathname !== '/auth/callback' ||
+		parsed.search ||
+		parsed.hash
+	) {
+		return false;
+	}
+
+	return isLoopbackHostname(parsed.hostname);
+}
+
+function hasValidLocalDevelopmentAuthBypassConfiguration(): boolean {
 	return (
 		env.NODE_ENV?.trim().toLowerCase() === 'development' &&
-		isLoopbackOrigin(env.ORIGIN) &&
-		isLoopbackOrigin(env.WORKOS_REDIRECT_URI)
+		isLoopbackOriginUrl(env.ORIGIN) &&
+		isLoopbackCallbackUrl(env.WORKOS_REDIRECT_URI)
 	);
 }
 
@@ -69,10 +95,8 @@ function getDevelopmentAuthBypassUser() {
 		return null;
 	}
 
-	if (!isLocalDevelopmentAuthBypassConfiguration()) {
-		throw new Error(
-			'DEV_AUTH_BYPASS requires NODE_ENV=development with loopback-only ORIGIN and WORKOS_REDIRECT_URI.'
-		);
+	if (!hasValidLocalDevelopmentAuthBypassConfiguration()) {
+		throw new Error(DEV_AUTH_BYPASS_CONFIGURATION_ERROR_MESSAGE);
 	}
 
 	return {
@@ -87,32 +111,6 @@ if (env.DEV_AUTH_BYPASS?.trim().toLowerCase() === 'true') {
 	getDevelopmentAuthBypassUser();
 }
 
-function getTrustedSignInOriginSet(): Set<string> {
-	try {
-		const workosEnv = getValidatedWorkosEnv(env);
-		const cacheKey = [
-			workosEnv.apiHostname,
-			workosEnv.origin,
-			workosEnv.redirectUri
-		].join('|');
-		if (
-			trustedSignInOriginSetCache &&
-			trustedSignInOriginCacheKey === cacheKey
-		) {
-			return trustedSignInOriginSetCache;
-		}
-
-		const trustedOrigins = getTrustedAuthOriginSet(workosEnv);
-		trustedSignInOriginSetCache = trustedOrigins;
-		trustedSignInOriginCacheKey = cacheKey;
-		return trustedOrigins;
-	} catch {
-		// Build-time route analysis can evaluate this module before runtime env is injected.
-		// Do not cache failures so later requests can recover once runtime env is available.
-	}
-
-	return new Set();
-}
 function sanitizeAvatarUrl(
 	candidate: string | null | undefined
 ): string | null {
@@ -137,38 +135,6 @@ function sanitizeAvatarUrl(
 	}
 }
 
-function sanitizeSignInUrl(
-	candidate: string | null | undefined,
-	appOrigin: string,
-	trustedOrigins: Set<string>
-): string | null {
-	if (!candidate) {
-		return null;
-	}
-
-	try {
-		const normalizedLocation = normalizeTrustedRedirectLocation(
-			candidate,
-			appOrigin,
-			trustedOrigins
-		);
-		if (!normalizedLocation) {
-			return null;
-		}
-
-		const parsed = new URL(normalizedLocation, appOrigin);
-		return isTrustedSignInPath(parsed.pathname) ? normalizedLocation : null;
-	} catch {
-		return null;
-	}
-}
-
-function isTrustedSignInPath(pathname: string): boolean {
-	return TRUSTED_SIGN_IN_PATH_PREFIXES.some(
-		(prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
-	);
-}
-
 function markAuthFailureNoStore(event: Parameters<LayoutServerLoad>[0]): void {
 	if (typeof event.setHeaders !== 'function') {
 		return;
@@ -189,13 +155,8 @@ export const load: LayoutServerLoad = async (event) => {
 		const user = developmentBypassUser ?? (await authKit.getUser(event));
 		let signInUrl = null;
 		if (!user) {
-			const workosEnv = getValidatedWorkosEnv(env);
-			const trustedSignInOrigins = getTrustedSignInOriginSet();
-			signInUrl = sanitizeSignInUrl(
-				await authKit.getSignInUrl({ returnTo: '/services' }),
-				workosEnv.origin,
-				trustedSignInOrigins
-			);
+			getValidatedWorkosEnv(env);
+			signInUrl = LOCAL_SIGN_IN_PATH;
 		}
 		const authError =
 			user || signInUrl

@@ -18,8 +18,8 @@ import {
 } from './auth-error-query-shared.ts';
 export const AUTH_ERROR_QUERY_TTL_MS = 5 * 60 * 1000;
 
-const CALLBACK_INCIDENT_ID_PATTERN =
-	/^authcb_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const AUTH_REDIRECT_INCIDENT_ID_PATTERN =
+	/^auth(?:cb|sign)_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type BuildAuthErrorRedirectQueryOptions = {
 	incidentId: string;
@@ -38,7 +38,7 @@ export type VerifiedAuthError = {
 };
 
 function isValidCallbackIncidentId(incidentId: string): boolean {
-	return CALLBACK_INCIDENT_ID_PATTERN.test(incidentId);
+	return AUTH_REDIRECT_INCIDENT_ID_PATTERN.test(incidentId);
 }
 
 function signAuthErrorIncident(

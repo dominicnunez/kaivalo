@@ -22,7 +22,7 @@ describe('services page load', () => {
 				parent: async () =>
 					createParentData({
 						user: null,
-						signInUrl: 'https://api.workos.com/user_management/authorize'
+						signInUrl: '/auth/sign-in'
 					})
 			} as never);
 			expect.unreachable('expected redirect');
@@ -32,9 +32,7 @@ describe('services page load', () => {
 				return;
 			}
 			expect(caught.status).toBe(303);
-			expect(caught.location).toBe(
-				'https://api.workos.com/user_management/authorize'
-			);
+			expect(caught.location).toBe('/auth/sign-in');
 		}
 	});
 
