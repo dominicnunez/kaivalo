@@ -217,4 +217,37 @@ describe('avatar proxy route', () => {
 		expect(response.status).toBe(502);
 		expect(response.headers.get('cache-control')).toBe('private, no-store');
 	});
+
+	it('rejects streamed avatar responses that exceed the byte limit', async () => {
+		const chunk = new Uint8Array(AVATAR_MAX_RESPONSE_BYTES / 2 + 1);
+		const fetch = vi.fn(async () => {
+			const stream = new ReadableStream<Uint8Array>({
+				start(controller) {
+					controller.enqueue(chunk);
+					controller.enqueue(chunk);
+					controller.close();
+				}
+			});
+
+			return new Response(stream, {
+				status: 200,
+				headers: {
+					'content-type': 'image/png'
+				}
+			});
+		});
+
+		const response = await GET({
+			request: new Request(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			url: new URL(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			fetch
+		} as never);
+
+		expect(response.status).toBe(502);
+		expect(response.headers.get('cache-control')).toBe('private, no-store');
+	});
 });

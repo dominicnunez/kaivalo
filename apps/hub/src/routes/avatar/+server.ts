@@ -74,7 +74,7 @@ async function readAvatarBody(upstream: Response): Promise<Uint8Array> {
 		return new Uint8Array();
 	}
 
-	const chunks: Uint8Array[] = [];
+	const body = new Uint8Array(AVATAR_MAX_RESPONSE_BYTES);
 	let totalBytes = 0;
 
 	try {
@@ -90,20 +90,13 @@ async function readAvatarBody(upstream: Response): Promise<Uint8Array> {
 				throw new Error('Avatar response exceeds maximum allowed size');
 			}
 
-			chunks.push(value);
+			body.set(value, totalBytes - value.byteLength);
 		}
 	} finally {
 		reader.releaseLock();
 	}
 
-	const body = new Uint8Array(totalBytes);
-	let offset = 0;
-	for (const chunk of chunks) {
-		body.set(chunk, offset);
-		offset += chunk.byteLength;
-	}
-
-	return body;
+	return body.subarray(0, totalBytes);
 }
 
 export const GET: RequestHandler = async ({ request, url, fetch }) => {
