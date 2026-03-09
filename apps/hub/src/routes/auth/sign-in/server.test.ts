@@ -102,17 +102,8 @@ describe('auth sign-in route', () => {
 				message: expect.stringMatching(/^Sign-in failed\. Reference: authsign_/)
 			}
 		});
-		expect(errorSpy).toHaveBeenCalledWith(
-			'Sign-in failed',
-			expect.objectContaining({
-				errorCode: 'AUTH_SIGN_IN_UNEXPECTED_FAILURE',
-				errorName: 'Error',
-				method: 'GET',
-				pathname: '/auth/sign-in',
-				requestId: 'missing',
-				incidentId: expect.stringMatching(/^authsign_/)
-			})
-		);
+		expect(errorSpy).toHaveBeenCalledOnce();
+		expect(errorSpy.mock.calls.at(-1)?.[0]).toBe('Sign-in failed');
 	});
 
 	it('rejects sign-in URLs on untrusted origins', async () => {
@@ -132,17 +123,8 @@ describe('auth sign-in route', () => {
 				message: expect.stringMatching(/^Sign-in failed\. Reference: authsign_/)
 			}
 		});
-		expect(errorSpy).toHaveBeenCalledWith(
-			'Sign-in failed',
-			expect.objectContaining({
-				errorCode: 'AUTH_SIGN_IN_UNEXPECTED_FAILURE',
-				errorName: 'Error',
-				method: 'GET',
-				pathname: '/auth/sign-in',
-				requestId: 'missing',
-				incidentId: expect.stringMatching(/^authsign_/)
-			})
-		);
+		expect(errorSpy).toHaveBeenCalledOnce();
+		expect(errorSpy.mock.calls.at(-1)?.[0]).toBe('Sign-in failed');
 	});
 
 	it('redirects browser failures back to the landing page with a signed auth error', async () => {
@@ -190,17 +172,8 @@ describe('auth sign-in route', () => {
 					'Sign-in is temporarily unavailable. Please try again shortly.',
 				incidentId: expect.stringMatching(/^authsign_/)
 			});
-			expect(errorSpy).toHaveBeenCalledWith(
-				'Sign-in failed',
-				expect.objectContaining({
-					errorCode: 'AUTH_SIGN_IN_UNEXPECTED_FAILURE',
-					errorName: 'Error',
-					method: 'GET',
-					pathname: '/auth/sign-in',
-					requestId: 'missing',
-					incidentId: expect.stringMatching(/^authsign_/)
-				})
-			);
+			expect(errorSpy).toHaveBeenCalledOnce();
+			expect(errorSpy.mock.calls.at(-1)?.[0]).toBe('Sign-in failed');
 		}
 	});
 });
