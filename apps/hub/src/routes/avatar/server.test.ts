@@ -59,6 +59,7 @@ describe('avatar proxy route', () => {
 		);
 		expect(response.status).toBe(200);
 		expect(response.headers.get('content-type')).toBe('image/png');
+		expect(await response.text()).toBe('image-bytes');
 		expect(response.headers.get('cache-control')).toBe(
 			'public, max-age=300, stale-while-revalidate=86400'
 		);

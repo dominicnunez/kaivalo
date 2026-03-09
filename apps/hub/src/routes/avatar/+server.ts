@@ -163,7 +163,7 @@ export const GET: RequestHandler = async ({ request, url, fetch }) => {
 
 	headers.set('content-type', contentType);
 	headers.set('content-length', String(body.byteLength));
-	const responseBody = Uint8Array.from(body);
+	const responseBody = body as unknown as BodyInit;
 
 	return new Response(responseBody, {
 		status: 200,
