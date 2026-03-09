@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	AUTH_ERROR_QUERY_NAME,
 	AUTH_ERROR_QUERY_VALUE,
@@ -38,9 +38,16 @@ function createEvent(headers: HeadersInit = {}) {
 }
 
 describe('auth callback route', () => {
+	let errorSpy: ReturnType<typeof vi.spyOn>;
+
 	beforeEach(() => {
 		vi.resetModules();
 		mockHandleCallback.mockReset();
+		errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+	});
+
+	afterEach(() => {
+		errorSpy.mockRestore();
 	});
 
 	it('returns the upstream callback response for successful requests', async () => {
@@ -128,6 +135,17 @@ describe('auth callback route', () => {
 					'Sign-in is temporarily unavailable. Please try again shortly.',
 				incidentId: expect.stringMatching(/^authcb_/)
 			});
+			expect(errorSpy).toHaveBeenCalledWith(
+				'Auth callback failed',
+				expect.objectContaining({
+					errorCode: 'AUTH_CALLBACK_UNEXPECTED_FAILURE',
+					errorName: 'Error',
+					method: 'GET',
+					pathname: '/auth/callback',
+					requestId: 'missing',
+					incidentId: expect.stringMatching(/^authcb_/)
+				})
+			);
 		}
 	});
 });

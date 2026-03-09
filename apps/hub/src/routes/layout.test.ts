@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildAuthErrorRedirectQuery } from '$lib/auth/auth-error-query.ts';
 
 const { mockEnv } = vi.hoisted(() => ({
@@ -36,6 +36,8 @@ const mockedAuthKit = vi.mocked(authKit);
 const baseEvent = createEvent('https://kaivalo.test/');
 
 describe('layout server load', () => {
+	let errorSpy: ReturnType<typeof vi.spyOn>;
+
 	beforeEach(() => {
 		vi.clearAllMocks();
 		delete mockEnv.WORKOS_API_HOSTNAME;
@@ -45,6 +47,11 @@ describe('layout server load', () => {
 		delete mockEnv.NODE_ENV;
 		mockEnv.ORIGIN = 'https://kaivalo.test';
 		mockEnv.WORKOS_REDIRECT_URI = 'https://kaivalo.test/auth/callback';
+		errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+	});
+
+	afterEach(() => {
+		errorSpy.mockRestore();
 	});
 
 	it('returns a development bypass user without calling WorkOS when enabled', async () => {
@@ -89,6 +96,19 @@ describe('layout server load', () => {
 				incidentId: expect.stringMatching(/^authlayout_/)
 			}
 		});
+		expect(errorSpy).toHaveBeenCalledWith(
+			'Auth layout load failed',
+			expect.objectContaining({
+				errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
+				errorMessage:
+					'DEV_AUTH_BYPASS requires NODE_ENV=development with loopback-only ORIGIN and WORKOS_REDIRECT_URI.',
+				errorName: 'Error',
+				method: 'GET',
+				pathname: '/',
+				requestId: 'missing',
+				incidentId: expect.stringMatching(/^authlayout_/)
+			})
+		);
 	});
 
 	it('rejects development auth bypass when node env is not development', async () => {
@@ -108,6 +128,19 @@ describe('layout server load', () => {
 				incidentId: expect.stringMatching(/^authlayout_/)
 			}
 		});
+		expect(errorSpy).toHaveBeenCalledWith(
+			'Auth layout load failed',
+			expect.objectContaining({
+				errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
+				errorMessage:
+					'DEV_AUTH_BYPASS requires NODE_ENV=development with loopback-only ORIGIN and WORKOS_REDIRECT_URI.',
+				errorName: 'Error',
+				method: 'GET',
+				pathname: '/',
+				requestId: 'missing',
+				incidentId: expect.stringMatching(/^authlayout_/)
+			})
+		);
 	});
 
 	it('returns normalized user data for authenticated requests', async () => {
@@ -495,9 +528,6 @@ describe('layout server load', () => {
 	});
 
 	it('returns auth-unavailable state and logs incident id when upstream auth calls throw', async () => {
-		const errorSpy = vi
-			.spyOn(console, 'error')
-			.mockImplementation(() => undefined);
 		const cause = Object.assign(new Error('upstream detail'), {
 			code: 'cause_timeout'
 		});
@@ -544,6 +574,5 @@ describe('layout server load', () => {
 				requestId: 'bad_value___trace'
 			})
 		);
-		errorSpy.mockRestore();
 	});
 });
