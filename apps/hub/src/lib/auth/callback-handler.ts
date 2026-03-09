@@ -24,6 +24,7 @@ type CreateAuthCallbackGetHandlerOptions = {
 	isRedirect: (error: unknown) => boolean;
 	isHttpError: (error: unknown) => boolean;
 	cookiePassword: string;
+	expectedOrigin: string;
 	includeMessageInLogs?: boolean;
 	logError?: (message: string, context: CallbackLogContext) => void;
 };
@@ -44,7 +45,7 @@ function cloneRedirectResponse(response: Response, location: string): Response {
 
 function normalizeCallbackResponse(
 	response: Response,
-	event: RequestEvent
+	expectedOrigin: string
 ): Response {
 	if (!REDIRECT_RESPONSE_STATUSES.has(response.status)) {
 		return response;
@@ -57,7 +58,7 @@ function normalizeCallbackResponse(
 
 	const safeLocation = normalizeSameOriginRedirectLocation(
 		location,
-		event.url.origin
+		expectedOrigin
 	);
 	if (!safeLocation) {
 		throw new Error('Auth callback produced an invalid redirect location');
@@ -73,11 +74,29 @@ export function createAuthCallbackGetHandler({
 	isRedirect,
 	isHttpError,
 	cookiePassword,
+	expectedOrigin,
 	includeMessageInLogs = false,
 	logError = console.error
 }: CreateAuthCallbackGetHandlerOptions): (
 	event: RequestEvent
 ) => Promise<Response> {
+	let trustedOrigin: string;
+	try {
+		const parsed = new URL(expectedOrigin);
+		if (
+			parsed.username ||
+			parsed.password ||
+			parsed.pathname !== '/' ||
+			parsed.search ||
+			parsed.hash
+		) {
+			throw new Error();
+		}
+		trustedOrigin = parsed.origin;
+	} catch {
+		throw new Error('expectedOrigin must be a valid URL origin');
+	}
+
 	function shouldUseUserRedirect(event: RequestEvent): boolean {
 		const mode = event.request.headers.get('sec-fetch-mode');
 		const destination = event.request.headers.get('sec-fetch-dest');
@@ -92,7 +111,7 @@ export function createAuthCallbackGetHandler({
 	return async (event: RequestEvent) => {
 		try {
 			const handler = handleCallback();
-			return normalizeCallbackResponse(await handler(event), event);
+			return normalizeCallbackResponse(await handler(event), trustedOrigin);
 		} catch (err) {
 			let normalizedError = err;
 
@@ -103,7 +122,7 @@ export function createAuthCallbackGetHandler({
 
 				const safeLocation = normalizeSameOriginRedirectLocation(
 					err.location,
-					event.url.origin
+					trustedOrigin
 				);
 				if (safeLocation) {
 					if (safeLocation === err.location) {

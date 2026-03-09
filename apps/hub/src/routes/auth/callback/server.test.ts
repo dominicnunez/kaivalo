@@ -28,12 +28,15 @@ vi.mock('@workos/authkit-sveltekit', () => ({
 	}
 }));
 
-function createEvent(headers: HeadersInit = {}) {
+function createEvent(
+	headers: HeadersInit = {},
+	requestUrl = 'https://kaivalo.test/auth/callback'
+) {
 	return {
-		request: new Request('https://kaivalo.test/auth/callback', {
+		request: new Request(requestUrl, {
 			headers
 		}),
-		url: new URL('https://kaivalo.test/auth/callback')
+		url: new URL(requestUrl)
 	} as never;
 }
 
@@ -86,6 +89,47 @@ describe('auth callback route', () => {
 
 		expect(response.status).toBe(303);
 		expect(response.headers.get('location')).toBe('/services?welcome=1');
+		expect(mockHandleCallback).toHaveBeenCalledOnce();
+	});
+
+	it('normalizes callback redirects against the configured origin when the request host is poisoned', async () => {
+		mockHandleCallback.mockReturnValue(async () =>
+			Response.redirect('https://kaivalo.test/services', 303)
+		);
+
+		const { GET } = await import('./+server');
+		const response = await GET(
+			createEvent({}, 'https://attacker.test/auth/callback')
+		);
+
+		expect(response.status).toBe(303);
+		expect(response.headers.get('location')).toBe('/services');
+		expect(mockHandleCallback).toHaveBeenCalledOnce();
+	});
+
+	it('rejects callback redirects that point at the poisoned request host instead of the configured origin', async () => {
+		mockHandleCallback.mockReturnValue(async () =>
+			Response.redirect('https://attacker.test/services', 303)
+		);
+
+		const { GET } = await import('./+server');
+		await expect(
+			GET(
+				createEvent(
+					{
+						accept: 'application/json'
+					},
+					'https://attacker.test/auth/callback'
+				)
+			)
+		).rejects.toMatchObject({
+			status: 503,
+			body: {
+				message: expect.stringMatching(
+					/^Auth callback failed\. Reference: authcb_/
+				)
+			}
+		});
 		expect(mockHandleCallback).toHaveBeenCalledOnce();
 	});
 
