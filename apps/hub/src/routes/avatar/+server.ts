@@ -1,5 +1,6 @@
 import type { RequestHandler } from './$types';
 import {
+	AVATAR_ALLOWED_CONTENT_TYPES,
 	AVATAR_FETCH_TIMEOUT_MS,
 	AVATAR_MAX_RESPONSE_BYTES
 } from '$lib/server/avatar-proxy.ts';
@@ -10,8 +11,13 @@ const AVATAR_CACHE_CONTROL =
 const PRIVATE_NO_STORE_CACHE_CONTROL = 'private, no-store';
 
 function getAvatarContentType(upstream: Response): string | null {
-	const contentType = upstream.headers.get('content-type')?.trim() ?? '';
-	return contentType.toLowerCase().startsWith('image/') ? contentType : null;
+	const contentType = upstream.headers.get('content-type');
+	if (!contentType) {
+		return null;
+	}
+
+	const mediaType = contentType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+	return AVATAR_ALLOWED_CONTENT_TYPES.has(mediaType) ? mediaType : null;
 }
 
 function createGatewayErrorResponse(status: number, message: string): Response {

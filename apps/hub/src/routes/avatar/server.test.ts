@@ -91,6 +91,31 @@ describe('avatar proxy route', () => {
 		expect(response.status).toBe(502);
 	});
 
+	it('rejects svg avatar responses from trusted upstream hosts', async () => {
+		const fetch = vi.fn(
+			async () =>
+				new Response('<svg xmlns="http://www.w3.org/2000/svg"></svg>', {
+					status: 200,
+					headers: {
+						'content-type': 'image/svg+xml'
+					}
+				})
+		);
+
+		const response = await GET({
+			request: new Request(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			url: new URL(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			fetch
+		} as never);
+
+		expect(response.status).toBe(502);
+		expect(response.headers.get('cache-control')).toBe('private, no-store');
+	});
+
 	it('returns a controlled gateway failure when the upstream fetch throws', async () => {
 		const fetch = vi.fn(async () => {
 			throw new Error('socket hang up');
