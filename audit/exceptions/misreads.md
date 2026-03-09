@@ -175,3 +175,12 @@ That means the public-API test uniquely verifies the package barrel exports and 
 **Reason:** The audit conflated two different `stop()` paths.
 `process.once('exit', () => { void sharedPreview?.stop(); })` calls the underlying shared preview object's `stop`, which is `stopServer()` from `createHubPreview()`, not the lease-level `stop()` that defers shutdown behind `SHARED_PREVIEW_IDLE_SHUTDOWN_MS`.
 That underlying `stopServer()` sends `SIGTERM` to the detached process group synchronously before its first `await`, so the reported idle-timer-based orphaning path does not match the actual code.
+
+### Startup path contains a dead HOST assignment
+
+**Location:** `apps/hub/src/lib/server/node-server-runtime.ts:571` — startup host normalization before `parseHost(env.HOST)`
+
+**Reason:** The audit called `host = env.HOST.trim()` dead because the next line assigns `host = parseHost(env.HOST)`.
+That misses the surrounding `try`/`catch`: if `parseHost(env.HOST)` throws, control jumps to `handleStartupError(error)` before the second assignment completes.
+In that failure path, `handleStartupError()` logs and reports the current `host` value, so the trim step preserves the caller-supplied HOST for fatal diagnostics instead of falling back to the default `127.0.0.1`.
+The assignment may be debatable style, but it is not dead code and the behavior described by the audit does not match the actual control flow.
