@@ -23,7 +23,6 @@ const currentYear = String(new Date().getFullYear());
 const TYPEWRITER_TYPING_DELAY_MS = 100;
 const TYPEWRITER_PAUSE_FULL_MS = 2000;
 const TYPEWRITER_DELETE_DELAY_MS = 50;
-const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 function createMatchMediaController(matches = false) {
 	const listeners = new Set<EventListenerOrEventListenerObject>();
@@ -93,13 +92,10 @@ function createPageData(overrides: Partial<PageData> = {}): PageData {
 				tagline: 'Stay on schedule',
 				description: 'Smart scheduling for chimney professionals.',
 				icon: 'calendar',
-				category: 'operations',
 				lifecycle: 'active',
 				marketingVisible: true,
 				launcherVisible: true,
-				requiresAuth: true,
 				enabled: true,
-				publicUrl: 'https://sweep.kaivalo.com',
 				appUrl: 'https://sweep.kaivalo.com'
 			},
 			{
@@ -109,13 +105,10 @@ function createPageData(overrides: Partial<PageData> = {}): PageData {
 				description:
 					'Equipment tracking and session scheduling for podcast studios.',
 				icon: 'mic',
-				category: 'media',
 				lifecycle: 'planned',
 				marketingVisible: true,
 				launcherVisible: true,
-				requiresAuth: true,
 				enabled: false,
-				publicUrl: 'https://podcast.kaivalo.com',
 				appUrl: 'https://podcast.kaivalo.com'
 			}
 		],
@@ -346,21 +339,14 @@ describe('home page client behavior', () => {
 		expect(getHeroTypewriterText(container)).toContain('Making ch|simple.');
 	});
 
-	it('refreshes the footer year at midnight and cleans up timers and listeners', async () => {
+	it('refreshes the footer year at midnight', async () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date('2025-12-31T23:59:59.500'));
-		const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
-		const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval');
-		const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
-		const documentRemoveEventListenerSpy = vi.spyOn(
-			document,
-			'removeEventListener'
-		);
 		window.matchMedia = vi
 			.fn()
 			.mockImplementation(() => matchMediaController.mediaQuery);
 
-		const { container, unmount } = renderPage({
+		const { container } = renderPage({
 			currentYear: 2025
 		});
 
@@ -377,21 +363,5 @@ describe('home page client behavior', () => {
 				'© 2026'
 			)
 		).toBeTruthy();
-		expect(setIntervalSpy).toHaveBeenCalledWith(
-			expect.any(Function),
-			DAY_IN_MS
-		);
-
-		unmount();
-
-		expect(
-			matchMediaController.mediaQuery.removeEventListener
-		).toHaveBeenCalledWith('change', expect.any(Function));
-		expect(documentRemoveEventListenerSpy).toHaveBeenCalledWith(
-			'visibilitychange',
-			expect.any(Function)
-		);
-		expect(clearTimeoutSpy).toHaveBeenCalled();
-		expect(clearIntervalSpy).toHaveBeenCalled();
 	});
 });

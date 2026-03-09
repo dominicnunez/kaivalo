@@ -1,5 +1,44 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { isRedirect } from '@sveltejs/kit';
+
+const { mockLauncherServices } = vi.hoisted(() => ({
+	mockLauncherServices: {
+		activeServices: [
+			{
+				id: 'sweep',
+				name: 'Sweep',
+				tagline: 'Stay on schedule',
+				description: 'Smart scheduling for chimney professionals.',
+				icon: 'calendar',
+				lifecycle: 'active',
+				marketingVisible: true,
+				launcherVisible: true,
+				enabled: true,
+				appUrl: 'https://sweep.kaivalo.com'
+			}
+		],
+		plannedServices: [
+			{
+				id: 'podstudio',
+				name: 'PodStudio',
+				tagline: 'Podcast management',
+				description:
+					'Equipment tracking and session scheduling for podcast studios.',
+				icon: 'mic',
+				lifecycle: 'planned',
+				marketingVisible: true,
+				launcherVisible: true,
+				enabled: false,
+				appUrl: 'https://podcast.kaivalo.com'
+			}
+		]
+	}
+}));
+
+vi.mock('$lib/services/registry.ts', () => ({
+	getLauncherServices: vi.fn(() => mockLauncherServices)
+}));
+
 import { load } from './+page.server';
 
 function createParentData(overrides: Record<string, unknown> = {}) {
@@ -72,11 +111,7 @@ describe('services page load', () => {
 				'Open the Kaivalo services available on your account from one authenticated launcher.'
 		});
 		expect(result.currentYear).toBe(new Date().getFullYear());
-		expect(result.activeServices.map((service) => service.id)).toEqual([
-			'sweep'
-		]);
-		expect(result.plannedServices.map((service) => service.id)).toEqual([
-			'podstudio'
-		]);
+		expect(result.activeServices).toBe(mockLauncherServices.activeServices);
+		expect(result.plannedServices).toBe(mockLauncherServices.plannedServices);
 	});
 });
