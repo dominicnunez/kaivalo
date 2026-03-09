@@ -29,6 +29,36 @@ function buildSearchParams(now = issuedAt) {
 }
 
 describe('readVerifiedAuthError', () => {
+	it.each([
+		'',
+		'not-an-incident-id',
+		'authlayout_123e4567-e89b-12d3-a456-426614174000'
+	])(
+		'rejects malformed auth redirect incident ids when signing: %s',
+		(badId) => {
+			expect(() =>
+				buildAuthErrorRedirectQuery({
+					incidentId: badId,
+					secret: cookiePassword,
+					now: issuedAt
+				})
+			).toThrowError('incidentId must be a valid auth callback incident id');
+		}
+	);
+
+	it.each(['', '   '])(
+		'rejects empty signing secret when building redirect query: %j',
+		(invalidSecret) => {
+			expect(() =>
+				buildAuthErrorRedirectQuery({
+					incidentId,
+					secret: invalidSecret,
+					now: issuedAt
+				})
+			).toThrowError('secret must be a non-empty string');
+		}
+	);
+
 	it('accepts a signed auth error at the ttl boundary', () => {
 		const searchParams = buildSearchParams();
 
