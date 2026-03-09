@@ -268,6 +268,24 @@ function getRuntimeStageBuildCopies(dockerfile) {
 	return records;
 }
 
+function getDockerfileFromImages(dockerfile) {
+	return dockerfile
+		.split('\n')
+		.map((line) => line.trim())
+		.filter((line) => line.startsWith('FROM '))
+		.map((line) => {
+			const match = line.match(/^FROM\s+(\S+)\s+AS\s+([a-z0-9_-]+)\s*$/i);
+			assert.ok(
+				match,
+				`Dockerfile FROM line should declare a named stage: ${line}`
+			);
+			return {
+				image: match[1],
+				stage: match[2].toLowerCase()
+			};
+		});
+}
+
 function getPackageScripts() {
 	const packageJson = JSON.parse(readFileSync(PACKAGE_JSON_PATH, 'utf8'));
 	assert.ok(packageJson.scripts, 'package.json should define scripts');
@@ -358,5 +376,26 @@ describe('deployment runtime guardrails', () => {
 			'/app/package-lock.json -> ./',
 			'/app/package.json -> ./'
 		]);
+	});
+
+	it('pins both Docker stages to an immutable node base image digest', () => {
+		const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
+		const fromImages = getDockerfileFromImages(dockerfile);
+
+		assert.deepStrictEqual(
+			fromImages.map(({ image, stage }) => ({ image, stage })),
+			[
+				{
+					image:
+						'node:24.14.0-bookworm-slim@sha256:b4687aef2571c632a1953695ce4d61d6462a7eda471fe6e272eebf0418f276ba',
+					stage: 'build'
+				},
+				{
+					image:
+						'node:24.14.0-bookworm-slim@sha256:b4687aef2571c632a1953695ce4d61d6462a7eda471fe6e272eebf0418f276ba',
+					stage: 'runtime'
+				}
+			]
+		);
 	});
 });

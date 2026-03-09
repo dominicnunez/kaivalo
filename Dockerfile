@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim AS build
+FROM node:24.14.0-bookworm-slim@sha256:b4687aef2571c632a1953695ce4d61d6462a7eda471fe6e272eebf0418f276ba AS build
 
 WORKDIR /app
 
@@ -19,7 +19,7 @@ RUN WORKOS_CLIENT_ID=client_build_placeholder \
     npm --prefix apps/hub run build
 RUN npm prune --omit=dev
 
-FROM node:24-bookworm-slim AS runtime
+FROM node:24.14.0-bookworm-slim@sha256:b4687aef2571c632a1953695ce4d61d6462a7eda471fe6e272eebf0418f276ba AS runtime
 
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
