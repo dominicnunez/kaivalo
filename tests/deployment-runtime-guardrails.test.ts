@@ -282,8 +282,12 @@ describe('deployment runtime guardrails', () => {
 
 		assert.ok(triggers.has('push'));
 		assert.ok(triggers.has('pull_request'));
-		assert.ok(runCommands.includes('npm run lint'));
 		assert.ok(runCommands.includes('npm run test:ci'));
+		assert.strictEqual(
+			runCommands.filter((command) => command === 'npm run lint').length,
+			0,
+			'fast lane CI should invoke the shared test:ci entrypoint without a duplicate lint step'
+		);
 	});
 
 	it('runs the full verification lane before deployment', () => {
