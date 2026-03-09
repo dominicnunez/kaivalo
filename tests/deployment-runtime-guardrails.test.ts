@@ -21,54 +21,193 @@ const DOCKERFILE_PATH = path.join(ROOT, 'Dockerfile');
 const DEPLOYABLE_REF_CONDITION =
 	"github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')";
 
-function getWorkflowJobCondition(workflow, jobName) {
-	const lines = workflow.split('\n');
-	let insideJobs = false;
-	let insideRequestedJob = false;
+function getIndentedSection(lines, sectionName, indentSize = 0) {
+	const prefix = ' '.repeat(indentSize);
+	const sectionHeader = `${prefix}${sectionName}:`;
+	const startIndex = lines.findIndex((line) => line === sectionHeader);
+	assert.notStrictEqual(startIndex, -1, `${sectionName} section should exist`);
 
-	for (const line of lines) {
-		if (!insideJobs) {
-			if (line.trim() === 'jobs:') {
-				insideJobs = true;
-			}
+	const sectionLines = [];
+	for (const line of lines.slice(startIndex + 1)) {
+		if (line.length === 0) {
+			sectionLines.push(line);
 			continue;
 		}
 
-		if (/^[^\s]/.test(line)) {
+		const lineIndent = line.match(/^ */)?.[0].length ?? 0;
+		if (lineIndent <= indentSize) {
 			break;
 		}
 
-		const topLevelJobMatch = line.match(/^ {2}([a-z0-9_-]+):\s*$/i);
-		if (topLevelJobMatch) {
-			insideRequestedJob = topLevelJobMatch[1] === jobName;
+		sectionLines.push(line);
+	}
+
+	return sectionLines;
+}
+
+function getWorkflowTriggers(workflow) {
+	const lines = workflow.split('\n');
+	const triggerLines = getIndentedSection(lines, 'on');
+	const triggers = new Set();
+	const schedule = [];
+
+	for (const line of triggerLines) {
+		const triggerMatch = line.match(/^ {2}([a-z_]+):\s*$/);
+		if (triggerMatch) {
+			triggers.add(triggerMatch[1]);
 			continue;
 		}
 
-		if (insideRequestedJob) {
-			const ifMatch = line.match(/^ {4}if:\s*(.+)\s*$/);
-			if (ifMatch) {
-				return ifMatch[1];
-			}
+		const cronMatch = line.match(/^ {4}- cron: ['"](.+)['"]$/);
+		if (cronMatch) {
+			schedule.push(cronMatch[1]);
+		}
+	}
+
+	return { triggers, schedule };
+}
+
+function getWorkflowPermissions(workflow) {
+	const lines = workflow.split('\n');
+	const permissionLines = getIndentedSection(lines, 'permissions');
+	const permissions = new Map();
+
+	for (const line of permissionLines) {
+		const match = line.match(/^ {2}([a-z-]+):\s*(.+)$/);
+		if (match) {
+			permissions.set(match[1], match[2]);
+		}
+	}
+
+	return permissions;
+}
+
+function getWorkflowJobBlock(workflow, jobName) {
+	const lines = workflow.split('\n');
+	const jobsLines = getIndentedSection(lines, 'jobs');
+	const jobHeader = `  ${jobName}:`;
+	const startIndex = jobsLines.findIndex((line) => line === jobHeader);
+	assert.notStrictEqual(startIndex, -1, `job ${jobName} should exist`);
+
+	const jobLines = [];
+	for (const line of jobsLines.slice(startIndex + 1)) {
+		if (line.length === 0) {
+			jobLines.push(line);
+			continue;
+		}
+
+		const lineIndent = line.match(/^ */)?.[0].length ?? 0;
+		if (lineIndent <= 2) {
+			break;
+		}
+
+		jobLines.push(line);
+	}
+
+	return jobLines;
+}
+
+function getWorkflowJobCondition(workflow, jobName) {
+	for (const line of getWorkflowJobBlock(workflow, jobName)) {
+		const ifMatch = line.match(/^ {4}if:\s*(.+)\s*$/);
+		if (ifMatch) {
+			return ifMatch[1];
 		}
 	}
 
 	throw new Error(`job ${jobName} is missing an if condition`);
 }
 
-function getWorkflowTriggerBlock(workflow) {
-	const lines = workflow.split('\n');
-	const startIndex = lines.findIndex((line) => line.trim() === 'on:');
-	assert.notStrictEqual(startIndex, -1, 'workflow should declare triggers');
-
-	const block = [];
-	for (const line of lines.slice(startIndex + 1)) {
-		if (/^[^\s]/.test(line)) {
-			break;
-		}
-		block.push(line);
+function parseStepProperty(line) {
+	const propertyMatch = line.match(/^(?: {6}- | {8})([a-z-]+):\s*(.*)$/);
+	if (!propertyMatch) {
+		return null;
 	}
 
-	return block.join('\n');
+	return {
+		name: propertyMatch[1],
+		value: propertyMatch[2]
+	};
+}
+
+function parseWithProperty(line) {
+	const propertyMatch = line.match(/^ {10}([a-z-]+):\s*(.+)$/);
+	if (!propertyMatch) {
+		return null;
+	}
+
+	return {
+		name: propertyMatch[1],
+		value: propertyMatch[2]
+	};
+}
+
+function getWorkflowSteps(workflow, jobName) {
+	const jobLines = getWorkflowJobBlock(workflow, jobName);
+	const steps = [];
+	let currentStep = null;
+	let insideWith = false;
+
+	for (const line of jobLines) {
+		if (line === '    steps:') {
+			continue;
+		}
+
+		if (line.startsWith('      - ')) {
+			if (currentStep) {
+				steps.push(currentStep);
+			}
+
+			currentStep = { with: {} };
+			insideWith = false;
+
+			const property = parseStepProperty(line);
+			if (property) {
+				currentStep[property.name] = property.value;
+			}
+			continue;
+		}
+
+		if (!currentStep) {
+			continue;
+		}
+
+		if (line === '        with:') {
+			insideWith = true;
+			continue;
+		}
+
+		if (insideWith) {
+			const withProperty = parseWithProperty(line);
+			if (withProperty) {
+				currentStep.with[withProperty.name] = withProperty.value;
+				continue;
+			}
+
+			if (!line.startsWith('          ')) {
+				insideWith = false;
+			}
+		}
+
+		if (!insideWith) {
+			const property = parseStepProperty(line);
+			if (property) {
+				currentStep[property.name] = property.value;
+			}
+		}
+	}
+
+	if (currentStep) {
+		steps.push(currentStep);
+	}
+
+	return steps;
+}
+
+function getWorkflowRunCommands(workflow, jobName) {
+	return getWorkflowSteps(workflow, jobName)
+		.map((step) => step.run)
+		.filter((run) => typeof run === 'string');
 }
 
 function getRuntimeStageBuildCopies(dockerfile) {
@@ -130,34 +269,38 @@ function getRuntimeStageBuildCopies(dockerfile) {
 describe('deployment runtime guardrails', () => {
 	it('runs the fast verification lane on push and pull requests', () => {
 		const workflow = readFileSync(CI_WORKFLOW_PATH, 'utf8');
-		const triggerBlock = getWorkflowTriggerBlock(workflow);
+		const { triggers } = getWorkflowTriggers(workflow);
+		const runCommands = getWorkflowRunCommands(workflow, 'verify');
 
-		assert.match(triggerBlock, /^\s{2}push:\s*$/m);
-		assert.match(triggerBlock, /^\s{2}pull_request:\s*$/m);
-		assert.match(workflow, /^\s{6}- name: Run linter$/m);
-		assert.match(workflow, /^\s{8}run: npm run lint$/m);
-		assert.match(workflow, /^\s{6}- name: Run fast CI test suite$/m);
-		assert.match(workflow, /^\s{8}run: npm run test:ci$/m);
+		assert.ok(triggers.has('push'));
+		assert.ok(triggers.has('pull_request'));
+		assert.ok(runCommands.includes('npm run lint'));
+		assert.ok(runCommands.includes('npm run test:ci'));
 	});
 
 	it('runs the full verification lane before deployment', () => {
 		const workflow = readFileSync(DEPLOY_WORKFLOW_PATH, 'utf8');
+		const runCommands = getWorkflowRunCommands(workflow, 'test');
 
-		assert.match(workflow, /^\s{6}- name: Run full deploy test suite$/m);
-		assert.match(workflow, /^\s{8}run: npm run test:deploy$/m);
+		assert.ok(runCommands.includes('npm run test:deploy'));
 	});
 
 	it('runs the full verification lane on a daily schedule', () => {
 		const workflow = readFileSync(DAILY_FULL_SUITE_WORKFLOW_PATH, 'utf8');
-		const triggerBlock = getWorkflowTriggerBlock(workflow);
+		const { triggers, schedule } = getWorkflowTriggers(workflow);
+		const permissions = getWorkflowPermissions(workflow);
+		const setupNodeStep = getWorkflowSteps(workflow, 'verify').find((step) =>
+			step.uses?.startsWith('actions/setup-node@')
+		);
+		const runCommands = getWorkflowRunCommands(workflow, 'verify');
 
-		assert.match(triggerBlock, /^\s{2}workflow_dispatch:\s*$/m);
-		assert.match(triggerBlock, /^\s{4}- cron: '0 14 \* \* \*'$/m);
-		assert.match(workflow, /^permissions:\n\s{2}contents: read$/m);
-		assert.match(workflow, /^\s{10}node-version: 24$/m);
-		assert.match(workflow, /^\s{10}cache: npm$/m);
-		assert.match(workflow, /^\s{6}- name: Run daily full test suite$/m);
-		assert.match(workflow, /^\s{8}run: npm run test:full$/m);
+		assert.ok(triggers.has('workflow_dispatch'));
+		assert.deepStrictEqual(schedule, ['0 14 * * *']);
+		assert.strictEqual(permissions.get('contents'), 'read');
+		assert.ok(setupNodeStep, 'verify job should set up Node.js');
+		assert.strictEqual(setupNodeStep.with['node-version'], '24');
+		assert.strictEqual(setupNodeStep.with.cache, 'npm');
+		assert.ok(runCommands.includes('npm run test:full'));
 	});
 
 	it('only builds and deploys from deployable refs', () => {
