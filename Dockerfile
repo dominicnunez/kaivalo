@@ -6,7 +6,7 @@ COPY package.json package-lock.json ./
 COPY apps/hub/package.json apps/hub/package.json
 COPY packages/ui/package.json packages/ui/package.json
 
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 COPY apps/hub apps/hub
 COPY packages/ui packages/ui

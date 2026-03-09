@@ -301,6 +301,7 @@ describe('deployment runtime guardrails', () => {
 
 		assert.ok(triggers.has('push'));
 		assert.ok(triggers.has('pull_request'));
+		assert.ok(runCommands.includes('npm ci --ignore-scripts'));
 		assert.ok(runCommands.includes('npm run test:ci'));
 		assert.strictEqual(
 			runCommands.filter((command) => command === 'npm run lint').length,
@@ -313,6 +314,7 @@ describe('deployment runtime guardrails', () => {
 		const workflow = readFileSync(DEPLOY_WORKFLOW_PATH, 'utf8');
 		const runCommands = getWorkflowRunCommands(workflow, 'test');
 
+		assert.ok(runCommands.includes('npm ci --ignore-scripts'));
 		assert.ok(runCommands.includes('npm run test:deploy'));
 	});
 
@@ -331,6 +333,7 @@ describe('deployment runtime guardrails', () => {
 		assert.ok(setupNodeStep, 'verify job should set up Node.js');
 		assert.strictEqual(setupNodeStep.with['node-version'], '24');
 		assert.strictEqual(setupNodeStep.with.cache, 'npm');
+		assert.ok(runCommands.includes('npm ci --ignore-scripts'));
 		assert.ok(runCommands.includes('npm run test:full'));
 	});
 
@@ -404,6 +407,7 @@ describe('deployment runtime guardrails', () => {
 		const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
 		const buildEnv = getHubBuildEnv({});
 
+		assert.match(dockerfile, /\bRUN npm ci --ignore-scripts\b/);
 		assert.match(dockerfile, /\bRUN npm --prefix apps\/hub run build\b/);
 		assert.ok(buildEnv.AUTH_ERROR_SIGNING_SECRET);
 		assert.ok(buildEnv.WORKOS_COOKIE_PASSWORD);
