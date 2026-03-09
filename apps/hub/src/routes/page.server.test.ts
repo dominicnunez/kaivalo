@@ -36,29 +36,35 @@ import { load } from './+page.server';
 
 describe('home page load', () => {
 	it('builds metadata from the validated public origin', () => {
-		const result = load({} as never) as {
-			meta: {
-				title: string;
-				description: string;
-				url: string;
-				image: string;
-				imageAlt: string;
-				twitterCard: string;
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2030-07-04T12:00:00Z'));
+		try {
+			const result = load({} as never) as {
+				meta: {
+					title: string;
+					description: string;
+					url: string;
+					image: string;
+					imageAlt: string;
+					twitterCard: string;
+				};
+				currentYear: number;
+				marketingServices: typeof mockMarketingServices;
 			};
-			currentYear: number;
-			marketingServices: typeof mockMarketingServices;
-		};
 
-		expect(result.meta).toEqual({
-			title: 'Kaivalo | Tools That Solve Things',
-			description:
-				'Tools that cut through complexity. One account, all tools — sign up once and everything just works.',
-			url: 'https://kaivalo.test',
-			image: 'https://kaivalo.test/og-image.png',
-			imageAlt: 'Kaivalo — tools that cut through complexity',
-			twitterCard: 'summary_large_image'
-		});
-		expect(result.currentYear).toBe(new Date().getFullYear());
-		expect(result.marketingServices).toBe(mockMarketingServices);
+			expect(result.meta).toEqual({
+				title: 'Kaivalo | Tools That Solve Things',
+				description:
+					'Tools that cut through complexity. One account, all tools — sign up once and everything just works.',
+				url: 'https://kaivalo.test',
+				image: 'https://kaivalo.test/og-image.png',
+				imageAlt: 'Kaivalo — tools that cut through complexity',
+				twitterCard: 'summary_large_image'
+			});
+			expect(result.currentYear).toBe(2030);
+			expect(result.marketingServices).toBe(mockMarketingServices);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });

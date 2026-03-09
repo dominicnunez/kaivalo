@@ -93,25 +93,31 @@ describe('services page load', () => {
 	});
 
 	it('returns active and planned services for authenticated users', async () => {
-		const result = (await load({
-			parent: async () => createParentData()
-		} as never)) as {
-			meta: {
-				title: string;
-				description: string;
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2031-01-15T12:00:00Z'));
+		try {
+			const result = (await load({
+				parent: async () => createParentData()
+			} as never)) as {
+				meta: {
+					title: string;
+					description: string;
+				};
+				currentYear: number;
+				activeServices: Array<{ id: string }>;
+				plannedServices: Array<{ id: string }>;
 			};
-			currentYear: number;
-			activeServices: Array<{ id: string }>;
-			plannedServices: Array<{ id: string }>;
-		};
 
-		expect(result.meta).toEqual({
-			title: 'Kaivalo | Services',
-			description:
-				'Open the Kaivalo services available on your account from one authenticated launcher.'
-		});
-		expect(result.currentYear).toBe(new Date().getFullYear());
-		expect(result.activeServices).toBe(mockLauncherServices.activeServices);
-		expect(result.plannedServices).toBe(mockLauncherServices.plannedServices);
+			expect(result.meta).toEqual({
+				title: 'Kaivalo | Services',
+				description:
+					'Open the Kaivalo services available on your account from one authenticated launcher.'
+			});
+			expect(result.currentYear).toBe(2031);
+			expect(result.activeServices).toBe(mockLauncherServices.activeServices);
+			expect(result.plannedServices).toBe(mockLauncherServices.plannedServices);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });

@@ -135,7 +135,11 @@
 </script>
 
 {#if isLink}
-	<a href={safeHref} class="card {hover ? 'card-hover' : ''} {className}">
+	<a
+		href={safeHref}
+		class="card {hover ? 'card-hover' : ''} {className}"
+		data-ui="card"
+	>
 		{#if header}
 			<div class="card-header">{header}</div>
 		{/if}
@@ -144,7 +148,7 @@
 		</div>
 	</a>
 {:else}
-	<div class="card {hover ? 'card-hover' : ''} {className}">
+	<div class="card {hover ? 'card-hover' : ''} {className}" data-ui="card">
 		{#if header}
 			<div class="card-header">{header}</div>
 		{/if}

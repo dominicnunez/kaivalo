@@ -118,6 +118,14 @@ What remains is a narrower transient/build-analysis fallback path, not the gener
 That is incorrect: `apps/hub/src/routes/layout.test.ts:419` already makes `authKit.getUser()` reject, then asserts the sanitized `authError`, the `cache-control` and `vary` headers, and the logged `AUTH_LAYOUT_UNEXPECTED_FAILURE` context.
 The cited catch path is therefore already exercised by the current suite.
 
+### DEV_AUTH_BYPASS can activate with malformed local WorkOS URLs that normal runtime validation would reject
+
+**Location:** `apps/hub/src/routes/+layout.server.ts:42` — bypass precondition in `isLoopbackOrigin()`
+
+**Reason:** The bypass helper itself only checks for a loopback hostname, so in isolation it would accept values like `ftp://localhost/...` or callback URLs outside `/auth/callback`.
+That is not the real application behavior, because `apps/hub/src/hooks.server.ts:18` calls `getValidatedWorkosEnv(env)` during startup before requests are served.
+The shared validator in `apps/hub/src/lib/server/workos-security-env.ts:217` rejects non-HTTP(S) schemes, callback URLs outside `/auth/callback`, query/hash components, and non-equivalent local origins, so the audit's claim that bypass mode "can still activate" in the running app is factually wrong.
+
 ### The hook tests preserve an app-wide missing Content Security Policy
 
 **Location:** `tests/hub-workos-hooks.test.js:444` — helper-level security header assertion
@@ -159,3 +167,11 @@ Because there is no durable in-repo remediation path today beyond waiting for th
 **Reason:** This test does more than duplicate the direct component tests.
 `apps/hub/src/ui-public-api.test.ts` imports `Button`, `Badge`, `Card`, and `Container` from the package root `@kaivalo/ui`, while `apps/hub/src/ui-components.test.ts` imports the Svelte files directly from `packages/ui`.
 That means the public-API test uniquely verifies the package barrel exports and consumer import surface, which normal component rendering tests and the current app build do not fully cover.
+
+### Shared preview helper can leave detached test servers running after abrupt exits
+
+**Location:** `tests/helpers/hub-preview.ts:150` — `process.once('exit', ...)` cleanup for shared preview
+
+**Reason:** The audit conflated two different `stop()` paths.
+`process.once('exit', () => { void sharedPreview?.stop(); })` calls the underlying shared preview object's `stop`, which is `stopServer()` from `createHubPreview()`, not the lease-level `stop()` that defers shutdown behind `SHARED_PREVIEW_IDLE_SHUTDOWN_MS`.
+That underlying `stopServer()` sends `SIGTERM` to the detached process group synchronously before its first `await`, so the reported idle-timer-based orphaning path does not match the actual code.

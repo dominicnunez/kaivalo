@@ -11,12 +11,13 @@
 		xl: 'max-w-screen-xl',
 		full: 'max-w-full'
 	};
+	let resolvedSize = $derived(sizeClasses[size] ? size : 'lg');
 
 	let computedClasses = $derived(
-		`${baseClasses} ${sizeClasses[size] ?? sizeClasses.lg} ${className}`.trim()
+		`${baseClasses} ${sizeClasses[resolvedSize]} ${className}`.trim()
 	);
 </script>
 
-<div class={computedClasses} data-ui="container">
+<div class={computedClasses} data-ui="container" data-size={resolvedSize}>
 	{@render children?.()}
 </div>

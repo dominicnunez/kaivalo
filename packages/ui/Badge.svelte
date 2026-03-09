@@ -8,7 +8,12 @@
 	} = $props();
 </script>
 
-<span class="badge badge-{status} badge-{size} {className}">
+<span
+	class="badge badge-{status} badge-{size} {className}"
+	data-ui="badge"
+	data-status={status}
+	data-size={size}
+>
 	{@render children?.()}
 </span>
 

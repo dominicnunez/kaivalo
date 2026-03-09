@@ -28,14 +28,10 @@ describe('ui components', () => {
 			children: snippet
 		});
 
-		const badge = container.querySelector('.badge-coming-soon.badge-sm');
-		if (!badge) {
-			throw new Error(
-				'Expected badge wrapper to render with requested classes'
-			);
-		}
-		expect(badge.className).toContain('badge-coming-soon');
-		expect(badge.className).toContain('badge-sm');
+		const badge = container.querySelector('[data-ui="badge"]');
+		expect(badge).not.toBeNull();
+		expect(badge?.getAttribute('data-status')).toBe('coming-soon');
+		expect(badge?.getAttribute('data-size')).toBe('sm');
 		expect(container.textContent).toContain('Rendered child');
 	});
 
@@ -120,7 +116,9 @@ describe('ui components', () => {
 		expect(normalizedAllowlistLink?.getAttribute('href')).toBe(
 			'https://kaivalo.com/services'
 		);
-		expect(unsafeRender.container.querySelector('div')).not.toBeNull();
+		expect(
+			unsafeRender.container.querySelector('[data-ui="card"]')
+		).not.toBeNull();
 	});
 
 	it('does not render card link anchors for unsafe relative href variants', () => {
@@ -158,7 +156,7 @@ describe('ui components', () => {
 		const root = container.firstElementChild;
 		expect(root).not.toBeNull();
 		expect(root?.className).toContain('custom-wrapper');
-		expect(root?.className).toContain('max-w-screen-xl');
+		expect(root?.getAttribute('data-size')).toBe('xl');
 		expect(container.textContent).toContain('Rendered child');
 	});
 });

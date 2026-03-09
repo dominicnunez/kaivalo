@@ -27,8 +27,10 @@ describe('@kaivalo/ui public api', () => {
 			children: snippet
 		});
 
-		const badge = container.querySelector('.badge-coming-soon.badge-sm');
+		const badge = container.querySelector('[data-ui="badge"]');
 		expect(badge).not.toBeNull();
+		expect(badge?.getAttribute('data-status')).toBe('coming-soon');
+		expect(badge?.getAttribute('data-size')).toBe('sm');
 		expect(container.textContent).toContain('Rendered child');
 	});
 
@@ -71,6 +73,6 @@ describe('@kaivalo/ui public api', () => {
 		const root = container.firstElementChild;
 		expect(root).not.toBeNull();
 		expect(root?.className).toContain('custom-wrapper');
-		expect(root?.className).toContain('max-w-screen-xl');
+		expect(root?.getAttribute('data-size')).toBe('xl');
 	});
 });

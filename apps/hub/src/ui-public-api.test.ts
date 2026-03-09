@@ -30,13 +30,15 @@ describe('ui public api', () => {
 
 		expect(buttonRender.container.querySelector('button')?.disabled).toBe(true);
 		expect(
-			badgeRender.container.querySelector('.badge-coming-soon')
-		).not.toBeNull();
+			badgeRender.container
+				.querySelector('[data-ui="badge"]')
+				?.getAttribute('data-status')
+		).toBe('coming-soon');
 		expect(cardRender.container.querySelector('a')?.getAttribute('href')).toBe(
 			'/services'
 		);
-		expect(containerRender.container.firstElementChild?.className).toContain(
-			'max-w-screen-lg'
-		);
+		expect(
+			containerRender.container.firstElementChild?.getAttribute('data-size')
+		).toBe('lg');
 	});
 });
