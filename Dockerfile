@@ -13,13 +13,7 @@ RUN npm ci --ignore-scripts
 COPY apps/hub apps/hub
 COPY packages/ui packages/ui
 
-RUN --mount=type=secret,id=workos_client_id,env=WORKOS_CLIENT_ID,required=true \
-    --mount=type=secret,id=workos_api_key,env=WORKOS_API_KEY,required=true \
-    --mount=type=secret,id=workos_redirect_uri,env=WORKOS_REDIRECT_URI,required=true \
-    --mount=type=secret,id=workos_cookie_password,env=WORKOS_COOKIE_PASSWORD,required=true \
-    --mount=type=secret,id=auth_error_signing_secret,env=AUTH_ERROR_SIGNING_SECRET,required=true \
-    --mount=type=secret,id=origin,env=ORIGIN,required=true \
-    npm --prefix apps/hub run build
+RUN HUB_BUILD_ALLOW_PLACEHOLDERS=true npm --prefix apps/hub run build
 RUN npm prune --omit=dev
 
 FROM node:24.14.0-bookworm-slim@sha256:b4687aef2571c632a1953695ce4d61d6462a7eda471fe6e272eebf0418f276ba AS runtime

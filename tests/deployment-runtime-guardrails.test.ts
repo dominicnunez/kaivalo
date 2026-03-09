@@ -403,24 +403,18 @@ describe('deployment runtime guardrails', () => {
 		);
 	});
 
-	it('uses the shared hub build env defaults instead of ad hoc Docker placeholders', () => {
+	it('uses the shared hub build env defaults for placeholder-safe image builds', () => {
 		const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
 		const buildEnv = getHubBuildEnv({ NODE_ENV: 'test' });
 
 		assert.match(dockerfile, /\bRUN npm ci --ignore-scripts\b/);
-		assert.match(dockerfile, /\bnpm --prefix apps\/hub run build\b/);
 		assert.match(
 			dockerfile,
-			/--mount=type=secret,id=workos_client_id,env=WORKOS_CLIENT_ID/
+			/\bRUN HUB_BUILD_ALLOW_PLACEHOLDERS=true npm --prefix apps\/hub run build\b/
 		);
-		assert.match(
-			dockerfile,
-			/--mount=type=secret,id=workos_api_key,env=WORKOS_API_KEY/
-		);
-		assert.match(
-			dockerfile,
-			/--mount=type=secret,id=auth_error_signing_secret,env=AUTH_ERROR_SIGNING_SECRET/
-		);
+		assert.doesNotMatch(dockerfile, /--mount=type=secret,id=workos_/);
+		assert.doesNotMatch(dockerfile, /--mount=type=secret,id=auth_error_/);
+		assert.doesNotMatch(dockerfile, /--mount=type=secret,id=origin/);
 		assert.ok(buildEnv.AUTH_ERROR_SIGNING_SECRET);
 		assert.ok(buildEnv.WORKOS_COOKIE_PASSWORD);
 		assert.strictEqual(
@@ -430,7 +424,7 @@ describe('deployment runtime guardrails', () => {
 		assert.strictEqual(buildEnv.ORIGIN, 'http://localhost:3100');
 	});
 
-	it('passes required auth configuration into the image build as secrets', () => {
+	it('keeps runtime auth secrets out of the image build job', () => {
 		const workflow = readFileSync(DEPLOY_WORKFLOW_PATH, 'utf8');
 		const buildStepMatch = workflow.match(
 			/- name: Build and push image[\s\S]*?(?=\n\s*- name: |\n\s{2}[a-z]+:\n|\n\}$)/
@@ -443,27 +437,10 @@ describe('deployment runtime guardrails', () => {
 
 		const buildStep = buildStepMatch[0];
 
-		assert.match(
-			buildStep,
-			/"workos_client_id=\$\{\{ secrets\.WORKOS_CLIENT_ID \}\}"/
-		);
-		assert.match(
-			buildStep,
-			/"workos_api_key=\$\{\{ secrets\.WORKOS_API_KEY \}\}"/
-		);
-		assert.match(
-			buildStep,
-			/"auth_error_signing_secret=\$\{\{ secrets\.AUTH_ERROR_SIGNING_SECRET \}\}"/
-		);
-		assert.match(buildStep, /"origin=\$\{\{ secrets\.ORIGIN \}\}"/);
-		assert.match(
-			buildStep,
-			/"workos_redirect_uri=\$\{\{ secrets\.WORKOS_REDIRECT_URI \}\}"/
-		);
-		assert.match(
-			buildStep,
-			/"workos_cookie_password=\$\{\{ secrets\.WORKOS_COOKIE_PASSWORD \}\}"/
-		);
+		assert.doesNotMatch(buildStep, /\n\s+secrets:\s*\|/);
+		assert.doesNotMatch(buildStep, /secrets\.WORKOS_/);
+		assert.doesNotMatch(buildStep, /secrets\.AUTH_ERROR_SIGNING_SECRET/);
+		assert.doesNotMatch(buildStep, /secrets\.ORIGIN/);
 		assert.doesNotMatch(
 			buildStep,
 			/\n\s+env:\n(?:\s+[A-Z0-9_]+: \$\{\{ secrets\.[A-Z0-9_]+ \}\}\n)+/
