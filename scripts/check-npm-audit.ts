@@ -15,6 +15,8 @@ const ALLOWLIST_PATH = resolve(
  * @typedef {{
  *   package: string;
  *   source: number;
+ *   severity: string;
+ *   title: string;
  *   path?: string;
  *   url?: string;
  *   reason?: string;
@@ -37,9 +39,76 @@ const ALLOWLIST_PATH = resolve(
  * @returns {AuditAllowlistEntry[]}
  */
 export function readAllowlist(filePath = ALLOWLIST_PATH) {
-	return /** @type {AuditAllowlistEntry[]} */ JSON.parse(
-		readFileSync(filePath, 'utf8')
-	);
+	const parsed = JSON.parse(readFileSync(filePath, 'utf8'));
+	if (!Array.isArray(parsed)) {
+		throw new Error('npm audit allowlist must be an array');
+	}
+
+	return parsed.map((entry, index) => validateAllowlistEntry(entry, index));
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} fieldName
+ * @param {number} entryIndex
+ * @returns {string}
+ */
+function readRequiredAllowlistString(value, fieldName, entryIndex) {
+	if (typeof value !== 'string' || value.trim() === '') {
+		throw new Error(
+			`npm audit allowlist entry ${entryIndex + 1} must include a non-empty ${fieldName}`
+		);
+	}
+
+	return value.trim();
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} fieldName
+ * @param {number} entryIndex
+ * @returns {string | undefined}
+ */
+function readOptionalAllowlistString(value, fieldName, entryIndex) {
+	if (value === undefined) {
+		return undefined;
+	}
+
+	return readRequiredAllowlistString(value, fieldName, entryIndex);
+}
+
+/**
+ * @param {unknown} entry
+ * @param {number} entryIndex
+ * @returns {AuditAllowlistEntry}
+ */
+function validateAllowlistEntry(entry, entryIndex) {
+	if (!entry || typeof entry !== 'object') {
+		throw new Error(
+			`npm audit allowlist entry ${entryIndex + 1} must be an object`
+		);
+	}
+
+	const record = /** @type {Record<string, unknown>} */ entry;
+	if (!Number.isInteger(record.source)) {
+		throw new Error(
+			`npm audit allowlist entry ${entryIndex + 1} must include an integer source`
+		);
+	}
+
+	return {
+		package: readRequiredAllowlistString(record.package, 'package', entryIndex),
+		source: record.source,
+		severity: readRequiredAllowlistString(
+			record.severity,
+			'severity',
+			entryIndex
+		).toLowerCase(),
+		title: readRequiredAllowlistString(record.title, 'title', entryIndex),
+		path: readOptionalAllowlistString(record.path, 'path', entryIndex),
+		url: readOptionalAllowlistString(record.url, 'url', entryIndex),
+		reason: readOptionalAllowlistString(record.reason, 'reason', entryIndex)
+	};
 }
 
 /**
@@ -132,6 +201,8 @@ function matchesAllowlist(advisory, allowlistEntry) {
 	return (
 		advisory.package === allowlistEntry.package &&
 		advisory.source === allowlistEntry.source &&
+		advisory.severity.toLowerCase() === allowlistEntry.severity &&
+		advisory.title === allowlistEntry.title &&
 		(allowlistEntry.path === undefined ||
 			advisory.path === allowlistEntry.path) &&
 		(allowlistEntry.url === undefined || advisory.url === allowlistEntry.url)
