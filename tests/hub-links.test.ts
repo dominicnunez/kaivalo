@@ -45,17 +45,21 @@ describe('hub links', () => {
 		);
 	});
 
-	it('exposes a valid mailto contact link', () => {
+	it('exposes navigable internal or trusted auth links', () => {
 		const hrefs = getAnchors(document).map(
 			(anchor) => anchor.getAttribute('href') ?? ''
 		);
-		const mailtoLink = hrefs.find((href) => href.startsWith('mailto:'));
+		const actionableLink = hrefs.find(
+			(href) =>
+				href === '/services' ||
+				href.startsWith('/auth/sign-in') ||
+				href.startsWith('/user_management/authorize') ||
+				href.startsWith('https://api.workos.com/user_management/authorize')
+		);
 
-		assert.ok(mailtoLink, 'Missing mailto link');
-		const email = mailtoLink.replace('mailto:', '');
 		assert.ok(
-			/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
-			`Invalid email format: ${email}`
+			actionableLink,
+			'Expected homepage to expose a services or sign-in action'
 		);
 	});
 

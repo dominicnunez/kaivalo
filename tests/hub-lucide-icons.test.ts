@@ -52,7 +52,7 @@ describe('hub auth and footer controls', () => {
 		assert.strictEqual(icon.getAttribute('aria-hidden'), 'true');
 	});
 
-	it('renders service cards and contact action with icon affordances', () => {
+	it('renders service cards with icon affordances and the shared footer', () => {
 		const servicesSection = document.getElementById('services');
 		assert.ok(servicesSection, 'Expected a services section');
 
@@ -73,17 +73,8 @@ describe('hub auth and footer controls', () => {
 			);
 		}
 
-		const controls = [...document.querySelectorAll('a, button')];
-		const contactLink = controls.find(
-			(control) =>
-				control.tagName.toLowerCase() === 'a' &&
-				control.getAttribute('href') === 'mailto:kaivalo@proton.me'
-		);
-		assert.ok(contactLink, 'Expected a footer contact mailto control');
-
-		const contactIcon = contactLink.querySelector('svg');
-		assert.ok(contactIcon, 'Expected contact control to render an icon SVG');
-		assert.strictEqual(contactIcon.getAttribute('aria-hidden'), 'true');
-		assert.match(contactLink.textContent ?? '', /contact/i);
+		const footer = document.querySelector('footer');
+		assert.ok(footer, 'Expected the shared footer to render');
+		assert.match(footer.textContent ?? '', /Kaivalo/);
 	});
 });

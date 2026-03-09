@@ -21,7 +21,7 @@ describe('ui package SSR markup', () => {
 		await preview?.stop();
 	});
 
-	it('renders a valid unauthenticated auth control and a contact control', () => {
+	it('renders a valid unauthenticated auth control and the shared footer mark', () => {
 		assert.strictEqual(homepage.statusCode, 200);
 
 		const controls = Array.from(document.querySelectorAll('a,button'));
@@ -68,15 +68,12 @@ describe('ui package SSR markup', () => {
 			);
 		}
 
-		const contactLink = controls.find(
-			(element) =>
-				element.tagName.toLowerCase() === 'a' &&
-				element.getAttribute('href') === 'mailto:kaivalo@proton.me' &&
-				/contact/i.test(element.textContent ?? '')
-		);
-		assert.ok(
-			contactLink,
-			'Expected a mailto contact control with a visible label'
+		const footer = document.querySelector('footer');
+		assert.ok(footer, 'Expected the shared footer to render');
+		assert.match(
+			footer.textContent ?? '',
+			/Kaivalo/,
+			'Expected the footer brand mark to be visible'
 		);
 	});
 });
