@@ -18,6 +18,8 @@ const DAILY_FULL_SUITE_WORKFLOW_PATH = path.join(
 	'daily-full-suite.yml'
 );
 const DOCKERFILE_PATH = path.join(ROOT, 'Dockerfile');
+const PRE_PUSH_HOOK_PATH = path.join(ROOT, '.husky', 'pre-push');
+const PACKAGE_JSON_PATH = path.join(ROOT, 'package.json');
 const DEPLOYABLE_REF_CONDITION =
 	"github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')";
 
@@ -266,6 +268,12 @@ function getRuntimeStageBuildCopies(dockerfile) {
 	return records;
 }
 
+function getPackageScripts() {
+	const packageJson = JSON.parse(readFileSync(PACKAGE_JSON_PATH, 'utf8'));
+	assert.ok(packageJson.scripts, 'package.json should define scripts');
+	return packageJson.scripts;
+}
+
 describe('deployment runtime guardrails', () => {
 	it('runs the fast verification lane on push and pull requests', () => {
 		const workflow = readFileSync(CI_WORKFLOW_PATH, 'utf8');
@@ -301,6 +309,22 @@ describe('deployment runtime guardrails', () => {
 		assert.strictEqual(setupNodeStep.with['node-version'], '24');
 		assert.strictEqual(setupNodeStep.with.cache, 'npm');
 		assert.ok(runCommands.includes('npm run test:full'));
+	});
+
+	it('keeps the pre-push hook on the fast verification lane', () => {
+		const hook = readFileSync(PRE_PUSH_HOOK_PATH, 'utf8');
+
+		assert.match(hook, /\bnpm run test:fast\b/);
+		assert.doesNotMatch(hook, /\bnpm run test:full\b/);
+	});
+
+	it('defines the fast and full verification scripts from the canonical lanes', () => {
+		const scripts = getPackageScripts();
+
+		assert.match(scripts.lint, /\beslint\b/);
+		assert.match(scripts['test:fast'], /\bnpm run lint\b/);
+		assert.match(scripts['test:fast'], /\bnpm run test:core\b/);
+		assert.match(scripts['test:full'], /\bnpm run test:fast\b/);
 	});
 
 	it('only builds and deploys from deployable refs', () => {
