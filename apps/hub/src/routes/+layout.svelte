@@ -52,9 +52,6 @@
 			>
 		</div>
 	{/if}
-
-	<!-- Nav removed — sign in lives in hero -->
-
 	<main>
 		{@render children()}
 	</main>
