@@ -125,6 +125,12 @@ describe('apps/hub/.env.example behavior', () => {
 		assert.match(content, /64 hex chars/i);
 		assert.match(content, /mandatory for production https origins/i);
 		assert.match(content, /TRUST_X_FORWARDED_PROTO=true/i);
+		assert.match(content, /strip or overwrite any inbound x-forwarded-proto/i);
+		assert.match(
+			runtimeEnvDoc,
+			/strip or overwrite inbound `x-forwarded-proto`/i
+		);
+		assert.match(runtimeEnvDoc, /right-most value/i);
 	});
 
 	it('keeps the production origin example aligned with runtime documentation', () => {

@@ -18,6 +18,7 @@ const CACHE_VARY_AUTHORIZATION_HEADER = 'Authorization';
 const FORWARDED_PROTO_HEADER = 'x-forwarded-proto';
 const HTTPS_PROTO = 'https';
 const HTTP_PROTO = 'http';
+const CACHE_PRESERVING_REVALIDATION_STATUS = 304;
 const ROOT_STATIC_ASSET_PATHS = new Set([
 	'/favicon.ico',
 	'/favicon.svg',
@@ -142,15 +143,22 @@ export function getTrustedForwardedProto(
 		return '';
 	}
 
-	const originalClientProto = hops[0];
+	const proxyControlledProto = hops[hops.length - 1];
 	if (
-		originalClientProto === HTTPS_PROTO ||
-		originalClientProto === HTTP_PROTO
+		proxyControlledProto === HTTPS_PROTO ||
+		proxyControlledProto === HTTP_PROTO
 	) {
-		return originalClientProto;
+		return proxyControlledProto;
 	}
 
 	return '';
+}
+
+function isCachePreservingStatus(statusCode: number): boolean {
+	return (
+		(statusCode >= 200 && statusCode < 300) ||
+		statusCode === CACHE_PRESERVING_REVALIDATION_STATUS
+	);
 }
 
 function isAuthRouteRequest(event: RequestEvent): boolean {
@@ -275,7 +283,7 @@ function appendVaryHeaders(headers: Headers, values: string[]): void {
 }
 
 function getDocumentCacheControl(response: Response): string {
-	if (response.status < 200 || response.status >= 300) {
+	if (!isCachePreservingStatus(response.status)) {
 		return SENSITIVE_DOCUMENT_CACHE_CONTROL;
 	}
 
@@ -325,13 +333,17 @@ export function getStaticAssetCacheControlForResponse({
 	if (!cacheControl) {
 		return null;
 	}
-	if (hasSetCookie || statusCode < 200 || statusCode >= 300) {
+	if (hasSetCookie || !isCachePreservingStatus(statusCode)) {
 		return null;
 	}
 
 	const mediaType = getResponseMediaType(contentType);
 	if (mediaType) {
 		return isStaticAssetMediaType(mediaType) ? cacheControl : null;
+	}
+
+	if (statusCode === CACHE_PRESERVING_REVALIDATION_STATUS) {
+		return cacheControl;
 	}
 
 	return isRootStaticAssetPath(pathname) ? cacheControl : null;

@@ -379,10 +379,10 @@ describe('node server proxy trust handling', () => {
 		assert.strictEqual(untrusted.ignoredForwardedProto, true);
 	});
 
-	it('uses the original client proto from the left side of comma-separated values', () => {
+	it('uses the proxy-controlled proto nearest the app for comma-separated values', () => {
 		const trustedHttpsHop = evaluateSecureRequest(
 			{
-				headers: { 'x-forwarded-proto': 'https, http' },
+				headers: { 'x-forwarded-proto': 'http, https' },
 				socket: { remoteAddress: '::ffff:127.0.0.1', encrypted: undefined }
 			},
 			true,
@@ -390,7 +390,7 @@ describe('node server proxy trust handling', () => {
 		);
 		const trustedHttpHop = evaluateSecureRequest(
 			{
-				headers: { 'x-forwarded-proto': 'http, https' },
+				headers: { 'x-forwarded-proto': 'https, http' },
 				socket: { remoteAddress: '::ffff:127.0.0.1', encrypted: undefined }
 			},
 			true,

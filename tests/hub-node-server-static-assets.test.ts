@@ -179,4 +179,28 @@ describe('node server static asset classification', () => {
 		assert.strictEqual(response.headers['cache-control'], undefined);
 		assert.strictEqual(response.body, '<svg />');
 	});
+
+	it('preserves static cache headers on 304 asset revalidation responses', async () => {
+		const { server } = createHubServer({
+			handler: (_req, res) => {
+				res.writeHead(304);
+				res.end();
+			},
+			env: baseEnv
+		});
+		servers.push(server);
+		const port = await listenOnEphemeralPort(server);
+
+		const response = await httpGet(
+			port,
+			'/_app/immutable/chunks/index.abc123.js'
+		);
+
+		assert.strictEqual(response.statusCode, 304);
+		assert.strictEqual(
+			response.headers['cache-control'],
+			'public, max-age=31536000, immutable'
+		);
+		assert.strictEqual(response.body, '');
+	});
 });

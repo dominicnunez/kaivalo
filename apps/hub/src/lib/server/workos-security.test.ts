@@ -78,6 +78,13 @@ describe('static asset security policy', () => {
 		).toBeNull();
 		expect(
 			getStaticAssetCacheControlForResponse({
+				pathname: '/_app/immutable/chunks/index.abc123.js',
+				statusCode: 304,
+				contentType: null
+			})
+		).toBe('public, max-age=31536000, immutable');
+		expect(
+			getStaticAssetCacheControlForResponse({
 				pathname: '/favicon.ico',
 				statusCode: 200,
 				contentType: ''
@@ -162,12 +169,37 @@ describe('workos environment protocols', () => {
 });
 
 describe('trusted forwarded proto parsing', () => {
-	it('uses the original client proto from the left side of comma-separated values', () => {
-		expect(getTrustedForwardedProto('https, http')).toBe('https');
-		expect(getTrustedForwardedProto('http, https')).toBe('http');
+	it('uses the proxy-controlled proto nearest the app for comma-separated values', () => {
+		expect(getTrustedForwardedProto('https, http')).toBe('http');
+		expect(getTrustedForwardedProto('http, https')).toBe('https');
 	});
 
 	it('rejects unsupported trusted proxy proto values', () => {
-		expect(getTrustedForwardedProto('ws, https')).toBe('');
+		expect(getTrustedForwardedProto('ws')).toBe('');
+		expect(getTrustedForwardedProto('https, ws')).toBe('');
+	});
+});
+
+describe('document revalidation caching', () => {
+	it('keeps public document caching on 304 responses', async () => {
+		const handle = createSecurityHeadersHandle();
+		const response = await handle({
+			event: {
+				request: new Request('https://kaivalo.test/', {
+					method: 'GET',
+					headers: { Accept: 'text/html' }
+				}),
+				url: new URL('https://kaivalo.test/')
+			} as never,
+			resolve: async () =>
+				new Response(null, {
+					status: 304,
+					headers: { 'Content-Type': 'text/html; charset=utf-8' }
+				})
+		});
+
+		expect(response.headers.get('Cache-Control')).toBe(
+			'public, max-age=300, stale-while-revalidate=60'
+		);
 	});
 });

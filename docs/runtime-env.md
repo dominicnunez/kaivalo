@@ -34,11 +34,13 @@ For a development-oriented starting point, see `apps/hub/.env.example`.
 
 - `TRUST_X_FORWARDED_PROTO`
   Set to `true` only when TLS is terminated by a trusted proxy and forwarded proto headers should be honored.
+  Configure that proxy to strip or overwrite inbound `x-forwarded-proto`
+  before forwarding requests to the app.
 
 - `TRUSTED_PROXY_IPS`
   Comma-separated proxy IPs that are allowed to provide `x-forwarded-proto`.
-  When the header contains multiple comma-separated values, the app uses the
-  left-most original-client protocol.
+  If the header still contains multiple comma-separated values, the app uses the
+  proxy-controlled hop nearest the app, which is the right-most value.
   Required when `TRUST_X_FORWARDED_PROTO=true`.
 
 ## Server Binding Variables
