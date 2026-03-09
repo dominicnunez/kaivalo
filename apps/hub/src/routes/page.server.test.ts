@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { getMarketingServices } from '$lib/services/registry.ts';
 
 const { mockEnv } = vi.hoisted(() => ({
 	mockEnv: {
@@ -33,7 +32,18 @@ describe('home page load', () => {
 					twitterCard: string;
 				};
 				currentYear: number;
-				marketingServices: ReturnType<typeof getMarketingServices>;
+				marketingServices: Array<{
+					id: string;
+					name: string;
+					tagline: string;
+					description: string;
+					icon: string;
+					lifecycle: string;
+					marketingVisible: boolean;
+					launcherVisible: boolean;
+					enabled: boolean;
+					appUrl: string;
+				}>;
 			};
 
 			expect(result.meta).toEqual({
@@ -46,9 +56,33 @@ describe('home page load', () => {
 				twitterCard: 'summary_large_image'
 			});
 			expect(result.currentYear).toBe(2030);
-			expect(result.marketingServices.map((service) => service.id)).toEqual(
-				getMarketingServices().map((service) => service.id)
-			);
+			expect(result.marketingServices).toEqual([
+				{
+					id: 'sweep',
+					name: 'Sweep',
+					tagline: 'Stay on schedule',
+					description: 'Smart scheduling for chimney professionals.',
+					icon: 'calendar',
+					lifecycle: 'active',
+					marketingVisible: true,
+					launcherVisible: true,
+					enabled: true,
+					appUrl: 'https://sweep.kaivalo.com'
+				},
+				{
+					id: 'podstudio',
+					name: 'PodStudio',
+					tagline: 'Podcast management',
+					description:
+						'Equipment tracking and session scheduling for podcast studios.',
+					icon: 'mic',
+					lifecycle: 'planned',
+					marketingVisible: true,
+					launcherVisible: true,
+					enabled: false,
+					appUrl: 'https://podcast.kaivalo.com'
+				}
+			]);
 		} finally {
 			vi.useRealTimers();
 		}
