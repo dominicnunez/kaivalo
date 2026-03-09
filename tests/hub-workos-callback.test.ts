@@ -12,7 +12,7 @@ import {
 import { isHttpError, isRedirect } from '@sveltejs/kit';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 
-const cookiePassword = 'ab'.repeat(32);
+const authErrorSigningSecret = 'cd'.repeat(32);
 const expectedOrigin = 'https://kaivalo.test';
 
 type CallbackHandlerOptions = Parameters<
@@ -85,7 +85,7 @@ describe('WorkOS Auth Callback Route', () => {
 				handleCallback: () => async () => expectedResponse,
 				isRedirect: () => false,
 				isHttpError: () => false,
-				cookiePassword
+				authErrorSigningSecret
 			});
 
 			const result = await handler(createEvent());
@@ -98,7 +98,7 @@ describe('WorkOS Auth Callback Route', () => {
 					Response.redirect('https://kaivalo.test/account?from=auth#done', 303),
 				isRedirect,
 				isHttpError,
-				cookiePassword
+				authErrorSigningSecret
 			});
 
 			const result = await handler(createEvent());
@@ -115,7 +115,7 @@ describe('WorkOS Auth Callback Route', () => {
 					Response.redirect('https://kaivalo.test/services', 303),
 				isRedirect,
 				isHttpError,
-				cookiePassword
+				authErrorSigningSecret
 			});
 
 			const result = await handler(createEvent());
@@ -129,7 +129,7 @@ describe('WorkOS Auth Callback Route', () => {
 					Response.redirect('https://kaivalo.test/services?welcome=1', 303),
 				isRedirect,
 				isHttpError,
-				cookiePassword
+				authErrorSigningSecret
 			});
 
 			const result = await handler(createEvent());
@@ -143,7 +143,7 @@ describe('WorkOS Auth Callback Route', () => {
 					Response.redirect('https://kaivalo.test/services', 303),
 				isRedirect,
 				isHttpError,
-				cookiePassword
+				authErrorSigningSecret
 			});
 
 			const result = await handler(
@@ -160,7 +160,7 @@ describe('WorkOS Auth Callback Route', () => {
 					Response.redirect('https://evil.test/phish', 303),
 				isRedirect,
 				isHttpError,
-				cookiePassword,
+				authErrorSigningSecret,
 				logError: (...args) => logs.push(args)
 			});
 
@@ -189,7 +189,7 @@ describe('WorkOS Auth Callback Route', () => {
 					Response.redirect('https://evil.test/phish', 303),
 				isRedirect,
 				isHttpError,
-				cookiePassword,
+				authErrorSigningSecret,
 				logError: (...args) => logs.push(args)
 			});
 
@@ -212,7 +212,7 @@ describe('WorkOS Auth Callback Route', () => {
 					Response.redirect('https://kaivalo.test/%2F%2Fevil.test/phish', 303),
 				isRedirect,
 				isHttpError,
-				cookiePassword,
+				authErrorSigningSecret,
 				logError: (...args) => logs.push(args)
 			});
 
@@ -236,7 +236,7 @@ describe('WorkOS Auth Callback Route', () => {
 				},
 				isRedirect: (value) => value === redirectErr,
 				isHttpError: () => false,
-				cookiePassword
+				authErrorSigningSecret
 			});
 
 			try {
@@ -258,7 +258,7 @@ describe('WorkOS Auth Callback Route', () => {
 				},
 				isRedirect: (value) => value === redirectErr,
 				isHttpError: () => false,
-				cookiePassword
+				authErrorSigningSecret
 			});
 
 			await assert.rejects(
@@ -284,7 +284,7 @@ describe('WorkOS Auth Callback Route', () => {
 				},
 				isRedirect: (value) => value === redirectErr,
 				isHttpError: () => false,
-				cookiePassword,
+				authErrorSigningSecret,
 				logError: (...args) => logs.push(args)
 			});
 
@@ -307,7 +307,7 @@ describe('WorkOS Auth Callback Route', () => {
 				},
 				isRedirect: () => false,
 				isHttpError: (value) => value === httpErr,
-				cookiePassword
+				authErrorSigningSecret
 			});
 
 			try {
@@ -326,7 +326,7 @@ describe('WorkOS Auth Callback Route', () => {
 				},
 				isRedirect: () => false,
 				isHttpError: () => false,
-				cookiePassword,
+				authErrorSigningSecret,
 				logError: (...args) => logs.push(args)
 			});
 
@@ -357,7 +357,7 @@ describe('WorkOS Auth Callback Route', () => {
 					assert.ok(location.searchParams.has(AUTH_ERROR_SIGNATURE_QUERY_NAME));
 					assert.deepStrictEqual(
 						readVerifiedAuthError(location.searchParams, {
-							secret: cookiePassword,
+							secret: authErrorSigningSecret,
 							now:
 								Number(
 									location.searchParams.get(AUTH_ERROR_TIMESTAMP_QUERY_NAME)
@@ -410,7 +410,7 @@ describe('WorkOS Auth Callback Route', () => {
 				},
 				isRedirect: () => false,
 				isHttpError: () => false,
-				cookiePassword,
+				authErrorSigningSecret,
 				logError: (...args) => logs.push(args)
 			});
 
@@ -436,7 +436,7 @@ describe('WorkOS Auth Callback Route', () => {
 				},
 				isRedirect: () => false,
 				isHttpError: () => false,
-				cookiePassword,
+				authErrorSigningSecret,
 				logError: (...args) => logs.push(args)
 			});
 
@@ -472,7 +472,7 @@ describe('WorkOS Auth Callback Route', () => {
 				},
 				isRedirect: () => false,
 				isHttpError: () => false,
-				cookiePassword
+				authErrorSigningSecret
 			});
 
 			await assert.rejects(
@@ -498,7 +498,7 @@ describe('WorkOS Auth Callback Route', () => {
 				},
 				isRedirect: () => false,
 				isHttpError: () => false,
-				cookiePassword
+				authErrorSigningSecret
 			});
 
 			await assert.rejects(
@@ -527,7 +527,7 @@ describe('WorkOS Auth Callback Route', () => {
 				},
 				isRedirect: () => false,
 				isHttpError: () => false,
-				cookiePassword,
+				authErrorSigningSecret,
 				logError: (...args) => logs.push(args)
 			});
 
@@ -556,7 +556,7 @@ describe('WorkOS Auth Callback Route', () => {
 				},
 				isRedirect: () => false,
 				isHttpError: () => false,
-				cookiePassword,
+				authErrorSigningSecret,
 				logError: (...args) => logs.push(args)
 			});
 
