@@ -112,6 +112,20 @@ function validateAllowlistEntry(entry, entryIndex) {
 }
 
 /**
+ * @param {unknown} value
+ * @param {string} fallback
+ * @returns {string}
+ */
+function readSeverity(value, fallback = 'unknown') {
+	if (typeof value !== 'string') {
+		return fallback;
+	}
+
+	const normalized = value.trim().toLowerCase();
+	return normalized === '' ? fallback : normalized;
+}
+
+/**
  * @param {unknown} report
  * @returns {AuditAdvisory[]}
  */
@@ -133,8 +147,8 @@ export function collectAuditAdvisories(report) {
 		}
 
 		const severity =
-			'severity' in vulnerability && typeof vulnerability.severity === 'string'
-				? vulnerability.severity
+			'severity' in vulnerability
+				? readSeverity(vulnerability.severity)
 				: 'unknown';
 		const nodes =
 			'nodes' in vulnerability && Array.isArray(vulnerability.nodes)
@@ -164,12 +178,14 @@ export function collectAuditAdvisories(report) {
 					: packageName;
 			const advisoryUrl =
 				'url' in item && typeof item.url === 'string' ? item.url : undefined;
+			const advisorySeverity =
+				'severity' in item ? readSeverity(item.severity, severity) : severity;
 
 			if (nodes.length === 0) {
 				advisories.push({
 					package: advisoryPackage,
 					source: item.source,
-					severity,
+					severity: advisorySeverity,
 					title: item.title,
 					url: advisoryUrl
 				});
@@ -180,7 +196,7 @@ export function collectAuditAdvisories(report) {
 				advisories.push({
 					package: advisoryPackage,
 					source: item.source,
-					severity,
+					severity: advisorySeverity,
 					title: item.title,
 					url: advisoryUrl,
 					path

@@ -49,6 +49,52 @@ describe('npm audit gate', () => {
 		]);
 	});
 
+	it('preserves advisory-level severity for mixed-severity vulnerabilities', () => {
+		const advisories = collectAuditAdvisories({
+			vulnerabilities: {
+				vite: {
+					severity: 'high',
+					nodes: ['node_modules/vite'],
+					via: [
+						{
+							source: 1100001,
+							name: 'esbuild',
+							severity: 'moderate',
+							title: 'esbuild advisory',
+							url: 'https://github.com/advisories/GHSA-esbuild'
+						},
+						{
+							source: 1100002,
+							name: 'vite',
+							severity: 'low',
+							title: 'vite advisory',
+							url: 'https://github.com/advisories/GHSA-vite'
+						}
+					]
+				}
+			}
+		});
+
+		assert.deepStrictEqual(advisories, [
+			{
+				package: 'esbuild',
+				source: 1100001,
+				severity: 'moderate',
+				title: 'esbuild advisory',
+				url: 'https://github.com/advisories/GHSA-esbuild',
+				path: 'node_modules/vite'
+			},
+			{
+				package: 'vite',
+				source: 1100002,
+				severity: 'low',
+				title: 'vite advisory',
+				url: 'https://github.com/advisories/GHSA-vite',
+				path: 'node_modules/vite'
+			}
+		]);
+	});
+
 	it('fails only on advisories missing from the allowlist', () => {
 		const advisories = [
 			{
