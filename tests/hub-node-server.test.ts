@@ -790,4 +790,41 @@ describe('node server lifecycle', () => {
 			server?.emit('close');
 		}
 	});
+
+	it('trims HOST before binding the server', async () => {
+		const originalListen = http.Server.prototype.listen;
+		let server = null;
+		let capturedHost;
+
+		http.Server.prototype.listen = function listen(port, host) {
+			void port;
+			capturedHost = host;
+			process.nextTick(() => {
+				this.emit('listening');
+			});
+			return this;
+		};
+
+		try {
+			server = await startHubServer({
+				handler: (_req, res) => res.end('ok'),
+				env: {
+					...baseEnv,
+					HOST: ' 127.0.0.1 ',
+					PORT: undefined
+				},
+				logger: {
+					log: () => {},
+					warn: () => {},
+					error: () => {}
+				}
+			});
+
+			assert.ok(server);
+			assert.strictEqual(capturedHost, '127.0.0.1');
+		} finally {
+			http.Server.prototype.listen = originalListen;
+			server?.emit('close');
+		}
+	});
 });

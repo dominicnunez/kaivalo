@@ -51,6 +51,38 @@ function startWithFatalCapture(env) {
 }
 
 describe('node server port validation', () => {
+	it('reports blank HOST values through startup fatal handling', async () => {
+		const { server, fatalEvents } = await startWithFatalCapture({
+			...baseEnv,
+			HOST: '   '
+		});
+
+		assert.strictEqual(server, null);
+		assert.strictEqual(fatalEvents.length, 1);
+		assert.strictEqual(fatalEvents[0].reason, 'startup-error');
+		assert.strictEqual(fatalEvents[0].exitCode, 1);
+		assert.strictEqual(
+			fatalEvents[0].error?.message,
+			'HOST must be a valid IP address or hostname'
+		);
+	});
+
+	it('reports malformed HOST values through startup fatal handling', async () => {
+		const { server, fatalEvents } = await startWithFatalCapture({
+			...baseEnv,
+			HOST: '127.0.0.1:3100'
+		});
+
+		assert.strictEqual(server, null);
+		assert.strictEqual(fatalEvents.length, 1);
+		assert.strictEqual(fatalEvents[0].reason, 'startup-error');
+		assert.strictEqual(fatalEvents[0].exitCode, 1);
+		assert.strictEqual(
+			fatalEvents[0].error?.message,
+			'HOST must be a valid IP address or hostname'
+		);
+	});
+
 	it('reports invalid out-of-range PORT values through startup fatal handling', async () => {
 		const { server, logs, fatalEvents } = await startWithFatalCapture({
 			...baseEnv,

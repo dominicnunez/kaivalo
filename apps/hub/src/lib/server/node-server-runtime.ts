@@ -1,5 +1,5 @@
 import http from 'node:http';
-import type net from 'node:net';
+import { isIP, type Socket } from 'node:net';
 import {
 	getErrorDiagnostics,
 	type ErrorDiagnostics
@@ -31,6 +31,8 @@ const PRODUCTION_NODE_ENV = 'production';
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
 const MIN_PORT = 1;
 const MAX_PORT = 65_535;
+const MAX_HOST_LENGTH = 253;
+const HOSTNAME_LABEL_PATTERN = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/i;
 
 type Env = Record<string, string | undefined>;
 
@@ -151,6 +153,37 @@ function parsePositiveIntegerEnvValue(
 	return parsed;
 }
 
+function isValidHostname(host: string): boolean {
+	if (
+		host.length === 0 ||
+		host.length > MAX_HOST_LENGTH ||
+		host.startsWith('.') ||
+		host.endsWith('.') ||
+		host.includes('..')
+	) {
+		return false;
+	}
+
+	return host.split('.').every((label) => HOSTNAME_LABEL_PATTERN.test(label));
+}
+
+function parseHost(hostValue: string | undefined): string {
+	if (hostValue === undefined) {
+		return DEFAULT_HOST;
+	}
+
+	const normalized = hostValue.trim();
+	if (normalized === '') {
+		throw new Error('HOST must be a valid IP address or hostname');
+	}
+
+	if (isIP(normalized) !== 0 || isValidHostname(normalized)) {
+		return normalized;
+	}
+
+	throw new Error('HOST must be a valid IP address or hostname');
+}
+
 function getListeningLogMessage(env: Env, host: string, port: number): string {
 	const internalOrigin = `http://${host}:${port}`;
 	const publicOrigin = getValidatedWorkosEnv(env).origin;
@@ -180,7 +213,7 @@ export function createHubServer(options: HubServerOptions): {
 
 	let activeRequests = 0;
 	let shuttingDown = false;
-	const activeSockets = new Set<net.Socket>();
+	const activeSockets = new Set<Socket>();
 	const forwardedProtoWarningKeys = new Map<string, number>();
 	let shutdownPromise: Promise<number> | null = null;
 	let resolveShutdown: ((exitCode: number) => void) | null = null;
@@ -483,7 +516,7 @@ export function startHubServer(
 	options: StartHubServerOptions
 ): Promise<http.Server | null> {
 	const env = options.env ?? process.env;
-	const host = env.HOST || DEFAULT_HOST;
+	let host = DEFAULT_HOST;
 	const configuredPort =
 		env.PORT === undefined || env.PORT.trim() === ''
 			? undefined
@@ -535,6 +568,10 @@ export function startHubServer(
 
 	return new Promise((resolve) => {
 		try {
+			if (env.HOST !== undefined) {
+				host = env.HOST.trim();
+			}
+			host = parseHost(env.HOST);
 			port = parsePort(env.PORT);
 			({ server, beginShutdown } = createHubServer({
 				handler: options.handler,
