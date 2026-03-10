@@ -10,6 +10,16 @@ const HUB_DIR = join(ROOT, 'apps', 'hub');
 const BUILD_DIR = join(HUB_DIR, 'build');
 const BUILD_ENTRY = join(BUILD_DIR, 'index.js');
 
+type BuildFreshnessOptions = {
+	buildDir: string;
+	buildEntry: string;
+	inputPaths: string[];
+};
+
+type EnsureBuildFreshOptions = BuildFreshnessOptions & {
+	runBuild: () => void;
+};
+
 export function getHubBuildInputPaths() {
 	return [
 		join(ROOT, 'package.json'),
@@ -31,44 +41,57 @@ export function getHubRuntimeServerBuildPaths() {
 	);
 }
 
-let didCheckBuild = false;
-let shouldBuildCache = false;
-
-function shouldRebuildOncePerProcess() {
-	if (didCheckBuild) {
-		return shouldBuildCache;
-	}
-
-	didCheckBuild = true;
-
-	if (!existsSync(BUILD_DIR) || !existsSync(BUILD_ENTRY)) {
-		shouldBuildCache = true;
-		return shouldBuildCache;
+export function shouldBuildBeRegenerated({
+	buildDir,
+	buildEntry,
+	inputPaths
+}: BuildFreshnessOptions) {
+	if (!existsSync(buildDir) || !existsSync(buildEntry)) {
+		return true;
 	}
 
 	clearNewestMtimeCache();
-	const buildTimeMs = statSync(BUILD_ENTRY).mtimeMs;
+	const buildTimeMs = statSync(buildEntry).mtimeMs;
 	const newestInputTimeMs = Math.max(
-		...getHubBuildInputPaths().map((entryPath) => getNewestMtimeMs(entryPath))
+		...inputPaths.map((entryPath) => getNewestMtimeMs(entryPath))
 	);
-	shouldBuildCache = newestInputTimeMs > buildTimeMs;
-	return shouldBuildCache;
+	return newestInputTimeMs > buildTimeMs;
 }
 
 export function ensureHubBuild() {
-	if (!shouldRebuildOncePerProcess()) {
-		return;
+	return ensureBuildFresh({
+		buildDir: BUILD_DIR,
+		buildEntry: BUILD_ENTRY,
+		inputPaths: getHubBuildInputPaths(),
+		runBuild: () =>
+			execSync('npm run build 2>&1', {
+				cwd: HUB_DIR,
+				timeout: 180000,
+				encoding: 'utf8',
+				env: getHubBuildEnv({
+					...process.env,
+					NODE_ENV: 'test'
+				})
+			})
+	});
+}
+
+export function ensureBuildFresh({
+	buildDir,
+	buildEntry,
+	inputPaths,
+	runBuild
+}: EnsureBuildFreshOptions) {
+	if (
+		!shouldBuildBeRegenerated({
+			buildDir,
+			buildEntry,
+			inputPaths
+		})
+	) {
+		return false;
 	}
 
-	execSync('npm run build 2>&1', {
-		cwd: HUB_DIR,
-		timeout: 180000,
-		encoding: 'utf8',
-		env: getHubBuildEnv({
-			...process.env,
-			NODE_ENV: 'test'
-		})
-	});
-
-	shouldBuildCache = false;
+	runBuild();
+	return true;
 }
