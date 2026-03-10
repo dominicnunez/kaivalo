@@ -210,3 +210,18 @@ That means trusted proxied HTTPS requests still receive HSTS in the deployed ser
 `getAvatarRateLimitKey()` delegates to `getTrustedClientAddress()`, which only consults the forwarded chain when the direct peer IP is itself in `TRUSTED_PROXY_IPS`, canonicalizes every hop, rejects malformed chains entirely, and then walks the chain from the right to strip only trusted proxies.
 That means the absence of `ADDRESS_HEADER` or `XFF_DEPTH` does not create the spoofable bucket-key path described in the audit, because this route already reconstructs the client address from the trusted proxy allowlist instead of trusting the left-most forwarded hop.
 When forwarded data is malformed, the code falls back to the shared empty-key bucket rather than accepting an attacker-chosen client address.
+
+### Runtime build packaging leaves stale server helpers in deploy artifacts
+
+**Location:** `apps/hub/scripts/prepare-runtime.ts:9` — runtime helper copy step
+
+**Reason:** The audit stopped at `prepare-runtime.ts` and missed the surrounding build behavior.
+`npm --prefix apps/hub run build` runs `vite build` before `node scripts/prepare-runtime.ts`, and the real build clears `apps/hub/build` before the runtime helper copy step.
+Seeding `apps/hub/build/runtime/server/__audit_stale_helper__.ts` and then running `HUB_BUILD_ALLOW_PLACEHOLDERS=true npm --prefix apps/hub run build` removed the stale file, so the obsolete helper does not persist into the artifact later copied by `Dockerfile`.
+
+### Build freshness coverage misses stale runtime artifact cleanup
+
+**Location:** `tests/hub-build-freshness.test.ts:14` — build freshness regression coverage
+
+**Reason:** The current test does not seed an obsolete runtime helper, but the claimed regression path depends on a packaging bug that does not occur in the current build.
+Because the real hub build clears `apps/hub/build` before `prepare-runtime.ts` copies the allowlisted runtime files, the stale-helper scenario described in the audit could not be reproduced and is not an uncovered behavior gap in this test suite.
