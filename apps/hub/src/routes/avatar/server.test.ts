@@ -119,6 +119,44 @@ describe('avatar proxy route', () => {
 		expect(response.headers.get('cache-control')).toBe('private, no-store');
 	});
 
+	it.each([
+		{
+			name: 'preserves a zero browser lifetime instead of widening it from s-maxage',
+			upstreamCacheControl: 'public, max-age=0, s-maxage=600',
+			expectedCacheControl: 'public, max-age=0'
+		},
+		{
+			name: 'does not synthesize browser caching from a shared-cache-only lifetime',
+			upstreamCacheControl: 'public, s-maxage=600',
+			expectedCacheControl: 'private, no-store'
+		}
+	])('$name', async ({ upstreamCacheControl, expectedCacheControl }) => {
+		const fetch = vi.fn(
+			async () =>
+				new Response('image-bytes', {
+					status: 200,
+					headers: {
+						'cache-control': upstreamCacheControl,
+						'content-type': 'image/png',
+						'content-length': '11'
+					}
+				})
+		);
+
+		const response = await GET({
+			request: new Request(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			url: new URL(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			fetch
+		} as never);
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('cache-control')).toBe(expectedCacheControl);
+	});
+
 	it('preserves stricter upstream cache lifetimes instead of widening them', async () => {
 		const fetch = vi.fn(
 			async () =>

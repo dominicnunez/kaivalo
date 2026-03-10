@@ -194,16 +194,14 @@ function buildAvatarCacheControl(upstream: Response): string {
 		return 'public, max-age=0, must-revalidate';
 	}
 
-	const upstreamMaxAge =
-		getIntegerDirective(directives, 's-maxage') ??
-		getIntegerDirective(directives, 'max-age');
-	if (upstreamMaxAge === null) {
+	const browserMaxAge = getIntegerDirective(directives, 'max-age');
+	if (browserMaxAge === null) {
 		return PRIVATE_NO_STORE_CACHE_CONTROL;
 	}
 
 	const cacheDirectives = [
 		AVATAR_CACHE_CONTROL,
-		`max-age=${Math.min(upstreamMaxAge, AVATAR_CACHE_MAX_AGE_SECONDS)}`
+		`max-age=${Math.min(browserMaxAge, AVATAR_CACHE_MAX_AGE_SECONDS)}`
 	];
 	const staleWhileRevalidate = getIntegerDirective(
 		directives,
