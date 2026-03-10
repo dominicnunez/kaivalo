@@ -278,4 +278,62 @@ describe('auth sign-in route', () => {
 			);
 		}
 	});
+
+	it('treats sec-fetch-dest=document failures as browser navigations', async () => {
+		mockGetSignInUrl.mockRejectedValue(new Error('upstream unavailable'));
+
+		const { GET } = await import('./+server');
+
+		try {
+			await GET(
+				createEvent({
+					accept: 'text/html',
+					'sec-fetch-dest': 'document'
+				})
+			);
+			throw new Error('expected GET to redirect');
+		} catch (thrown) {
+			expect(thrown).toMatchObject({
+				status: 303,
+				location: expect.any(String)
+			});
+
+			if (
+				typeof thrown !== 'object' ||
+				thrown === null ||
+				!('location' in thrown) ||
+				typeof thrown.location !== 'string'
+			) {
+				throw thrown;
+			}
+
+			const location = new URL(thrown.location, mockEnv.ORIGIN);
+			expect(location.pathname).toBe('/');
+			expect(location.searchParams.get(AUTH_ERROR_QUERY_NAME)).toBe(
+				AUTH_ERROR_QUERY_VALUE
+			);
+			expect(
+				readVerifiedAuthError(location.searchParams, {
+					secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
+					now: Number(
+						location.searchParams.get(AUTH_ERROR_TIMESTAMP_QUERY_NAME)
+					)
+				})
+			).toEqual({
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
+				incidentId: expect.stringMatching(/^authsign_/)
+			});
+			expect(errorSpy).toHaveBeenCalledOnce();
+			expect(errorSpy).toHaveBeenLastCalledWith(
+				expect.any(String),
+				expect.objectContaining({
+					errorCode: 'AUTH_SIGN_IN_UNEXPECTED_FAILURE',
+					pathname: '/auth/sign-in',
+					method: 'GET',
+					incidentId: expect.stringMatching(/^authsign_/)
+				})
+			);
+		}
+	});
 });
