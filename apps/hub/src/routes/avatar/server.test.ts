@@ -747,6 +747,57 @@ describe('avatar proxy route', () => {
 		expect(fetch).toHaveBeenCalledTimes(2);
 	});
 
+	it('keeps using the trusted proxy configuration captured when the handler is created', async () => {
+		const GET = _createAvatarGetHandler({
+			trustedProxyIps: ['203.0.113.1', '203.0.113.2'],
+			rateLimiter: createSlidingWindowRateLimiter({
+				limit: 1,
+				windowMs: 60_000,
+				maxEntries: 128,
+				now: () => 1_000
+			})
+		});
+		const fetch = vi.fn(
+			async () =>
+				new Response('image-bytes', {
+					status: 200,
+					headers: {
+						'cache-control': 'public, max-age=60',
+						'content-type': 'image/png',
+						'content-length': '11'
+					}
+				})
+		);
+		const createEvent = (forwardedFor: string) =>
+			({
+				request: new Request(
+					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1',
+					{
+						headers: {
+							'x-forwarded-for': forwardedFor
+						}
+					}
+				),
+				url: new URL(
+					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+				),
+				fetch,
+				getClientAddress: () => '203.0.113.2'
+			}) as never;
+
+		expect((await GET(createEvent('198.51.100.10, 203.0.113.1'))).status).toBe(
+			200
+		);
+
+		vi.stubEnv('TRUST_X_FORWARDED_PROTO', 'true');
+		vi.stubEnv('TRUSTED_PROXY_IPS', ' ');
+
+		expect((await GET(createEvent('198.51.100.11, 203.0.113.1'))).status).toBe(
+			200
+		);
+		expect(fetch).toHaveBeenCalledTimes(2);
+	});
+
 	it.each([
 		{
 			name: 'the request has no client address resolver',

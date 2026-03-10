@@ -327,17 +327,15 @@ async function readAvatarBody(upstream: Response): Promise<Uint8Array> {
 	return body.subarray(0, totalBytes);
 }
 
-function getAvatarRateLimitKey(event: Parameters<RequestHandler>[0]): string {
+function getAvatarRateLimitKey(
+	event: Parameters<RequestHandler>[0],
+	trustedProxyIps: readonly string[]
+): string {
 	if (typeof event.getClientAddress !== 'function') {
 		return '';
 	}
 
 	try {
-		const { trustedProxyIps } = getProxyTrustConfiguration(
-			env,
-			env.ORIGIN?.trim() || 'http://localhost'
-		);
-
 		return getTrustedClientAddress({
 			directClientAddress: event.getClientAddress(),
 			forwardedForHeader: event.request.headers.get('x-forwarded-for'),
@@ -350,15 +348,30 @@ function getAvatarRateLimitKey(event: Parameters<RequestHandler>[0]): string {
 
 type CreateAvatarGetHandlerOptions = {
 	rateLimiter?: SlidingWindowRateLimiter;
+	trustedProxyIps?: readonly string[];
 };
 
 export function _createAvatarGetHandler({
+	trustedProxyIps,
 	rateLimiter = createSlidingWindowRateLimiter({
 		limit: AVATAR_RATE_LIMIT_MAX_REQUESTS,
 		windowMs: AVATAR_RATE_LIMIT_WINDOW_MS,
 		maxEntries: AVATAR_RATE_LIMIT_MAX_ENTRIES
 	})
 }: CreateAvatarGetHandlerOptions = {}): RequestHandler {
+	const configuredTrustedProxyIps =
+		trustedProxyIps ??
+		(() => {
+			try {
+				return getProxyTrustConfiguration(
+					env,
+					env.ORIGIN?.trim() || 'http://localhost'
+				).trustedProxyIps;
+			} catch {
+				return [];
+			}
+		})();
+
 	return async (event) => {
 		const { request, url, fetch } = event;
 		const source = sanitizeAvatarUrl(url.searchParams.get('source'));
@@ -366,7 +379,10 @@ export function _createAvatarGetHandler({
 			return createGatewayErrorResponse(404, 'Not found');
 		}
 
-		const rateLimitKey = getAvatarRateLimitKey(event);
+		const rateLimitKey = getAvatarRateLimitKey(
+			event,
+			configuredTrustedProxyIps
+		);
 		const rateLimitResult = rateLimiter.check(rateLimitKey);
 		if (!rateLimitResult.allowed) {
 			return createTooManyRequestsResponse(rateLimitResult.retryAfterSeconds);
