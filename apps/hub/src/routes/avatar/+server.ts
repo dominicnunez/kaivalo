@@ -17,6 +17,7 @@ import {
 } from '$lib/server/request-rate-limit.ts';
 import { normalizeRequestId } from '$lib/server/request-id.ts';
 import { getTrustedClientAddress } from '$lib/server/trusted-client-address.ts';
+import { getRequestPeerAddress } from '$lib/server/request-peer-address.ts';
 import { getProxyTrustConfiguration } from '$lib/server/workos-security.ts';
 
 const AVATAR_CACHE_CONTROL = 'public';
@@ -28,6 +29,8 @@ const AVATAR_RATE_LIMIT_MAX_ENTRIES = 10_000;
 const AVATAR_PROXY_ERROR_CODE = 'AVATAR_PROXY_FAILURE';
 const TOO_MANY_REQUESTS_MESSAGE = 'Too many requests';
 const TOO_MANY_REQUESTS_STATUS = 429;
+const SERVICE_UNAVAILABLE_MESSAGE = 'Service unavailable';
+const SERVICE_UNAVAILABLE_STATUS = 503;
 const PRIVATE_NO_STORE_CACHE_CONTROL = 'private, no-store';
 
 type CacheDirectiveMap = Map<string, string | true>;
@@ -80,6 +83,15 @@ function createTooManyRequestsResponse(retryAfterSeconds: number): Response {
 		headers: {
 			'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL,
 			'retry-after': String(retryAfterSeconds)
+		}
+	});
+}
+
+function createServiceUnavailableResponse(): Response {
+	return new Response(SERVICE_UNAVAILABLE_MESSAGE, {
+		status: SERVICE_UNAVAILABLE_STATUS,
+		headers: {
+			'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL
 		}
 	});
 }
@@ -201,8 +213,16 @@ function getIntegerDirective(
 	return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
-function buildAvatarCacheControl(upstream: Response): string {
-	const directives = parseCacheControl(upstream.headers.get('cache-control'));
+function buildAvatarCacheControl(
+	upstream: Response,
+	defaultCacheControl: string | null = PRIVATE_NO_STORE_CACHE_CONTROL
+): string | null {
+	const cacheControlHeader = upstream.headers.get('cache-control');
+	if (!cacheControlHeader) {
+		return defaultCacheControl;
+	}
+
+	const directives = parseCacheControl(cacheControlHeader);
 	if (directives.has('no-store')) {
 		return PRIVATE_NO_STORE_CACHE_CONTROL;
 	}
@@ -330,20 +350,19 @@ async function readAvatarBody(upstream: Response): Promise<Uint8Array> {
 function getAvatarRateLimitKey(
 	event: Parameters<RequestHandler>[0],
 	trustedProxyIps: readonly string[]
-): string {
-	if (typeof event.getClientAddress !== 'function') {
-		return '';
+): string | null {
+	const directClientAddress = getRequestPeerAddress(event);
+	if (!directClientAddress) {
+		return null;
 	}
 
-	try {
-		return getTrustedClientAddress({
-			directClientAddress: event.getClientAddress(),
-			forwardedForHeader: event.request.headers.get('x-forwarded-for'),
-			trustedProxyIps
-		});
-	} catch {
-		return '';
-	}
+	const trustedClientAddress = getTrustedClientAddress({
+		directClientAddress,
+		forwardedForHeader: event.request.headers.get('x-forwarded-for'),
+		trustedProxyIps
+	});
+
+	return trustedClientAddress || directClientAddress;
 }
 
 type CreateAvatarGetHandlerOptions = {
@@ -383,6 +402,10 @@ export function _createAvatarGetHandler({
 			event,
 			configuredTrustedProxyIps
 		);
+		if (!rateLimitKey) {
+			return createServiceUnavailableResponse();
+		}
+
 		const rateLimitResult = rateLimiter.check(rateLimitKey);
 		if (!rateLimitResult.allowed) {
 			return createTooManyRequestsResponse(rateLimitResult.retryAfterSeconds);
@@ -421,9 +444,15 @@ export function _createAvatarGetHandler({
 		}
 
 		const headers = new Headers({
-			'cache-control': buildAvatarCacheControl(upstream),
 			'x-content-type-options': 'nosniff'
 		});
+		const cacheControl = buildAvatarCacheControl(
+			upstream,
+			upstream.status === 304 ? null : PRIVATE_NO_STORE_CACHE_CONTROL
+		);
+		if (cacheControl) {
+			headers.set('cache-control', cacheControl);
+		}
 		copyCacheValidators(upstream, headers);
 
 		if (upstream.status === 304) {
