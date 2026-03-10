@@ -56,6 +56,16 @@ server process or container, not to the build step.
   proxy-controlled hop nearest the app, which is the right-most value.
   Required when `TRUST_X_FORWARDED_PROTO=true`.
 
+- `ADDRESS_HEADER`
+  Set to `x-forwarded-for` for proxied deployments so SvelteKit can derive
+  `event.getClientAddress()` from the forwarded client chain instead of the
+  innermost proxy's IP address.
+
+- `XFF_DEPTH`
+  Set to the number of trusted proxy hops that sit in front of the app when
+  `ADDRESS_HEADER=x-forwarded-for`.
+  With one trusted reverse proxy directly in front of the app, use `XFF_DEPTH=1`.
+
 ## Server Binding Variables
 
 - `HOST`
@@ -77,6 +87,8 @@ For production:
 - `ORIGIN` and `WORKOS_REDIRECT_URI` must stay on the same origin
 - `WORKOS_REDIRECT_URI` must end in `/auth/callback`
 - `TRUST_X_FORWARDED_PROTO=true` requires a correct `TRUSTED_PROXY_IPS` value
+- proxied deployments should set `ADDRESS_HEADER=x-forwarded-for` and the
+  matching `XFF_DEPTH` value so request-level client identity stays accurate
 - the deployed app should expose `/healthz` returning plain-text `ok`
 
 ## Example Shape
@@ -94,5 +106,7 @@ WORKOS_COOKIE_PASSWORD=0123456789abcdef0123456789abcdef0123456789abcdef012345678
 AUTH_ERROR_SIGNING_SECRET=fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
 TRUST_X_FORWARDED_PROTO=true
 TRUSTED_PROXY_IPS=203.0.113.10,2001:db8::10
+ADDRESS_HEADER=x-forwarded-for
+XFF_DEPTH=1
 SHUTDOWN_TIMEOUT_MS=30000
 ```

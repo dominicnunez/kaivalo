@@ -11,12 +11,13 @@ import {
 	getErrorLogContext,
 	shouldIncludeErrorMessage
 } from '$lib/server/error-diagnostics.ts';
-import { canonicalizeIpAddress } from '$lib/server/ip-address.ts';
 import {
 	createSlidingWindowRateLimiter,
 	type SlidingWindowRateLimiter
 } from '$lib/server/request-rate-limit.ts';
 import { normalizeRequestId } from '$lib/server/request-id.ts';
+import { getTrustedClientAddress } from '$lib/server/trusted-client-address.ts';
+import { getProxyTrustConfiguration } from '$lib/server/workos-security.ts';
 
 const AVATAR_CACHE_CONTROL = 'public';
 const AVATAR_CACHE_MAX_AGE_SECONDS = 300;
@@ -27,7 +28,6 @@ const AVATAR_RATE_LIMIT_MAX_ENTRIES = 10_000;
 const AVATAR_PROXY_ERROR_CODE = 'AVATAR_PROXY_FAILURE';
 const TOO_MANY_REQUESTS_MESSAGE = 'Too many requests';
 const TOO_MANY_REQUESTS_STATUS = 429;
-const UNKNOWN_CLIENT_RATE_LIMIT_KEY = 'unknown';
 const PRIVATE_NO_STORE_CACHE_CONTROL = 'private, no-store';
 
 type CacheDirectiveMap = Map<string, string | true>;
@@ -329,16 +329,22 @@ async function readAvatarBody(upstream: Response): Promise<Uint8Array> {
 
 function getAvatarRateLimitKey(event: Parameters<RequestHandler>[0]): string {
 	if (typeof event.getClientAddress !== 'function') {
-		return UNKNOWN_CLIENT_RATE_LIMIT_KEY;
+		return '';
 	}
 
 	try {
-		return (
-			canonicalizeIpAddress(event.getClientAddress()) ||
-			UNKNOWN_CLIENT_RATE_LIMIT_KEY
+		const { trustedProxyIps } = getProxyTrustConfiguration(
+			env,
+			env.ORIGIN?.trim() || 'http://localhost'
 		);
+
+		return getTrustedClientAddress({
+			directClientAddress: event.getClientAddress(),
+			forwardedForHeader: event.request.headers.get('x-forwarded-for'),
+			trustedProxyIps
+		});
 	} catch {
-		return UNKNOWN_CLIENT_RATE_LIMIT_KEY;
+		return '';
 	}
 }
 
@@ -360,9 +366,12 @@ export function _createAvatarGetHandler({
 			return createGatewayErrorResponse(404, 'Not found');
 		}
 
-		const rateLimitResult = rateLimiter.check(getAvatarRateLimitKey(event));
-		if (!rateLimitResult.allowed) {
-			return createTooManyRequestsResponse(rateLimitResult.retryAfterSeconds);
+		const rateLimitKey = getAvatarRateLimitKey(event);
+		if (rateLimitKey) {
+			const rateLimitResult = rateLimiter.check(rateLimitKey);
+			if (!rateLimitResult.allowed) {
+				return createTooManyRequestsResponse(rateLimitResult.retryAfterSeconds);
+			}
 		}
 
 		let upstream: Response;

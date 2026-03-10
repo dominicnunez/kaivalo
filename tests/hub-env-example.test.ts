@@ -159,14 +159,21 @@ describe('apps/hub/.env.example behavior', () => {
 		assert.match(content, /64 hex chars/i);
 		assert.match(content, /mandatory for production https origins/i);
 		assert.match(content, /TRUST_X_FORWARDED_PROTO=true/i);
+		assert.match(content, /ADDRESS_HEADER=x-forwarded-for/i);
+		assert.match(content, /XFF_DEPTH=1/i);
 		assert.match(content, /strip or overwrite any inbound x-forwarded-proto/i);
+		assert.match(content, /innermost proxy address/i);
+		assert.match(content, /proxy hops sit in front of the app/i);
 		assert.match(runtimeEnvDoc, /placeholder-safe image builds/i);
 		assert.match(runtimeEnvDoc, /runtime-only secrets/i);
+		assert.match(runtimeEnvDoc, /ADDRESS_HEADER=x-forwarded-for/i);
+		assert.match(runtimeEnvDoc, /XFF_DEPTH=1/i);
 		assert.match(
 			runtimeEnvDoc,
 			/strip or overwrite inbound `x-forwarded-proto`/i
 		);
 		assert.match(runtimeEnvDoc, /right-most value/i);
+		assert.match(runtimeEnvDoc, /innermost proxy's IP address/i);
 	});
 
 	it('keeps the production origin example aligned with runtime documentation', () => {

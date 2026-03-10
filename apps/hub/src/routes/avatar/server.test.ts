@@ -689,4 +689,95 @@ describe('avatar proxy route', () => {
 		expect((await GET(createEvent('203.0.113.11'))).status).toBe(200);
 		expect(fetch).toHaveBeenCalledTimes(3);
 	});
+
+	it('rate limits proxied avatar requests by the trusted forwarded client address', async () => {
+		vi.stubEnv('TRUST_X_FORWARDED_PROTO', 'true');
+		vi.stubEnv('TRUSTED_PROXY_IPS', '203.0.113.1,203.0.113.2');
+
+		let now = 1_000;
+		const GET = _createAvatarGetHandler({
+			rateLimiter: createSlidingWindowRateLimiter({
+				limit: 2,
+				windowMs: 60_000,
+				maxEntries: 128,
+				now: () => now
+			})
+		});
+		const fetch = vi.fn(
+			async () =>
+				new Response('image-bytes', {
+					status: 200,
+					headers: {
+						'cache-control': 'public, max-age=60',
+						'content-type': 'image/png',
+						'content-length': '11'
+					}
+				})
+		);
+		const createEvent = (forwardedFor: string) =>
+			({
+				request: new Request(
+					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1',
+					{
+						headers: {
+							'x-forwarded-for': forwardedFor
+						}
+					}
+				),
+				url: new URL(
+					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+				),
+				fetch,
+				getClientAddress: () => '203.0.113.2'
+			}) as never;
+
+		expect((await GET(createEvent('198.51.100.10, 203.0.113.1'))).status).toBe(
+			200
+		);
+		now += 1;
+		expect((await GET(createEvent('198.51.100.10, 203.0.113.1'))).status).toBe(
+			200
+		);
+		now += 1;
+
+		const limited = await GET(createEvent('198.51.100.10, 203.0.113.1'));
+
+		expect(limited.status).toBe(429);
+		expect(fetch).toHaveBeenCalledTimes(2);
+	});
+
+	it('skips avatar rate limiting when no trustworthy client identity is available', async () => {
+		const GET = _createAvatarGetHandler({
+			rateLimiter: createSlidingWindowRateLimiter({
+				limit: 1,
+				windowMs: 60_000,
+				maxEntries: 128,
+				now: () => 1_000
+			})
+		});
+		const fetch = vi.fn(
+			async () =>
+				new Response('image-bytes', {
+					status: 200,
+					headers: {
+						'cache-control': 'public, max-age=60',
+						'content-type': 'image/png',
+						'content-length': '11'
+					}
+				})
+		);
+		const event = {
+			request: new Request(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			url: new URL(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			fetch
+		} as never;
+
+		expect((await GET(event)).status).toBe(200);
+		expect((await GET(event)).status).toBe(200);
+		expect(fetch).toHaveBeenCalledTimes(2);
+	});
 });
