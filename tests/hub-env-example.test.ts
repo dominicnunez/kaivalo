@@ -127,6 +127,8 @@ describe('apps/hub/.env.example behavior', () => {
 		assert.match(content, /mandatory for production https origins/i);
 		assert.match(content, /TRUST_X_FORWARDED_PROTO=true/i);
 		assert.match(content, /strip or overwrite any inbound x-forwarded-proto/i);
+		assert.match(runtimeEnvDoc, /placeholder-safe image builds/i);
+		assert.match(runtimeEnvDoc, /runtime-only secrets/i);
 		assert.match(
 			runtimeEnvDoc,
 			/strip or overwrite inbound `x-forwarded-proto`/i
