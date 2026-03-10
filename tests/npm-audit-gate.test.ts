@@ -189,6 +189,26 @@ describe('npm audit gate', () => {
 		);
 	});
 
+	it('audits the full dependency tree instead of omitting dev dependencies', () => {
+		let command;
+		let args;
+		const report = runAudit({
+			spawnSyncImpl: (receivedCommand, receivedArgs) => {
+				command = receivedCommand;
+				args = receivedArgs;
+				return {
+					status: 0,
+					stdout: '{"vulnerabilities":{}}',
+					stderr: ''
+				};
+			}
+		});
+
+		assert.deepStrictEqual(report, { vulnerabilities: {} });
+		assert.strictEqual(command, 'npm');
+		assert.deepStrictEqual(args, ['audit', '--json']);
+	});
+
 	it('rejects malformed JSON output from npm audit', () => {
 		assert.throws(
 			() =>

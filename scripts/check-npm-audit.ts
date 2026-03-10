@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
 export const AUDIT_TIMEOUT_MS = 30_000;
+const AUDIT_COMMAND_ARGS = ['audit', '--json'];
 const ALLOWLIST_PATH = resolve(
 	ROOT,
 	'audit',
@@ -285,7 +286,7 @@ export function runAudit({
 	spawnSyncImpl = spawnSync,
 	timeoutMs = AUDIT_TIMEOUT_MS
 } = {}) {
-	const auditResult = spawnSyncImpl('npm', ['audit', '--omit=dev', '--json'], {
+	const auditResult = spawnSyncImpl('npm', AUDIT_COMMAND_ARGS, {
 		cwd: ROOT,
 		encoding: 'utf8',
 		timeout: timeoutMs
@@ -327,13 +328,13 @@ export function main() {
 
 	if (unallowlistedAdvisories.length === 0) {
 		console.log(
-			`npm audit passed with ${advisories.length} allowlisted production advisories`
+			`npm audit passed with ${advisories.length} allowlisted advisories`
 		);
 		return;
 	}
 
 	console.error(
-		`npm audit reported unallowlisted production advisories:\n${formatAdvisories(unallowlistedAdvisories)}`
+		`npm audit reported unallowlisted advisories:\n${formatAdvisories(unallowlistedAdvisories)}`
 	);
 	process.exitCode = 1;
 }
