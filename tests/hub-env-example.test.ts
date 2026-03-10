@@ -23,6 +23,14 @@ const runtimeEnvDocPath = resolve(
 const content = readFileSync(envExamplePath, 'utf-8');
 const runtimeEnvDoc = readFileSync(runtimeEnvDocPath, 'utf-8');
 
+const runtimeEnvExampleMatch = runtimeEnvDoc.match(/```env\n([\s\S]*?)\n```/);
+
+if (!runtimeEnvExampleMatch) {
+	throw new Error('docs/runtime-env.md must include an env example block');
+}
+
+const runtimeEnvExample = parseEnvTemplate(runtimeEnvExampleMatch[1]);
+
 function parseEnvTemplate(value) {
 	const parsed = {};
 	for (const line of value.split('\n')) {
@@ -123,6 +131,31 @@ describe('apps/hub/.env.example behavior', () => {
 	});
 
 	it('documents deployment guidance that matches runtime validation expectations', () => {
+		const proxyConfig = getProxyTrustConfiguration(
+			{
+				...runtimeEnvExample,
+				NODE_ENV: 'production'
+			},
+			runtimeEnvExample.ORIGIN
+		);
+
+		assert.deepStrictEqual(proxyConfig, {
+			trustForwardedProto: true,
+			trustedProxyIps: ['203.0.113.10', '2001:db8::10']
+		});
+		assert.throws(
+			() =>
+				getProxyTrustConfiguration(
+					{
+						...runtimeEnvExample,
+						NODE_ENV: 'production',
+						TRUSTED_PROXY_IPS: ' '
+					},
+					runtimeEnvExample.ORIGIN
+				),
+			/TRUSTED_PROXY_IPS must be configured when TRUST_X_FORWARDED_PROTO=true/
+		);
+
 		assert.match(content, /64 hex chars/i);
 		assert.match(content, /mandatory for production https origins/i);
 		assert.match(content, /TRUST_X_FORWARDED_PROTO=true/i);
