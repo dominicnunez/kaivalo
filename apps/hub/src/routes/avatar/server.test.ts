@@ -1,10 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
 	AVATAR_FETCH_TIMEOUT_MS,
 	AVATAR_MAX_RESPONSE_BYTES
 } from '$lib/server/avatar-proxy.ts';
 import { GET } from './+server';
+
+afterEach(() => {
+	vi.restoreAllMocks();
+});
 
 function createTrackedUpstreamResponse(
 	headers: HeadersInit,
@@ -171,11 +175,12 @@ describe('avatar proxy route', () => {
 		expect(response.headers.get('cache-control')).toBe('private, no-store');
 	});
 
-	it('rejects non-image upstream responses', async () => {
+	it('rejects non-image upstream responses and logs content-type failures', async () => {
 		const { response: upstream, cancelSpy } = createTrackedUpstreamResponse({
 			'content-type': 'text/html'
 		});
 		const fetch = vi.fn(async () => upstream);
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
 		const response = await GET({
 			request: new Request(
@@ -189,9 +194,23 @@ describe('avatar proxy route', () => {
 
 		expect(response.status).toBe(502);
 		expect(cancelSpy).toHaveBeenCalledOnce();
+		expect(errorSpy).toHaveBeenCalledWith(
+			'Avatar proxy request failed',
+			expect.objectContaining({
+				incidentId: expect.stringMatching(/^avatar_[0-9a-f-]+$/),
+				requestId: 'missing',
+				pathname: '/avatar',
+				method: 'GET',
+				sourceHost: 'avatars.githubusercontent.com',
+				failureClass: 'content-type',
+				responseStatus: 502,
+				upstreamContentType: 'text/html',
+				errorCode: 'AVATAR_PROXY_FAILURE'
+			})
+		);
 	});
 
-	it('cancels non-ok upstream avatar responses before returning bad gateway', async () => {
+	it('cancels non-ok upstream avatar responses before returning bad gateway and logs status failures', async () => {
 		const { response: upstream, cancelSpy } = createTrackedUpstreamResponse(
 			{
 				'content-type': 'image/png'
@@ -199,6 +218,7 @@ describe('avatar proxy route', () => {
 			404
 		);
 		const fetch = vi.fn(async () => upstream);
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
 		const response = await GET({
 			request: new Request(
@@ -212,6 +232,18 @@ describe('avatar proxy route', () => {
 
 		expect(response.status).toBe(502);
 		expect(cancelSpy).toHaveBeenCalledOnce();
+		expect(errorSpy).toHaveBeenCalledWith(
+			'Avatar proxy request failed',
+			expect.objectContaining({
+				incidentId: expect.stringMatching(/^avatar_[0-9a-f-]+$/),
+				requestId: 'missing',
+				sourceHost: 'avatars.githubusercontent.com',
+				failureClass: 'status',
+				responseStatus: 502,
+				upstreamStatus: 404,
+				errorCode: 'AVATAR_PROXY_FAILURE'
+			})
+		);
 	});
 
 	it('rejects svg avatar responses from trusted upstream hosts', async () => {
@@ -224,6 +256,7 @@ describe('avatar proxy route', () => {
 					}
 				})
 		);
+		vi.spyOn(console, 'error').mockImplementation(() => {});
 
 		const response = await GET({
 			request: new Request(
@@ -239,14 +272,20 @@ describe('avatar proxy route', () => {
 		expect(response.headers.get('cache-control')).toBe('private, no-store');
 	});
 
-	it('returns a controlled gateway failure when the upstream fetch throws', async () => {
+	it('returns a controlled gateway failure when the upstream fetch throws and logs the fetch context', async () => {
 		const fetch = vi.fn(async () => {
 			throw new Error('socket hang up');
 		});
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
 		const response = await GET({
 			request: new Request(
-				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1',
+				{
+					headers: {
+						'x-request-id': 'bad request/+trace'
+					}
+				}
 			),
 			url: new URL(
 				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
@@ -256,11 +295,27 @@ describe('avatar proxy route', () => {
 
 		expect(response.status).toBe(502);
 		expect(response.headers.get('cache-control')).toBe('private, no-store');
+		expect(errorSpy).toHaveBeenCalledWith(
+			'Avatar proxy request failed',
+			expect.objectContaining({
+				incidentId: expect.stringMatching(/^avatar_[0-9a-f-]+$/),
+				requestId: 'bad_request__trace',
+				pathname: '/avatar',
+				method: 'GET',
+				sourceHost: 'avatars.githubusercontent.com',
+				failureClass: 'fetch',
+				responseStatus: 502,
+				errorCode: 'AVATAR_PROXY_FAILURE',
+				errorName: 'Error',
+				errorMessage: 'socket hang up'
+			})
+		);
 	});
 
 	it('fails fast when the upstream avatar fetch exceeds the timeout', async () => {
 		const controller = new AbortController();
 		const originalTimeout = AbortSignal.timeout;
+		vi.spyOn(console, 'error').mockImplementation(() => {});
 		const fetch = vi.fn(
 			(_input: string | URL | Request, init?: RequestInit) =>
 				new Promise<Response>((_resolve, reject) => {
@@ -294,8 +349,9 @@ describe('avatar proxy route', () => {
 		}
 	});
 
-	it('returns gateway timeout when the upstream body stalls after headers arrive', async () => {
+	it('returns gateway timeout when the upstream body stalls after headers arrive and logs stream failures', async () => {
 		const chunk = new Uint8Array([1, 2, 3]);
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const fetch = vi.fn(async () => {
 			let readCount = 0;
 			const stream = new ReadableStream<Uint8Array>({
@@ -331,6 +387,19 @@ describe('avatar proxy route', () => {
 		expect(response.status).toBe(504);
 		expect(response.headers.get('cache-control')).toBe('private, no-store');
 		await expect(response.text()).resolves.toBe('Gateway timeout');
+		expect(errorSpy).toHaveBeenCalledWith(
+			'Avatar proxy request failed',
+			expect.objectContaining({
+				incidentId: expect.stringMatching(/^avatar_[0-9a-f-]+$/),
+				requestId: 'missing',
+				sourceHost: 'avatars.githubusercontent.com',
+				failureClass: 'stream',
+				responseStatus: 504,
+				errorCode: 'AVATAR_PROXY_FAILURE',
+				errorName: 'TimeoutError',
+				errorMessage: 'Timed out'
+			})
+		);
 	});
 
 	it('passes client validators upstream and preserves successful 304 revalidation', async () => {
@@ -385,6 +454,7 @@ describe('avatar proxy route', () => {
 			'content-length': String(AVATAR_MAX_RESPONSE_BYTES + 1)
 		});
 		const fetch = vi.fn(async () => upstream);
+		vi.spyOn(console, 'error').mockImplementation(() => {});
 
 		const response = await GET({
 			request: new Request(
@@ -401,8 +471,9 @@ describe('avatar proxy route', () => {
 		expect(cancelSpy).toHaveBeenCalledOnce();
 	});
 
-	it('rejects streamed avatar responses that exceed the byte limit', async () => {
+	it('rejects streamed avatar responses that exceed the byte limit and logs size failures', async () => {
 		const chunk = new Uint8Array(AVATAR_MAX_RESPONSE_BYTES / 2 + 1);
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const fetch = vi.fn(async () => {
 			const stream = new ReadableStream<Uint8Array>({
 				start(controller) {
@@ -432,5 +503,18 @@ describe('avatar proxy route', () => {
 
 		expect(response.status).toBe(502);
 		expect(response.headers.get('cache-control')).toBe('private, no-store');
+		expect(errorSpy).toHaveBeenCalledWith(
+			'Avatar proxy request failed',
+			expect.objectContaining({
+				incidentId: expect.stringMatching(/^avatar_[0-9a-f-]+$/),
+				requestId: 'missing',
+				sourceHost: 'avatars.githubusercontent.com',
+				failureClass: 'size',
+				responseStatus: 502,
+				errorCode: 'AVATAR_PROXY_FAILURE',
+				errorName: 'AvatarResponseSizeError',
+				errorMessage: 'Avatar response exceeds maximum allowed size'
+			})
+		);
 	});
 });
