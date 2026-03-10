@@ -219,6 +219,15 @@ When forwarded data is malformed, the code falls back to the shared empty-key bu
 `npm --prefix apps/hub run build` runs `vite build` before `node scripts/prepare-runtime.ts`, and the real build clears `apps/hub/build` before the runtime helper copy step.
 Seeding `apps/hub/build/runtime/server/__audit_stale_helper__.ts` and then running `HUB_BUILD_ALLOW_PLACEHOLDERS=true npm --prefix apps/hub run build` removed the stale file, so the obsolete helper does not persist into the artifact later copied by `Dockerfile`.
 
+### Homepage link smoke test duplicates stronger coverage and checks no unique behavior
+
+**Location:** `tests/hub-links.test.ts:15`
+
+**Reason:** The audit misdescribed what this suite asserts.
+`tests/hub-links.test.ts` does not merely check that the homepage contains some safe link; it iterates every rendered `a[href]` on the preview homepage and fails if any link is empty or starts with `javascript:`.
+The existing `tests/hub-auth-landing.test.ts` and page-level component suites cover trusted sign-in and `/services` actions, but they do not provide that whole-page anchor hygiene check.
+Because the suite still verifies behavior not covered elsewhere, the claim that it only duplicates stronger coverage is a false positive.
+
 ### Build freshness coverage misses stale runtime artifact cleanup
 
 **Location:** `tests/hub-build-freshness.test.ts:14` — build freshness regression coverage
