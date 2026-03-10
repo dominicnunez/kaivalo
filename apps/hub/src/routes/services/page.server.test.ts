@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import { isRedirect } from '@sveltejs/kit';
-import { getLauncherServices } from '$lib/services/registry.ts';
 
 import { load } from './+page.server';
 
@@ -64,7 +63,6 @@ describe('services page load', () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date('2031-01-15T12:00:00Z'));
 		try {
-			const expectedServices = getLauncherServices();
 			const result = (await load({
 				parent: async () => createParentData()
 			} as never)) as {
@@ -83,8 +81,35 @@ describe('services page load', () => {
 					'Open the Kaivalo services available on your account from one authenticated launcher.'
 			});
 			expect(result.currentYear).toBe(2031);
-			expect(result.activeServices).toEqual(expectedServices.activeServices);
-			expect(result.plannedServices).toEqual(expectedServices.plannedServices);
+			expect(result.activeServices).toEqual([
+				{
+					id: 'sweep',
+					name: 'Sweep',
+					tagline: 'Stay on schedule',
+					description: 'Smart scheduling for chimney professionals.',
+					icon: 'calendar',
+					lifecycle: 'active',
+					marketingVisible: true,
+					launcherVisible: true,
+					enabled: true,
+					appUrl: 'https://sweep.kaivalo.com'
+				}
+			]);
+			expect(result.plannedServices).toEqual([
+				{
+					id: 'podstudio',
+					name: 'PodStudio',
+					tagline: 'Podcast management',
+					description:
+						'Equipment tracking and session scheduling for podcast studios.',
+					icon: 'mic',
+					lifecycle: 'planned',
+					marketingVisible: true,
+					launcherVisible: true,
+					enabled: false,
+					appUrl: 'https://podcast.kaivalo.com'
+				}
+			]);
 		} finally {
 			vi.useRealTimers();
 		}
