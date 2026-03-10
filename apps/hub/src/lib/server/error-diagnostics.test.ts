@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { getErrorLogContext } from './error-diagnostics.ts';
+import {
+	getErrorDiagnostics,
+	getErrorLogContext
+} from './error-diagnostics.ts';
 
 describe('error log diagnostics', () => {
 	it('redacts sensitive messages when log messages are enabled', () => {
@@ -57,5 +60,46 @@ describe('error log diagnostics', () => {
 			errorCauseName: 'Error',
 			errorCauseCode: 'UPSTREAM_TIMEOUT'
 		});
+	});
+
+	it('redacts cookie and authorization header values from logged messages', () => {
+		const cause = new Error(
+			'upstream request failed with Cookie: sid=abc123; refresh=def456 Authorization: Basic dXNlcjpwYXNz'
+		);
+		const context = getErrorLogContext(
+			Object.assign(
+				new Error(
+					'request failed with Set-Cookie: sid=abc123; Expires=Wed, 21 Oct 2015 07:28:00 GMT; HttpOnly Authorization: Bearer access-secret'
+				),
+				{
+					cause
+				}
+			),
+			{ includeMessage: true }
+		);
+
+		expect(context.errorMessage).toBe(
+			'request failed with Set-Cookie: [redacted] Authorization: [redacted]'
+		);
+		expect(context.errorCauseMessage).toBe(
+			'upstream request failed with Cookie: [redacted] Authorization: [redacted]'
+		);
+	});
+
+	it('redacts header-style credentials from diagnostics payloads', () => {
+		const diagnostics = getErrorDiagnostics(
+			new Error(
+				'request failed with Cookie: sid=abc123; refresh=def456 Set-Cookie: sid=abc123; HttpOnly Authorization: Basic dXNlcjpwYXNz'
+			),
+			{ includeSensitiveDetails: true }
+		);
+
+		expect(diagnostics).toEqual(
+			expect.objectContaining({
+				type: 'Error',
+				message:
+					'request failed with Cookie: [redacted] Set-Cookie: [redacted] Authorization: [redacted]'
+			})
+		);
 	});
 });

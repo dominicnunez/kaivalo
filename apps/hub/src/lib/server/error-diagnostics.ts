@@ -14,6 +14,8 @@ const SENSITIVE_BARE_OBJECT_PATTERN = new RegExp(
 	`\\b(${SENSITIVE_FIELD_NAME_PATTERN}\\s*:\\s*)${SENSITIVE_VALUE_PATTERN}`,
 	'gi'
 );
+const SENSITIVE_HEADER_PATTERN =
+	/\b((?:cookie|set-cookie|authorization|proxy-authorization)\s*:\s*)(.+?)(?=(?:\s+[A-Za-z][A-Za-z-]*\s*:)|$)/gi;
 const BEARER_TOKEN_PATTERN = /\b(bearer\s+)[^\s,;]+/gi;
 const SENSITIVE_QUERY_PATTERN =
 	/([?&](?:access_token|refresh_token|id_token|token|api_key|client_secret|code|password)=)[^&#\s]*/gi;
@@ -57,6 +59,7 @@ export function shouldIncludeErrorMessage(env: Env): boolean {
 export function redactSensitiveText(value: string): string {
 	const collapsedWhitespace = value.replace(/\s+/g, ' ').trim();
 	return collapsedWhitespace
+		.replace(SENSITIVE_HEADER_PATTERN, `$1${REDACTED_VALUE}`)
 		.replace(SENSITIVE_QUERY_PATTERN, `$1${REDACTED_VALUE}`)
 		.replace(SENSITIVE_OBJECT_PATTERN, `$1${REDACTED_VALUE}`)
 		.replace(SENSITIVE_BARE_OBJECT_PATTERN, `$1${REDACTED_VALUE}`)
