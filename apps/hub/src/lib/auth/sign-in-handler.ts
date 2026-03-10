@@ -85,30 +85,37 @@ export function createSignInGetHandler({
 	return async (event: RequestEvent) => {
 		try {
 			const signInUrl = await getSignInUrl({ returnTo: defaultReturnTo });
-			const safeLocation = normalizeTrustedRedirectLocation(signInUrl, {
+			const safeLocation = normalizeSignInRedirectLocation(signInUrl, {
 				requestOrigin: event.url.origin,
 				trustedOrigin,
-				allowedOrigins: trustedRedirectOrigins
+				allowedOrigins: trustedRedirectOrigins,
+				requestPathname: event.url.pathname
 			});
-			if (!safeLocation) {
-				throw new Error('Sign-in produced an invalid redirect location');
-			}
-			if (
-				isSelfReferentialRedirect(
-					safeLocation,
-					trustedOrigin,
-					event.url.pathname
-				)
-			) {
-				throw new Error(
-					'Sign-in produced a self-referential redirect location'
-				);
-			}
-
 			throw redirect(303, safeLocation);
 		} catch (err) {
+			let normalizedError = err;
 			if (isRedirect(err)) {
-				throw err;
+				const redirectError = err;
+				let safeLocation: string | null = null;
+				try {
+					safeLocation = normalizeSignInRedirectLocation(
+						redirectError.location,
+						{
+							requestOrigin: event.url.origin,
+							trustedOrigin,
+							allowedOrigins: trustedRedirectOrigins,
+							requestPathname: event.url.pathname
+						}
+					);
+				} catch (normalizationError) {
+					normalizedError = normalizationError;
+				}
+				if (safeLocation) {
+					if (safeLocation === redirectError.location) {
+						throw redirectError;
+					}
+					throw redirect(redirectError.status, safeLocation);
+				}
 			}
 
 			const requestId = normalizeRequestId(
@@ -121,7 +128,7 @@ export function createSignInGetHandler({
 				pathname: event.url.pathname,
 				incidentId,
 				errorCode: 'AUTH_SIGN_IN_UNEXPECTED_FAILURE',
-				...getErrorLogContext(err, {
+				...getErrorLogContext(normalizedError, {
 					includeMessage: includeMessageInLogs
 				})
 			};
@@ -141,4 +148,34 @@ export function createSignInGetHandler({
 			);
 		}
 	};
+}
+
+function normalizeSignInRedirectLocation(
+	location: string,
+	options: {
+		requestOrigin: string;
+		trustedOrigin: string;
+		allowedOrigins: Iterable<string>;
+		requestPathname: string;
+	}
+): string {
+	const safeLocation = normalizeTrustedRedirectLocation(location, {
+		requestOrigin: options.requestOrigin,
+		trustedOrigin: options.trustedOrigin,
+		allowedOrigins: options.allowedOrigins
+	});
+	if (!safeLocation) {
+		throw new Error('Sign-in produced an invalid redirect location');
+	}
+	if (
+		isSelfReferentialRedirect(
+			safeLocation,
+			options.trustedOrigin,
+			options.requestPathname
+		)
+	) {
+		throw new Error('Sign-in produced a self-referential redirect location');
+	}
+
+	return safeLocation;
 }

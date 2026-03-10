@@ -1,3 +1,4 @@
+import { redirect } from '@sveltejs/kit';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	AUTH_ERROR_QUERY_NAME,
@@ -114,6 +115,50 @@ describe('auth sign-in route', () => {
 			status: 303,
 			location: 'https://kaivalo.test/services?welcome=1#hero'
 		});
+	});
+
+	it('normalizes trusted redirect exceptions from upstream sign-in helpers', async () => {
+		mockGetSignInUrl.mockImplementation(async () => {
+			throw redirect(307, 'https://kaivalo.test/services?welcome=1#hero');
+		});
+
+		const { GET } = await import('./+server');
+
+		await expect(GET(createEvent())).rejects.toMatchObject({
+			status: 307,
+			location: '/services?welcome=1#hero'
+		});
+	});
+
+	it('rejects redirect exceptions on untrusted origins', async () => {
+		mockGetSignInUrl.mockImplementation(async () => {
+			throw redirect(307, 'https://evil.example/login');
+		});
+
+		const { GET } = await import('./+server');
+
+		await expect(
+			GET(
+				createEvent({
+					accept: 'application/json'
+				})
+			)
+		).rejects.toMatchObject({
+			status: 503,
+			body: {
+				message: expect.stringMatching(/^Sign-in failed\. Reference: authsign_/)
+			}
+		});
+		expect(errorSpy).toHaveBeenCalledOnce();
+		expect(errorSpy).toHaveBeenLastCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				errorCode: 'AUTH_SIGN_IN_UNEXPECTED_FAILURE',
+				pathname: '/auth/sign-in',
+				method: 'GET',
+				incidentId: expect.stringMatching(/^authsign_/)
+			})
+		);
 	});
 
 	it('rejects same-origin sign-in destinations that loop back to the route itself', async () => {
