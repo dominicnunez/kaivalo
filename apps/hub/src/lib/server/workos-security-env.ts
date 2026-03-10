@@ -31,6 +31,7 @@ type WorkosEnv = {
 	authErrorSigningSecret: string;
 	origin: string;
 	apiHostname: string;
+	authkitHostname: string;
 };
 
 function parseRedirectUrl(value: string): URL {
@@ -80,10 +81,14 @@ function assertHttpOrHttpsProtocol(url: URL, envVarName: string): void {
 	}
 }
 
-function parseWorkosApiHostname(value: string | undefined): string {
+function parseWorkosHostname(
+	value: string | undefined,
+	envVarName: string,
+	defaultHostname: string
+): string {
 	const trimmed = value?.trim();
 	if (!trimmed) {
-		return DEFAULT_WORKOS_API_HOSTNAME;
+		return defaultHostname;
 	}
 
 	if (
@@ -95,7 +100,7 @@ function parseWorkosApiHostname(value: string | undefined): string {
 		trimmed.includes(':')
 	) {
 		throw new Error(
-			'WORKOS_API_HOSTNAME must be a hostname without protocol, path, credentials, or port'
+			`${envVarName} must be a hostname without protocol, path, credentials, or port`
 		);
 	}
 
@@ -108,7 +113,7 @@ function parseWorkosApiHostname(value: string | undefined): string {
 		return parsedHostname;
 	} catch {
 		throw new Error(
-			'WORKOS_API_HOSTNAME must be a hostname without protocol, path, credentials, or port'
+			`${envVarName} must be a hostname without protocol, path, credentials, or port`
 		);
 	}
 }
@@ -208,7 +213,16 @@ export function getValidatedWorkosEnv(env: Env): WorkosEnv {
 		env,
 		'AUTH_ERROR_SIGNING_SECRET'
 	);
-	const apiHostname = parseWorkosApiHostname(env.WORKOS_API_HOSTNAME);
+	const apiHostname = parseWorkosHostname(
+		env.WORKOS_API_HOSTNAME,
+		'WORKOS_API_HOSTNAME',
+		DEFAULT_WORKOS_API_HOSTNAME
+	);
+	const authkitHostname = parseWorkosHostname(
+		env.WORKOS_AUTHKIT_HOSTNAME,
+		'WORKOS_AUTHKIT_HOSTNAME',
+		apiHostname
+	);
 
 	if (!HEX_64_PATTERN.test(cookiePassword)) {
 		throw new Error(
@@ -243,7 +257,8 @@ export function getValidatedWorkosEnv(env: Env): WorkosEnv {
 			cookiePassword,
 			authErrorSigningSecret,
 			origin: localOrigin,
-			apiHostname
+			apiHostname,
+			authkitHostname
 		};
 	}
 
@@ -263,7 +278,8 @@ export function getValidatedWorkosEnv(env: Env): WorkosEnv {
 		cookiePassword,
 		authErrorSigningSecret,
 		origin: originUrl.origin,
-		apiHostname
+		apiHostname,
+		authkitHostname
 	};
 }
 

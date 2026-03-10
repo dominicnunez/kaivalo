@@ -48,6 +48,8 @@ describe('auth sign-in route', () => {
 	beforeEach(() => {
 		vi.resetModules();
 		mockGetSignInUrl.mockReset();
+		mockEnv.WORKOS_API_HOSTNAME = 'auth.kaivalo-login.com';
+		delete mockEnv.WORKOS_AUTHKIT_HOSTNAME;
 		errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 	});
 
@@ -68,6 +70,22 @@ describe('auth sign-in route', () => {
 				'https://auth.kaivalo-login.com/user_management/authorize?screen_hint=sign-up'
 		});
 		expect(mockGetSignInUrl).toHaveBeenCalledWith({ returnTo: '/services' });
+	});
+
+	it('trusts the configured AuthKit hostname when it differs from the api host', async () => {
+		mockEnv.WORKOS_API_HOSTNAME = 'api-auth.kaivalo-login.com';
+		mockEnv.WORKOS_AUTHKIT_HOSTNAME = 'login.kaivalo-login.com';
+		mockGetSignInUrl.mockResolvedValue(
+			'https://login.kaivalo-login.com/user_management/authorize?screen_hint=sign-up' as never
+		);
+
+		const { GET } = await import('./+server');
+
+		await expect(GET(createEvent())).rejects.toMatchObject({
+			status: 303,
+			location:
+				'https://login.kaivalo-login.com/user_management/authorize?screen_hint=sign-up'
+		});
 	});
 
 	it('normalizes trusted same-origin destinations that do not point back to the sign-in route', async () => {

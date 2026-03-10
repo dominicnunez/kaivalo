@@ -170,8 +170,10 @@ describe('apps/hub/.env.example behavior', () => {
 			content,
 			/authkit\/login custom domains are configured separately/i
 		);
+		assert.match(content, /WORKOS_AUTHKIT_HOSTNAME=login\.kaivalo\.com/);
 		assert.match(runtimeEnvDoc, /placeholder-safe image builds/i);
 		assert.match(runtimeEnvDoc, /runtime-only secrets/i);
+		assert.match(runtimeEnvDoc, /WORKOS_AUTHKIT_HOSTNAME/i);
 		assert.match(runtimeEnvDoc, /ADDRESS_HEADER=x-forwarded-for/i);
 		assert.match(runtimeEnvDoc, /XFF_DEPTH=1/i);
 		assert.match(
