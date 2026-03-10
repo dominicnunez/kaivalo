@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	AUTH_ERROR_INCIDENT_QUERY_NAME,
+	AUTH_ERROR_MAX_FUTURE_SKEW_MS,
 	AUTH_ERROR_QUERY_NAME,
 	AUTH_ERROR_QUERY_TTL_MS,
 	AUTH_ERROR_QUERY_VALUE,
@@ -81,6 +82,35 @@ describe('readVerifiedAuthError', () => {
 		).toBeNull();
 	});
 
+	it('accepts signed auth errors within the bounded future skew window', () => {
+		const searchParams = buildSearchParams(
+			issuedAt + AUTH_ERROR_MAX_FUTURE_SKEW_MS
+		);
+
+		expect(
+			readVerifiedAuthError(searchParams, {
+				secret: cookiePassword,
+				now: issuedAt
+			})
+		).toEqual({
+			message: AUTH_ERROR_MESSAGE,
+			incidentId
+		});
+	});
+
+	it('rejects signed auth errors beyond the bounded future skew window', () => {
+		const searchParams = buildSearchParams(
+			issuedAt + AUTH_ERROR_MAX_FUTURE_SKEW_MS + 1
+		);
+
+		expect(
+			readVerifiedAuthError(searchParams, {
+				secret: cookiePassword,
+				now: issuedAt
+			})
+		).toBeNull();
+	});
+
 	const rejectionCases: Array<[string, SearchParamsMutator]> = [
 		[
 			'missing auth marker',
@@ -110,11 +140,6 @@ describe('readVerifiedAuthError', () => {
 			'non-numeric timestamp',
 			(searchParams) =>
 				searchParams.set(AUTH_ERROR_TIMESTAMP_QUERY_NAME, 'not-a-number')
-		],
-		[
-			'future timestamp',
-			(searchParams) =>
-				searchParams.set(AUTH_ERROR_TIMESTAMP_QUERY_NAME, String(issuedAt + 1))
 		],
 		[
 			'unsafe integer timestamp',

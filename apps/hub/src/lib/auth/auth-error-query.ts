@@ -17,6 +17,7 @@ import {
 	AUTH_ERROR_TIMESTAMP_QUERY_NAME
 } from './auth-error-query-shared.ts';
 export const AUTH_ERROR_QUERY_TTL_MS = 5 * 60 * 1000;
+export const AUTH_ERROR_MAX_FUTURE_SKEW_MS = 30 * 1000;
 
 const AUTH_INCIDENT_ID_PATTERN =
 	/^auth(?:cb|sign)_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -118,7 +119,10 @@ export function readVerifiedAuthError(
 	}
 
 	const issuedAt = Number(timestamp);
-	if (!Number.isSafeInteger(issuedAt) || issuedAt > now) {
+	if (
+		!Number.isSafeInteger(issuedAt) ||
+		issuedAt - now > AUTH_ERROR_MAX_FUTURE_SKEW_MS
+	) {
 		return null;
 	}
 	if (now - issuedAt > AUTH_ERROR_QUERY_TTL_MS) {
