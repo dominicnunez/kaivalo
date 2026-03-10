@@ -346,7 +346,7 @@ type CreateAvatarGetHandlerOptions = {
 	rateLimiter?: SlidingWindowRateLimiter;
 };
 
-export function createAvatarGetHandler({
+export function _createAvatarGetHandler({
 	rateLimiter = createSlidingWindowRateLimiter({
 		limit: AVATAR_RATE_LIMIT_MAX_REQUESTS,
 		windowMs: AVATAR_RATE_LIMIT_WINDOW_MS,
@@ -483,4 +483,4 @@ export function createAvatarGetHandler({
 	};
 }
 
-export const GET: RequestHandler = createAvatarGetHandler();
+export const GET: RequestHandler = _createAvatarGetHandler();

@@ -5,12 +5,12 @@ import {
 	AVATAR_MAX_RESPONSE_BYTES
 } from '$lib/server/avatar-proxy.ts';
 import { createSlidingWindowRateLimiter } from '$lib/server/request-rate-limit.ts';
-import { createAvatarGetHandler } from './+server';
+import { _createAvatarGetHandler } from './+server';
 
-let GET: ReturnType<typeof createAvatarGetHandler>;
+let GET: ReturnType<typeof _createAvatarGetHandler>;
 
 beforeEach(() => {
-	GET = createAvatarGetHandler();
+	GET = _createAvatarGetHandler();
 });
 
 afterEach(() => {
@@ -564,7 +564,7 @@ describe('avatar proxy route', () => {
 	});
 
 	it('rate limits repeated avatar fetches from the same client address', async () => {
-		const GET = createAvatarGetHandler({
+		const GET = _createAvatarGetHandler({
 			rateLimiter: createSlidingWindowRateLimiter({
 				limit: 2,
 				windowMs: 60_000,
@@ -608,7 +608,7 @@ describe('avatar proxy route', () => {
 
 	it('shares quotas across equivalent normalized client addresses', async () => {
 		let now = 1_000;
-		const GET = createAvatarGetHandler({
+		const GET = _createAvatarGetHandler({
 			rateLimiter: createSlidingWindowRateLimiter({
 				limit: 2,
 				windowMs: 60_000,
@@ -652,7 +652,7 @@ describe('avatar proxy route', () => {
 	});
 
 	it('keeps avatar quotas independent for different client addresses', async () => {
-		const GET = createAvatarGetHandler({
+		const GET = _createAvatarGetHandler({
 			rateLimiter: createSlidingWindowRateLimiter({
 				limit: 2,
 				windowMs: 60_000,
