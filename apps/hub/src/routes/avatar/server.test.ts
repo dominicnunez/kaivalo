@@ -15,6 +15,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	vi.restoreAllMocks();
+	vi.unstubAllEnvs();
 });
 
 function createTrackedUpstreamResponse(
@@ -746,38 +747,75 @@ describe('avatar proxy route', () => {
 		expect(fetch).toHaveBeenCalledTimes(2);
 	});
 
-	it('skips avatar rate limiting when no trustworthy client identity is available', async () => {
-		const GET = _createAvatarGetHandler({
-			rateLimiter: createSlidingWindowRateLimiter({
-				limit: 1,
-				windowMs: 60_000,
-				maxEntries: 128,
-				now: () => 1_000
-			})
-		});
-		const fetch = vi.fn(
-			async () =>
-				new Response('image-bytes', {
-					status: 200,
-					headers: {
-						'cache-control': 'public, max-age=60',
-						'content-type': 'image/png',
-						'content-length': '11'
-					}
-				})
-		);
-		const event = {
-			request: new Request(
-				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
-			),
-			url: new URL(
-				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
-			),
-			fetch
-		} as never;
+	it.each([
+		{
+			name: 'the request has no client address resolver',
+			createEvent: (fetch: typeof globalThis.fetch) =>
+				({
+					request: new Request(
+						'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+					),
+					url: new URL(
+						'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+					),
+					fetch
+				}) as never
+		},
+		{
+			name: 'trusted proxy forwarding headers are malformed',
+			createEvent: (fetch: typeof globalThis.fetch) => {
+				vi.stubEnv('TRUST_X_FORWARDED_PROTO', 'true');
+				vi.stubEnv('TRUSTED_PROXY_IPS', '203.0.113.1,203.0.113.2');
 
-		expect((await GET(event)).status).toBe(200);
-		expect((await GET(event)).status).toBe(200);
-		expect(fetch).toHaveBeenCalledTimes(2);
-	});
+				return {
+					request: new Request(
+						'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1',
+						{
+							headers: {
+								'x-forwarded-for': '198.51.100.10, garbage'
+							}
+						}
+					),
+					url: new URL(
+						'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+					),
+					fetch,
+					getClientAddress: () => '203.0.113.2'
+				} as never;
+			}
+		}
+	])(
+		'rate limits avatar requests through the shared fallback bucket when $name',
+		async ({ createEvent }) => {
+			const GET = _createAvatarGetHandler({
+				rateLimiter: createSlidingWindowRateLimiter({
+					limit: 1,
+					windowMs: 60_000,
+					maxEntries: 128,
+					now: () => 1_000
+				})
+			});
+			const fetch = vi.fn(
+				async () =>
+					new Response('image-bytes', {
+						status: 200,
+						headers: {
+							'cache-control': 'public, max-age=60',
+							'content-type': 'image/png',
+							'content-length': '11'
+						}
+					})
+			);
+
+			expect((await GET(createEvent(fetch))).status).toBe(200);
+
+			const limited = await GET(createEvent(fetch));
+
+			expect(limited.status).toBe(429);
+			expect(fetch).toHaveBeenCalledTimes(1);
+			expect(limited.headers.get('cache-control')).toBe('private, no-store');
+			expect(limited.headers.get('retry-after')).toBe('60');
+			await expect(limited.text()).resolves.toBe('Too many requests');
+		}
+	);
 });

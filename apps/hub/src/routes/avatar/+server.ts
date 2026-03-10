@@ -367,11 +367,9 @@ export function _createAvatarGetHandler({
 		}
 
 		const rateLimitKey = getAvatarRateLimitKey(event);
-		if (rateLimitKey) {
-			const rateLimitResult = rateLimiter.check(rateLimitKey);
-			if (!rateLimitResult.allowed) {
-				return createTooManyRequestsResponse(rateLimitResult.retryAfterSeconds);
-			}
+		const rateLimitResult = rateLimiter.check(rateLimitKey);
+		if (!rateLimitResult.allowed) {
+			return createTooManyRequestsResponse(rateLimitResult.retryAfterSeconds);
 		}
 
 		let upstream: Response;
