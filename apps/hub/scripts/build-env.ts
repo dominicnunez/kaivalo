@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { getValidatedWorkosEnv } from '../src/lib/server/workos-security-env.ts';
+import { getHubBuildPaths, removeServerSourceMaps } from './build-artifacts.ts';
 
 const BUILD_ENV_DEFAULTS = {
 	WORKOS_CLIENT_ID: 'client_build_placeholder',
@@ -54,6 +55,7 @@ export function runHubBuildWithEnv(): void {
 		['vite', 'build'],
 		['node', 'scripts/prepare-runtime.ts']
 	] as const;
+	const { serverDir } = getHubBuildPaths();
 
 	for (const [command, ...args] of steps) {
 		const result = spawnSync(command, args, {
@@ -62,6 +64,9 @@ export function runHubBuildWithEnv(): void {
 		});
 
 		if (result.status === 0) {
+			if (command === 'vite' && args[0] === 'build') {
+				removeServerSourceMaps(serverDir);
+			}
 			continue;
 		}
 

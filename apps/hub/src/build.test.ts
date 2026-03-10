@@ -4,8 +4,13 @@ import path from 'node:path';
 import http from 'node:http';
 import net from 'node:net';
 import { getHubBuildEnv } from '../scripts/build-env.ts';
+import {
+	findProductionArtifactLeaks,
+	getHubBuildPaths
+} from '../scripts/build-artifacts.ts';
 
 const hubDir = process.cwd();
+const { buildDir, repoRoot } = getHubBuildPaths(hubDir);
 const nodeEntrypoint = path.join(hubDir, 'server.ts');
 const STARTUP_TIMEOUT_MS = 10_000;
 const PROCESS_EXIT_TIMEOUT_MS = 5_000;
@@ -175,6 +180,12 @@ describe('Production build', () => {
 		{ timeout: 60000 },
 		async () => {
 			runBuildWithDiagnostics();
+			const { pathLeaks, serverSourceMaps } = findProductionArtifactLeaks(
+				buildDir,
+				repoRoot
+			);
+			expect(pathLeaks).toEqual([]);
+			expect(serverSourceMaps).toEqual([]);
 			const { server, baseUrl } = await startBuiltServer();
 
 			try {
