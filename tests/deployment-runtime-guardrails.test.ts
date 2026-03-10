@@ -21,8 +21,15 @@ const DAILY_FULL_SUITE_WORKFLOW_PATH = path.join(
 const DOCKERFILE_PATH = path.join(ROOT, 'Dockerfile');
 const PRE_PUSH_HOOK_PATH = path.join(ROOT, '.husky', 'pre-push');
 const PACKAGE_JSON_PATH = path.join(ROOT, 'package.json');
+const TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH = path.join(
+	ROOT,
+	'.github',
+	'workflows',
+	'track-sveltekit-upstream.yml'
+);
 const DEPLOYABLE_REF_CONDITION =
 	"github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')";
+const PINNED_NODE_VERSION_PATTERN = /^node:(\d+\.\d+\.\d+)-/;
 
 function getIndentedSection(lines, sectionName, indentSize = 0) {
 	const prefix = ' '.repeat(indentSize);
@@ -287,6 +294,19 @@ function getDockerfileFromImages(dockerfile) {
 		});
 }
 
+function getPinnedNodeVersionFromDockerfile(dockerfile) {
+	const [buildStage] = getDockerfileFromImages(dockerfile);
+	assert.ok(buildStage, 'Dockerfile should define at least one FROM image');
+
+	const match = buildStage.image.match(PINNED_NODE_VERSION_PATTERN);
+	assert.ok(
+		match,
+		`Dockerfile build stage should use a pinned node image tag: ${buildStage.image}`
+	);
+
+	return match[1];
+}
+
 function getPackageScripts() {
 	const packageJson = JSON.parse(readFileSync(PACKAGE_JSON_PATH, 'utf8'));
 	assert.ok(packageJson.scripts, 'package.json should define scripts');
@@ -310,6 +330,35 @@ describe('deployment runtime guardrails', () => {
 		);
 	});
 
+	it('pins every workflow node setup step to the Docker runtime patch version', () => {
+		const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
+		const pinnedNodeVersion = getPinnedNodeVersionFromDockerfile(dockerfile);
+		const workflowPaths = [
+			CI_WORKFLOW_PATH,
+			DEPLOY_WORKFLOW_PATH,
+			DAILY_FULL_SUITE_WORKFLOW_PATH,
+			TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH
+		];
+
+		for (const workflowPath of workflowPaths) {
+			const workflow = readFileSync(workflowPath, 'utf8');
+			const setupNodeSteps = workflow
+				.split('\n')
+				.filter((line) => line.includes('uses: actions/setup-node@'));
+
+			assert.ok(
+				setupNodeSteps.length > 0,
+				`${path.basename(workflowPath)} should define an actions/setup-node step`
+			);
+			assert.match(
+				workflow,
+				new RegExp(
+					`node-version:\\s*${pinnedNodeVersion.replace(/\./g, '\\.')}`
+				)
+			);
+		}
+	});
+
 	it('runs the full verification lane before deployment', () => {
 		const workflow = readFileSync(DEPLOY_WORKFLOW_PATH, 'utf8');
 		const runCommands = getWorkflowRunCommands(workflow, 'test');
@@ -331,7 +380,7 @@ describe('deployment runtime guardrails', () => {
 		assert.deepStrictEqual(schedule, ['0 14 * * *']);
 		assert.strictEqual(permissions.get('contents'), 'read');
 		assert.ok(setupNodeStep, 'verify job should set up Node.js');
-		assert.strictEqual(setupNodeStep.with['node-version'], '24');
+		assert.strictEqual(setupNodeStep.with['node-version'], '24.14.0');
 		assert.strictEqual(setupNodeStep.with.cache, 'npm');
 		assert.ok(runCommands.includes('npm ci --ignore-scripts'));
 		assert.ok(runCommands.includes('npm run test:full'));
