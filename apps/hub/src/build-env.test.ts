@@ -44,6 +44,29 @@ describe('hub build environment', () => {
 		expect(previewEnv.ORIGIN).toBe('http://localhost:4173');
 	});
 
+	it('derives placeholder preview origins from explicit loopback hosts', () => {
+		const previewEnv = getHubPreviewEnv({
+			HOST: '127.0.0.1',
+			PORT: '4173'
+		});
+
+		expect(previewEnv.WORKOS_REDIRECT_URI).toBe(
+			'http://127.0.0.1:4173/auth/callback'
+		);
+		expect(previewEnv.ORIGIN).toBe('http://127.0.0.1:4173');
+	});
+
+	it('requires an explicit origin when preview binds a wildcard host', () => {
+		expect(() =>
+			getHubPreviewEnv({
+				HOST: '0.0.0.0',
+				PORT: '4173'
+			})
+		).toThrow(
+			/ORIGIN must be set when HOST is not a concrete loopback address/
+		);
+	});
+
 	it('preserves explicit preview auth env values', () => {
 		const previewEnv = getHubPreviewEnv({
 			NODE_ENV: 'staging',
