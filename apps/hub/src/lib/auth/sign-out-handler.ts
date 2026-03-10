@@ -26,6 +26,9 @@ type CreateSignOutPostHandlerOptions = {
 	logError?: (message: string, context: SignOutLogContext) => void;
 };
 
+const SIGN_OUT_MISSING_REDIRECT_LOCATION_ERROR_MESSAGE =
+	'Sign-out produced a redirect response without a location header';
+
 function readUrl(value: string): URL | null {
 	try {
 		return new URL(value);
@@ -135,7 +138,7 @@ function normalizeSignOutResponse(
 
 	const location = response.headers.get('location');
 	if (location === null) {
-		return response;
+		throw new Error(SIGN_OUT_MISSING_REDIRECT_LOCATION_ERROR_MESSAGE);
 	}
 
 	const safeLocation = normalizeTrustedRedirectLocation(location, {

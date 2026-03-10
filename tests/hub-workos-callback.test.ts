@@ -231,6 +231,35 @@ describe('WorkOS Auth Callback Route', () => {
 			assert.strictEqual(logs[0][0], 'Auth callback failed');
 		});
 
+		it('rejects redirect responses that omit the location header', async () => {
+			const logs = [];
+			const handler = createHandler({
+				handleCallback: () => async () =>
+					new Response(null, {
+						status: 302
+					}),
+				isRedirect,
+				isHttpError,
+				authErrorSigningSecret,
+				includeMessageInLogs: true,
+				logError: (...args) => logs.push(args)
+			});
+
+			await assert.rejects(
+				() => handler(createEvent({ accept: 'application/json' })),
+				(caught) => {
+					assert.ok(isHttpError(caught));
+					assert.strictEqual(caught.status, 503);
+					return true;
+				}
+			);
+			assert.strictEqual(logs.length, 1);
+			assert.strictEqual(
+				logs[0][1].errorMessage,
+				'Auth callback produced a redirect response without a location header'
+			);
+		});
+
 		it('rethrows redirect responses from upstream handler', async () => {
 			const redirectErr = { kind: 'redirect' };
 			const handler = createHandler({

@@ -41,6 +41,8 @@ type CallbackRedirectResolution =
 
 const CALLBACK_AUTH_ERROR_PATHNAME = '/auth/error';
 const CALLBACK_AUTH_ERROR_REDIRECT_CODE = 'WORKOS_CALLBACK_AUTH_ERROR_REDIRECT';
+const CALLBACK_MISSING_REDIRECT_LOCATION_ERROR_MESSAGE =
+	'Auth callback produced a redirect response without a location header';
 
 function isRedirectLike(value: unknown): value is RedirectLikeObject {
 	if (isRedirectLikeObject(value)) {
@@ -122,7 +124,7 @@ function normalizeCallbackResponse(
 
 	const location = response.headers.get('location');
 	if (location === null) {
-		return response;
+		throw new Error(CALLBACK_MISSING_REDIRECT_LOCATION_ERROR_MESSAGE);
 	}
 
 	const redirectResolution = normalizeCallbackRedirectLocation(

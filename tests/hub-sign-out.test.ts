@@ -50,7 +50,7 @@ function getSetCookieHeaders(headers) {
 
 describe('sign-out handler unit behavior', () => {
 	it('allows same-origin requests', async () => {
-		const expected = new Response(null, { status: 303 });
+		const expected = new Response(null, { status: 200 });
 		const postHandler = createSignOutPostHandler({
 			signOut: async () => expected,
 			expectedOrigin: 'https://kaivalo.com'
@@ -90,7 +90,7 @@ describe('sign-out handler unit behavior', () => {
 	});
 
 	it('accepts configured origins with trailing slash', async () => {
-		const expected = new Response(null, { status: 303 });
+		const expected = new Response(null, { status: 200 });
 		const postHandler = createSignOutPostHandler({
 			signOut: async () => expected,
 			expectedOrigin: 'https://kaivalo.com/'
@@ -119,7 +119,7 @@ describe('sign-out handler unit behavior', () => {
 	});
 
 	it('accepts same-origin requests when origin is absent but referer is same-origin', async () => {
-		const expected = new Response(null, { status: 303 });
+		const expected = new Response(null, { status: 200 });
 		const postHandler = createSignOutPostHandler({
 			signOut: async () => expected,
 			expectedOrigin: 'https://kaivalo.com'
@@ -376,7 +376,7 @@ describe('sign-out handler unit behavior', () => {
 	});
 
 	it('normalizes origin hosts before comparing', async () => {
-		const expected = new Response(null, { status: 303 });
+		const expected = new Response(null, { status: 200 });
 		const postHandler = createSignOutPostHandler({
 			signOut: async () => expected,
 			expectedOrigin: 'https://kaivalo.com'
@@ -699,6 +699,43 @@ describe('sign-out handler unit behavior', () => {
 		assert.strictEqual(
 			logs[0][1].errorMessage,
 			'Sign-out produced an invalid redirect location'
+		);
+	});
+
+	it('rejects redirect responses that omit the location header', async () => {
+		const logs = [];
+		const postHandler = createSignOutPostHandler({
+			signOut: async () =>
+				new Response(null, {
+					status: 302
+				}),
+			expectedOrigin: 'https://kaivalo.com',
+			includeMessageInLogs: true,
+			logError: (...args) => logs.push(args)
+		});
+
+		await assert.rejects(
+			() =>
+				postHandler({
+					request: new Request('https://kaivalo.test/auth/sign-out', {
+						method: 'POST',
+						headers: {
+							origin: 'https://kaivalo.com',
+							accept: 'application/json'
+						}
+					}),
+					url: new URL('https://kaivalo.test/auth/sign-out')
+				}),
+			(caught) => {
+				assert.ok(isHttpError(caught));
+				assert.strictEqual(caught.status, 503);
+				return true;
+			}
+		);
+		assert.strictEqual(logs.length, 1);
+		assert.strictEqual(
+			logs[0][1].errorMessage,
+			'Sign-out produced a redirect response without a location header'
 		);
 	});
 
