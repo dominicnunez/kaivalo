@@ -30,6 +30,8 @@ describe('avatar proxy route', () => {
 				new Response('image-bytes', {
 					status: 200,
 					headers: {
+						'cache-control':
+							'public, max-age=600, stale-while-revalidate=86400',
 						'content-type': 'image/png',
 						'content-length': '11',
 						etag: '"avatar-1"'
@@ -65,6 +67,88 @@ describe('avatar proxy route', () => {
 		);
 		expect(response.headers.get('x-content-type-options')).toBe('nosniff');
 		expect(response.headers.get('etag')).toBe('"avatar-1"');
+	});
+
+	it('defaults successful avatar responses to private no-store when upstream cache policy is absent', async () => {
+		const fetch = vi.fn(
+			async () =>
+				new Response('image-bytes', {
+					status: 200,
+					headers: {
+						'content-type': 'image/png',
+						'content-length': '11'
+					}
+				})
+		);
+
+		const response = await GET({
+			request: new Request(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			url: new URL(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			fetch
+		} as never);
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('cache-control')).toBe('private, no-store');
+	});
+
+	it('preserves stricter upstream cache lifetimes instead of widening them', async () => {
+		const fetch = vi.fn(
+			async () =>
+				new Response('image-bytes', {
+					status: 200,
+					headers: {
+						'cache-control': 'public, max-age=60, stale-while-revalidate=30',
+						'content-type': 'image/png',
+						'content-length': '11'
+					}
+				})
+		);
+
+		const response = await GET({
+			request: new Request(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			url: new URL(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			fetch
+		} as never);
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('cache-control')).toBe(
+			'public, max-age=60, stale-while-revalidate=30'
+		);
+	});
+
+	it('does not widen restrictive upstream cache directives', async () => {
+		const fetch = vi.fn(
+			async () =>
+				new Response('image-bytes', {
+					status: 200,
+					headers: {
+						'cache-control': 'private, max-age=60',
+						'content-type': 'image/png',
+						'content-length': '11'
+					}
+				})
+		);
+
+		const response = await GET({
+			request: new Request(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			url: new URL(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			fetch
+		} as never);
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('cache-control')).toBe('private, no-store');
 	});
 
 	it('rejects non-image upstream responses', async () => {
@@ -216,6 +300,7 @@ describe('avatar proxy route', () => {
 				new Response(null, {
 					status: 304,
 					headers: {
+						'cache-control': 'public, max-age=60, stale-while-revalidate=30',
 						etag: '"avatar-2"',
 						'last-modified': 'Mon, 03 Mar 2025 12:00:00 GMT'
 					}
@@ -250,7 +335,7 @@ describe('avatar proxy route', () => {
 		);
 		expect(response.status).toBe(304);
 		expect(response.headers.get('cache-control')).toBe(
-			'public, max-age=300, stale-while-revalidate=86400'
+			'public, max-age=60, stale-while-revalidate=30'
 		);
 		expect(response.headers.get('etag')).toBe('"avatar-2"');
 	});

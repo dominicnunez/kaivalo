@@ -6,9 +6,12 @@ import {
 } from '$lib/server/avatar-proxy.ts';
 import { sanitizeAvatarUrl } from '$lib/server/avatar-url.ts';
 
-const AVATAR_CACHE_CONTROL =
-	'public, max-age=300, stale-while-revalidate=86400';
+const AVATAR_CACHE_CONTROL = 'public';
+const AVATAR_CACHE_MAX_AGE_SECONDS = 300;
+const AVATAR_CACHE_STALE_WHILE_REVALIDATE_SECONDS = 86400;
 const PRIVATE_NO_STORE_CACHE_CONTROL = 'private, no-store';
+
+type CacheDirectiveMap = Map<string, string | true>;
 
 function getAvatarContentType(upstream: Response): string | null {
 	const contentType = upstream.headers.get('content-type');
@@ -27,6 +30,93 @@ function createGatewayErrorResponse(status: number, message: string): Response {
 			'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL
 		}
 	});
+}
+
+function parseCacheControl(headerValue: string | null): CacheDirectiveMap {
+	const directives = new Map<string, string | true>();
+	if (!headerValue) {
+		return directives;
+	}
+
+	for (const directive of headerValue.split(',')) {
+		const trimmedDirective = directive.trim();
+		if (!trimmedDirective) {
+			continue;
+		}
+
+		const separatorIndex = trimmedDirective.indexOf('=');
+		if (separatorIndex === -1) {
+			directives.set(trimmedDirective.toLowerCase(), true);
+			continue;
+		}
+
+		const name = trimmedDirective.slice(0, separatorIndex).trim().toLowerCase();
+		const rawValue = trimmedDirective.slice(separatorIndex + 1).trim();
+		if (!name || rawValue.length === 0) {
+			continue;
+		}
+
+		directives.set(name, rawValue.replace(/^"|"$/g, ''));
+	}
+
+	return directives;
+}
+
+function getIntegerDirective(
+	directives: CacheDirectiveMap,
+	name: string
+): number | null {
+	const value = directives.get(name);
+	if (typeof value !== 'string' || !/^\d+$/.test(value)) {
+		return null;
+	}
+
+	const parsed = Number.parseInt(value, 10);
+	return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function buildAvatarCacheControl(upstream: Response): string {
+	const directives = parseCacheControl(upstream.headers.get('cache-control'));
+	if (directives.has('no-store')) {
+		return PRIVATE_NO_STORE_CACHE_CONTROL;
+	}
+
+	if (!directives.has('public') || directives.has('private')) {
+		return PRIVATE_NO_STORE_CACHE_CONTROL;
+	}
+
+	if (directives.has('no-cache')) {
+		return 'public, max-age=0, must-revalidate';
+	}
+
+	const upstreamMaxAge =
+		getIntegerDirective(directives, 's-maxage') ??
+		getIntegerDirective(directives, 'max-age');
+	if (upstreamMaxAge === null) {
+		return PRIVATE_NO_STORE_CACHE_CONTROL;
+	}
+
+	const cacheDirectives = [
+		AVATAR_CACHE_CONTROL,
+		`max-age=${Math.min(upstreamMaxAge, AVATAR_CACHE_MAX_AGE_SECONDS)}`
+	];
+	const staleWhileRevalidate = getIntegerDirective(
+		directives,
+		'stale-while-revalidate'
+	);
+	if (staleWhileRevalidate !== null) {
+		cacheDirectives.push(
+			`stale-while-revalidate=${Math.min(
+				staleWhileRevalidate,
+				AVATAR_CACHE_STALE_WHILE_REVALIDATE_SECONDS
+			)}`
+		);
+	}
+	if (directives.has('must-revalidate')) {
+		cacheDirectives.push('must-revalidate');
+	}
+
+	return cacheDirectives.join(', ');
 }
 
 function copyCacheValidators(upstream: Response, headers: Headers): void {
@@ -128,7 +218,7 @@ export const GET: RequestHandler = async ({ request, url, fetch }) => {
 	}
 
 	const headers = new Headers({
-		'cache-control': AVATAR_CACHE_CONTROL,
+		'cache-control': buildAvatarCacheControl(upstream),
 		'x-content-type-options': 'nosniff'
 	});
 	copyCacheValidators(upstream, headers);
