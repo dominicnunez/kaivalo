@@ -1,9 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import http from 'node:http';
 import { spawn } from 'node:child_process';
-import { ensureHubBuild } from './helpers/hub-build.ts';
 import { httpGet } from './helpers/hub-preview.ts';
+import { assertHubBuildAvailable } from './helpers/hub-build.ts';
 import { reserveLocalPort } from './helpers/network.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -42,6 +43,72 @@ function delay(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function post(url: string, headers: Record<string, string> = {}) {
+	return new Promise<{
+		statusCode: number | undefined;
+		headers: http.IncomingHttpHeaders;
+		data: string;
+	}>((resolve, reject) => {
+		const req = http.request(
+			url,
+			{
+				method: 'POST',
+				headers
+			},
+			(response) => {
+				let data = '';
+				response.on('data', (chunk) => {
+					data += chunk;
+				});
+				response.on('end', () => {
+					resolve({
+						statusCode: response.statusCode,
+						headers: response.headers,
+						data
+					});
+				});
+			}
+		);
+
+		req.on('error', reject);
+		req.setTimeout(5000, () => {
+			req.destroy(new Error('Request timeout'));
+		});
+		req.end();
+	});
+}
+
+async function assertPreviewAuthRoutes(baseUrl: string): Promise<void> {
+	const signOutResponse = await post(`${baseUrl}/auth/sign-out`, {
+		origin: baseUrl,
+		'sec-fetch-site': 'same-origin'
+	});
+	assert.strictEqual(signOutResponse.statusCode, 302);
+	assert.strictEqual(signOutResponse.headers.location, '/');
+
+	const signInResponse = await httpGet(`${baseUrl}/auth/sign-in`, {
+		accept: 'text/html',
+		'sec-fetch-mode': 'navigate'
+	});
+	assert.strictEqual(signInResponse.statusCode, 303);
+	assert.ok(signInResponse.headers.location, 'Expected a redirect location');
+
+	const redirectLocation = new URL(
+		String(signInResponse.headers.location),
+		baseUrl
+	);
+	assert.strictEqual(redirectLocation.origin, 'https://api.workos.com');
+	assert.ok(
+		redirectLocation.pathname === '/user_management/authorize' ||
+			redirectLocation.pathname.startsWith('/user_management/authorize/'),
+		'Expected sign-in to redirect to WorkOS authorization'
+	);
+	assert.strictEqual(
+		redirectLocation.searchParams.get('redirect_uri'),
+		`${baseUrl}/auth/callback`
+	);
+}
+
 function stopProcessGroup(
 	server: import('node:child_process').ChildProcess
 ): Promise<ProcessShutdownResult> {
@@ -74,7 +141,7 @@ function stopProcessGroup(
 
 describe('hub preview script', () => {
 	it('starts the built node runtime without requiring local auth secrets', async () => {
-		ensureHubBuild();
+		assertHubBuildAvailable();
 
 		const reservation = await reserveLocalPort();
 		const port = reservation.port;
@@ -135,6 +202,7 @@ describe('hub preview script', () => {
 						const homepage = await httpGet(baseUrl);
 						assert.strictEqual(homepage.statusCode, 200);
 						assert.match(homepage.data, /Kaivalo/i);
+						await assertPreviewAuthRoutes(baseUrl);
 						return;
 					}
 				} catch {

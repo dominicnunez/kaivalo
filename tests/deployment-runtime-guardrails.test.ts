@@ -400,6 +400,8 @@ describe('deployment runtime guardrails', () => {
 		assert.match(scripts['test:fast'], /\bnpm run lint\b/);
 		assert.match(scripts['test:fast'], /\bnpm run test:core\b/);
 		assert.match(scripts['test:full'], /\bnpm run test:fast\b/);
+		assert.doesNotMatch(scripts['test:core'], /hub-preview-script\.test\.ts/);
+		assert.match(scripts['test:full'], /\bnpm run test:preview:hub\b/);
 	});
 
 	it('only builds and deploys from deployable refs', () => {

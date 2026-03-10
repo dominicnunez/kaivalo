@@ -76,6 +76,20 @@ export function ensureHubBuild() {
 	});
 }
 
+export function assertHubBuildAvailable() {
+	if (
+		shouldBuildBeRegenerated({
+			buildDir: BUILD_DIR,
+			buildEntry: BUILD_ENTRY,
+			inputPaths: getHubBuildInputPaths()
+		})
+	) {
+		throw new Error(
+			'Hub preview tests require an up-to-date build. Run `npm run test:build:hub` first.'
+		);
+	}
+}
+
 export function ensureBuildFresh({
 	buildDir,
 	buildEntry,
