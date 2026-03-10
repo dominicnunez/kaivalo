@@ -2,15 +2,36 @@ import { spawnSync } from 'node:child_process';
 import { getValidatedWorkosEnv } from '../src/lib/server/workos-security-env.ts';
 import { getHubBuildPaths, removeServerSourceMaps } from './build-artifacts.ts';
 
-const BUILD_ENV_DEFAULTS = {
+const DEFAULT_LOCAL_PREVIEW_PORT = '3100';
+const LOCAL_PLACEHOLDER_ENV_DEFAULTS = {
 	WORKOS_CLIENT_ID: 'client_build_placeholder',
 	WORKOS_API_KEY: 'sk_build_placeholder',
-	WORKOS_REDIRECT_URI: 'http://localhost:3100/auth/callback',
 	WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
-	AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
-	ORIGIN: 'http://localhost:3100'
+	AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32)
 } as const;
 const BUILD_PLACEHOLDER_FLAG = 'HUB_BUILD_ALLOW_PLACEHOLDERS';
+
+function getLocalPreviewOrigin(baseEnv: NodeJS.ProcessEnv): string {
+	const configuredOrigin = baseEnv.ORIGIN?.trim();
+	if (configuredOrigin) {
+		return configuredOrigin;
+	}
+
+	const port = baseEnv.PORT?.trim() || DEFAULT_LOCAL_PREVIEW_PORT;
+	return `http://localhost:${port}`;
+}
+
+export function getHubLocalPlaceholderEnv(
+	baseEnv: NodeJS.ProcessEnv = process.env
+): NodeJS.ProcessEnv {
+	const origin = getLocalPreviewOrigin(baseEnv);
+
+	return {
+		...LOCAL_PLACEHOLDER_ENV_DEFAULTS,
+		WORKOS_REDIRECT_URI: `${origin}/auth/callback`,
+		ORIGIN: origin
+	};
+}
 
 function shouldAllowBuildPlaceholders(baseEnv: NodeJS.ProcessEnv): boolean {
 	const nodeEnv = baseEnv.NODE_ENV?.trim();
@@ -31,10 +52,9 @@ export function getHubBuildEnv(
 		? {
 				...baseEnv,
 				...Object.fromEntries(
-					Object.entries(BUILD_ENV_DEFAULTS).map(([name, value]) => [
-						name,
-						baseEnv[name] ?? value
-					])
+					Object.entries(getHubLocalPlaceholderEnv(baseEnv)).map(
+						([name, value]) => [name, baseEnv[name] ?? value]
+					)
 				)
 			}
 		: { ...baseEnv };
@@ -48,6 +68,23 @@ export function getHubBuildEnv(
 		...buildEnv,
 		[BUILD_PLACEHOLDER_FLAG]: buildEnv[BUILD_PLACEHOLDER_FLAG]
 	};
+}
+
+export function getHubPreviewEnv(
+	baseEnv: NodeJS.ProcessEnv = process.env
+): NodeJS.ProcessEnv {
+	const previewEnv = {
+		...baseEnv,
+		...Object.fromEntries(
+			Object.entries(getHubLocalPlaceholderEnv(baseEnv)).map(
+				([name, value]) => [name, baseEnv[name] ?? value]
+			)
+		),
+		NODE_ENV: baseEnv.NODE_ENV?.trim() || 'production'
+	};
+
+	getValidatedWorkosEnv(previewEnv);
+	return previewEnv;
 }
 
 export function runHubBuildWithEnv(): void {

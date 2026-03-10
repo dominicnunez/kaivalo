@@ -41,3 +41,4 @@ npm run test:ci
 `npm run test:fast` is the fast verification lane used by `pre-push` and regular CI.
 `npm run test:ci` runs the same fast verification lane for GitHub Actions push and pull request checks.
 `npm run test:deploy` runs the full verification lane, including the dependency audit gate, before deployment continues.
+`npm --prefix apps/hub run preview` starts the built Node adapter entrypoint, not Vite's static preview server. If runtime auth secrets are absent locally, it fills only the missing auth env with loopback-safe placeholder values so the built app can still be exercised end to end.
