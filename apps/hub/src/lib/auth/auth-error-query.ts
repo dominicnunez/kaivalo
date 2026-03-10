@@ -18,7 +18,7 @@ import {
 } from './auth-error-query-shared.ts';
 export const AUTH_ERROR_QUERY_TTL_MS = 5 * 60 * 1000;
 
-const AUTH_REDIRECT_INCIDENT_ID_PATTERN =
+const AUTH_INCIDENT_ID_PATTERN =
 	/^auth(?:cb|sign)_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type BuildAuthErrorRedirectQueryOptions = {
@@ -37,8 +37,8 @@ export type VerifiedAuthError = {
 	incidentId: string;
 };
 
-function isValidCallbackIncidentId(incidentId: string): boolean {
-	return AUTH_REDIRECT_INCIDENT_ID_PATTERN.test(incidentId);
+function isValidAuthIncidentId(incidentId: string): boolean {
+	return AUTH_INCIDENT_ID_PATTERN.test(incidentId);
 }
 
 function signAuthErrorIncident(
@@ -75,8 +75,8 @@ export function buildAuthErrorRedirectQuery({
 }: BuildAuthErrorRedirectQueryOptions): string {
 	const normalizedSecret =
 		typeof secret === 'string' ? normalizeSigningSecret(secret) : '';
-	if (!isValidCallbackIncidentId(incidentId)) {
-		throw new Error('incidentId must be a valid auth callback incident id');
+	if (!isValidAuthIncidentId(incidentId)) {
+		throw new Error('incidentId must be a valid auth incident id');
 	}
 	if (normalizedSecret === '') {
 		throw new Error('secret must be a non-empty string');
@@ -113,7 +113,7 @@ export function readVerifiedAuthError(
 	if (!incidentId || !timestamp || !signature) {
 		return null;
 	}
-	if (!isValidCallbackIncidentId(incidentId) || !/^\d+$/.test(timestamp)) {
+	if (!isValidAuthIncidentId(incidentId) || !/^\d+$/.test(timestamp)) {
 		return null;
 	}
 

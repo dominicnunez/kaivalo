@@ -33,18 +33,15 @@ describe('readVerifiedAuthError', () => {
 		'',
 		'not-an-incident-id',
 		'authlayout_123e4567-e89b-12d3-a456-426614174000'
-	])(
-		'rejects malformed auth redirect incident ids when signing: %s',
-		(badId) => {
-			expect(() =>
-				buildAuthErrorRedirectQuery({
-					incidentId: badId,
-					secret: cookiePassword,
-					now: issuedAt
-				})
-			).toThrowError('incidentId must be a valid auth callback incident id');
-		}
-	);
+	])('rejects malformed auth incident ids when signing: %s', (badId) => {
+		expect(() =>
+			buildAuthErrorRedirectQuery({
+				incidentId: badId,
+				secret: cookiePassword,
+				now: issuedAt
+			})
+		).toThrowError('incidentId must be a valid auth incident id');
+	});
 
 	it.each(['', '   '])(
 		'rejects empty signing secret when building redirect query: %j',
