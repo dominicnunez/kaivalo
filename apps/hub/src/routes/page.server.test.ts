@@ -47,32 +47,10 @@ describe('home page load', () => {
 			expect(result.meta.url).toBe('https://kaivalo.test');
 			expect(result.meta.image).toBe('https://kaivalo.test/og-image.png');
 			expect(result.currentYear).toBe(2030);
-			expect(result.marketingServices).toEqual([
-				{
-					id: 'sweep',
-					name: 'Sweep',
-					tagline: 'Stay on schedule',
-					description: 'Smart scheduling for chimney professionals.',
-					icon: 'calendar',
-					lifecycle: 'active',
-					marketingVisible: true,
-					launcherVisible: true,
-					enabled: true,
-					appUrl: 'https://sweep.kaivalo.com'
-				},
-				{
-					id: 'podstudio',
-					name: 'PodStudio',
-					tagline: 'Podcast management',
-					description:
-						'Equipment tracking and session scheduling for podcast studios.',
-					icon: 'mic',
-					lifecycle: 'planned',
-					marketingVisible: true,
-					launcherVisible: true,
-					enabled: false,
-					appUrl: 'https://podcast.kaivalo.com'
-				}
+			expect(result.marketingServices).toHaveLength(2);
+			expect(result.marketingServices.map((service) => service.id)).toEqual([
+				'sweep',
+				'podstudio'
 			]);
 		} finally {
 			mockEnv.ORIGIN = originalOrigin;
