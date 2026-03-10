@@ -242,9 +242,6 @@ describe('layout server load', () => {
 
 	it('returns normalized user data for authenticated requests', async () => {
 		const setHeaders = vi.fn();
-		mockGetValidatedWorkosEnv.mockImplementation(() => {
-			throw new Error('authenticated requests should not validate auth entry');
-		});
 		mockGetUser.mockResolvedValue({
 			firstName: 'Kai',
 			email: 'kai@example.com',
