@@ -61,6 +61,22 @@ function createEvent(
 
 const baseEvent = createEvent('https://kaivalo.test/');
 
+function expectAuthLayoutFailureLogged(
+	errorSpy: ReturnType<typeof vi.spyOn>
+): void {
+	expect(errorSpy).toHaveBeenCalledOnce();
+	expect(errorSpy).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({
+			errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
+			method: 'GET',
+			pathname: '/',
+			requestId: 'missing',
+			incidentId: expect.stringMatching(/^authlayout_/)
+		})
+	);
+}
+
 describe('layout server load', () => {
 	let errorSpy: ReturnType<typeof vi.spyOn>;
 
@@ -174,20 +190,7 @@ describe('layout server load', () => {
 					incidentId: expect.stringMatching(/^authlayout_/)
 				}
 			});
-			expect(errorSpy).toHaveBeenCalledOnce();
-			expect(errorSpy).toHaveBeenCalledWith(
-				expect.any(String),
-				expect.objectContaining({
-					errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
-					errorMessage:
-						'DEV_AUTH_BYPASS requires NODE_ENV=development with loopback-only ORIGIN and WORKOS_REDIRECT_URI callback URL.',
-					errorName: 'Error',
-					method: 'GET',
-					pathname: '/',
-					requestId: 'missing',
-					incidentId: expect.stringMatching(/^authlayout_/)
-				})
-			);
+			expectAuthLayoutFailureLogged(errorSpy);
 		}
 	);
 
@@ -211,18 +214,7 @@ describe('layout server load', () => {
 				incidentId: expect.stringMatching(/^authlayout_/)
 			}
 		});
-		expect(errorSpy).toHaveBeenCalledOnce();
-		expect(errorSpy).toHaveBeenCalledWith(
-			expect.any(String),
-			expect.objectContaining({
-				errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
-				method: 'GET',
-				pathname: '/',
-				incidentId: expect.stringMatching(/^authlayout_/),
-				errorMessage:
-					'DEV_AUTH_BYPASS only serves requests from loopback hosts and loopback clients.'
-			})
-		);
+		expectAuthLayoutFailureLogged(errorSpy);
 	});
 
 	it('rejects development auth bypass when the client is not loopback', async () => {
@@ -245,18 +237,7 @@ describe('layout server load', () => {
 				incidentId: expect.stringMatching(/^authlayout_/)
 			}
 		});
-		expect(errorSpy).toHaveBeenCalledOnce();
-		expect(errorSpy).toHaveBeenCalledWith(
-			expect.any(String),
-			expect.objectContaining({
-				errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
-				method: 'GET',
-				pathname: '/',
-				incidentId: expect.stringMatching(/^authlayout_/),
-				errorMessage:
-					'DEV_AUTH_BYPASS only serves requests from loopback hosts and loopback clients.'
-			})
-		);
+		expectAuthLayoutFailureLogged(errorSpy);
 	});
 
 	it('returns normalized user data for authenticated requests', async () => {
@@ -401,19 +382,7 @@ describe('layout server load', () => {
 				incidentId: expect.stringMatching(/^authlayout_/)
 			}
 		});
-		expect(errorSpy).toHaveBeenCalledOnce();
-		expect(errorSpy).toHaveBeenCalledWith(
-			expect.any(String),
-			expect.objectContaining({
-				errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
-				errorMessage: 'Missing required environment variable: WORKOS_API_KEY',
-				errorName: 'Error',
-				method: 'GET',
-				pathname: '/',
-				requestId: 'missing',
-				incidentId: expect.stringMatching(/^authlayout_/)
-			})
-		);
+		expectAuthLayoutFailureLogged(errorSpy);
 	});
 
 	it('preserves the local sign-in route when AuthKit lookup fails', async () => {
@@ -442,19 +411,7 @@ describe('layout server load', () => {
 			'cache-control': 'private, no-store',
 			vary: 'Cookie, Authorization'
 		});
-		expect(errorSpy).toHaveBeenCalledOnce();
-		expect(errorSpy).toHaveBeenCalledWith(
-			expect.any(String),
-			expect.objectContaining({
-				errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
-				errorMessage: 'AuthKit upstream timeout',
-				errorName: 'Error',
-				method: 'GET',
-				pathname: '/',
-				requestId: 'missing',
-				incidentId: expect.stringMatching(/^authlayout_/)
-			})
-		);
+		expectAuthLayoutFailureLogged(errorSpy);
 	});
 
 	it.each([
@@ -464,8 +421,7 @@ describe('layout server load', () => {
 				firstName: 'Kai',
 				email: '   ',
 				profilePictureUrl: null
-			},
-			'AuthKit returned an empty email'
+			}
 		],
 		[
 			'non-string email',
@@ -473,8 +429,7 @@ describe('layout server load', () => {
 				firstName: 'Kai',
 				email: 42,
 				profilePictureUrl: null
-			},
-			'AuthKit returned a non-string email'
+			}
 		],
 		[
 			'non-string first name',
@@ -482,8 +437,7 @@ describe('layout server load', () => {
 				firstName: ['Kai'],
 				email: 'kai@example.com',
 				profilePictureUrl: null
-			},
-			'AuthKit returned a non-string firstName'
+			}
 		],
 		[
 			'non-string profile picture url',
@@ -491,12 +445,11 @@ describe('layout server load', () => {
 				firstName: 'Kai',
 				email: 'kai@example.com',
 				profilePictureUrl: 7
-			},
-			'AuthKit returned a non-string profilePictureUrl'
+			}
 		]
 	])(
 		'rejects malformed authenticated payloads from AuthKit: %s',
-		async (_label, payload, expectedMessage) => {
+		async (_label, payload) => {
 			const setHeaders = vi.fn();
 			mockGetUser.mockResolvedValue(payload as never);
 
@@ -518,19 +471,7 @@ describe('layout server load', () => {
 				'cache-control': 'private, no-store',
 				vary: 'Cookie, Authorization'
 			});
-			expect(errorSpy).toHaveBeenCalledOnce();
-			expect(errorSpy).toHaveBeenCalledWith(
-				expect.any(String),
-				expect.objectContaining({
-					errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
-					errorMessage: expectedMessage,
-					errorName: 'Error',
-					method: 'GET',
-					pathname: '/',
-					requestId: 'missing',
-					incidentId: expect.stringMatching(/^authlayout_/)
-				})
-			);
+			expectAuthLayoutFailureLogged(errorSpy);
 		}
 	);
 
