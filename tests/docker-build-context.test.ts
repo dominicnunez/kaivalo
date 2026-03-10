@@ -12,6 +12,26 @@ const DOCKERIGNORE = readDockerIgnore(ROOT);
 describe('docker build context', () => {
 	it('excludes non-runtime repository content from the build context', () => {
 		assert.ok(
+			isIgnoredByDockerIgnore('AGENTS.md', DOCKERIGNORE),
+			'repository instructions should stay out of the build context'
+		);
+		assert.ok(
+			isIgnoredByDockerIgnore('.husky/pre-push', DOCKERIGNORE),
+			'git hook tooling should stay out of the build context'
+		);
+		assert.ok(
+			isIgnoredByDockerIgnore('flake.nix', DOCKERIGNORE),
+			'nix tooling should stay out of the build context'
+		);
+		assert.ok(
+			isIgnoredByDockerIgnore('eslint.config.js', DOCKERIGNORE),
+			'lint configuration should stay out of the build context'
+		);
+		assert.ok(
+			isIgnoredByDockerIgnore('.prettierrc.json', DOCKERIGNORE),
+			'formatting configuration should stay out of the build context'
+		);
+		assert.ok(
 			isIgnoredByDockerIgnore(
 				'tests/docker-build-context.test.ts',
 				DOCKERIGNORE
@@ -47,6 +67,14 @@ describe('docker build context', () => {
 				DOCKERIGNORE
 			),
 			'runtime application code must remain in the build context'
+		);
+		assert.ok(
+			!isIgnoredByDockerIgnore('package.json', DOCKERIGNORE),
+			'workspace manifests must remain in the build context'
+		);
+		assert.ok(
+			!isIgnoredByDockerIgnore('Dockerfile', DOCKERIGNORE),
+			'the Dockerfile must remain in the build context'
 		);
 	});
 

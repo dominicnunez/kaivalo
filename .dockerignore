@@ -6,8 +6,17 @@ npm-debug.log*
 .env.*
 .git
 .github
+.husky
+AGENTS.md
 audit
 docs
+eslint.config.js
+flake.lock
+flake.nix
+scripts
 tests
+.envrc
+.prettierignore
+.prettierrc.json
 **/*.test.*
 **/__tests__/**
