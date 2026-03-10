@@ -19,8 +19,5 @@ function sanitizeProductionArtifacts(): Plugin {
 }
 
 export default defineConfig({
-	plugins: [tailwindcss(), sanitizeProductionArtifacts(), sveltekit()],
-	preview: {
-		allowedHosts: ['localhost']
-	}
+	plugins: [tailwindcss(), sanitizeProductionArtifacts(), sveltekit()]
 });
