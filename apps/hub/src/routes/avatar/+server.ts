@@ -41,7 +41,8 @@ type AvatarFailureClass =
 	| 'status'
 	| 'content-type'
 	| 'size'
-	| 'stream';
+	| 'stream'
+	| 'client-address';
 type AvatarFailureLogOptions = {
 	request: Request;
 	pathname: string;
@@ -154,6 +155,20 @@ function logAvatarFailure({
 			: getErrorLogContext(getAvatarLoggableError(error), {
 					includeMessage: shouldIncludeErrorMessage(env)
 				}))
+	});
+}
+
+function logAvatarClientAddressFailure({
+	request,
+	pathname,
+	source
+}: Pick<AvatarFailureLogOptions, 'request' | 'pathname' | 'source'>): void {
+	logAvatarFailure({
+		request,
+		pathname,
+		source,
+		failureClass: 'client-address',
+		responseStatus: SERVICE_UNAVAILABLE_STATUS
 	});
 }
 
@@ -420,6 +435,11 @@ export function _createAvatarGetHandler({
 			configuredTrustedProxyIps
 		);
 		if (!rateLimitKey) {
+			logAvatarClientAddressFailure({
+				request,
+				pathname: url.pathname,
+				source
+			});
 			return createServiceUnavailableResponse();
 		}
 

@@ -124,7 +124,7 @@ describe('sliding window rate limiter', () => {
 		});
 	});
 
-	it('shares overflow capacity across keys that arrive after the table is full', () => {
+	it('assigns isolated quotas to new keys after the table reaches capacity', () => {
 		let now = 1_000;
 		const limiter = createSlidingWindowRateLimiter({
 			limit: 1,
@@ -144,42 +144,41 @@ describe('sliding window rate limiter', () => {
 		now += 1;
 
 		expect(limiter.check('203.0.113.13')).toMatchObject({
-			allowed: false,
-			retryAfterSeconds: 60
-		});
-		expect(limiter.check('203.0.113.10')).toMatchObject({
-			allowed: false,
-			retryAfterSeconds: 60
+			allowed: true,
+			retryAfterSeconds: 0
 		});
 	});
 
-	it('releases overflowed keys back to dedicated buckets after active entries expire', () => {
+	it('evicts the least recently used bucket before a recently active bucket', () => {
 		let now = 1_000;
 		const limiter = createSlidingWindowRateLimiter({
 			limit: 1,
-			windowMs: 1_000,
-			maxEntries: 1,
+			windowMs: 60_000,
+			maxEntries: 2,
 			now: () => now
 		});
 
+		expect(limiter.check('203.0.113.10').allowed).toBe(true);
+		now += 1;
+		expect(limiter.check('203.0.113.11').allowed).toBe(true);
+		now += 1;
 		expect(limiter.check('203.0.113.10')).toMatchObject({
+			allowed: false,
+			retryAfterSeconds: 60
+		});
+		now += 1;
+		expect(limiter.check('203.0.113.12')).toMatchObject({
 			allowed: true,
 			retryAfterSeconds: 0
 		});
 		now += 1;
-		expect(limiter.check('203.0.113.11')).toMatchObject({
-			allowed: true,
-			retryAfterSeconds: 0
-		});
-		now += 1_000;
-
-		expect(limiter.check('203.0.113.11')).toMatchObject({
-			allowed: true,
-			retryAfterSeconds: 0
-		});
-		expect(limiter.check('203.0.113.11')).toMatchObject({
+		expect(limiter.check('203.0.113.10')).toMatchObject({
 			allowed: false,
-			retryAfterSeconds: 1
+			retryAfterSeconds: 60
+		});
+		expect(limiter.check('203.0.113.11')).toMatchObject({
+			allowed: true,
+			retryAfterSeconds: 0
 		});
 	});
 });

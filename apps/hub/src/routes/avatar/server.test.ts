@@ -181,6 +181,48 @@ describe('avatar proxy route', () => {
 		);
 	});
 
+	it('normalizes upstream no-cache directives to mandatory revalidation', async () => {
+		const fetch = vi.fn(
+			async () =>
+				new Response('image-bytes', {
+					status: 200,
+					headers: {
+						'cache-control': 'public, no-cache',
+						'content-type': 'image/png',
+						'content-length': '11'
+					}
+				})
+		);
+
+		const response = await GET(createAvatarEvent(fetch));
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('cache-control')).toBe(
+			'public, max-age=0, must-revalidate'
+		);
+	});
+
+	it('preserves upstream must-revalidate directives on cacheable avatars', async () => {
+		const fetch = vi.fn(
+			async () =>
+				new Response('image-bytes', {
+					status: 200,
+					headers: {
+						'cache-control': 'public, max-age=600, must-revalidate',
+						'content-type': 'image/png',
+						'content-length': '11'
+					}
+				})
+		);
+
+		const response = await GET(createAvatarEvent(fetch));
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('cache-control')).toBe(
+			'public, max-age=300, must-revalidate'
+		);
+	});
+
 	it('does not widen restrictive upstream cache directives', async () => {
 		const fetch = vi.fn(
 			async () =>
@@ -768,6 +810,7 @@ describe('avatar proxy route', () => {
 			})
 		});
 		const fetch = vi.fn();
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
 		const response = await GET({
 			request: new Request(
@@ -783,6 +826,19 @@ describe('avatar proxy route', () => {
 		expect(fetch).not.toHaveBeenCalled();
 		expect(response.headers.get('cache-control')).toBe('private, no-store');
 		await expect(response.text()).resolves.toBe('Service unavailable');
+		expect(errorSpy).toHaveBeenCalledWith(
+			'Avatar proxy request failed',
+			expect.objectContaining({
+				incidentId: expect.stringMatching(/^avatar_[0-9a-f-]+$/),
+				requestId: 'missing',
+				pathname: '/avatar',
+				method: 'GET',
+				sourceHost: 'avatars.githubusercontent.com',
+				failureClass: 'client-address',
+				responseStatus: 503,
+				errorCode: 'AVATAR_PROXY_FAILURE'
+			})
+		);
 	});
 
 	it('falls back to the direct proxy peer when trusted forwarding headers are malformed', async () => {
