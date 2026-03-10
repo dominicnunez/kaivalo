@@ -577,6 +577,39 @@ describe('Security header handle behavior', () => {
 		);
 	});
 
+	it('trusts x-forwarded-proto when adapter-node resolves the real client address', async () => {
+		const trustedProxyHandle = createSecurityHeadersHandle({
+			trustForwardedProto: true,
+			trustedProxyIps: ['203.0.113.10']
+		});
+		const proxiedResponse = await trustedProxyHandle({
+			event: {
+				request: new Request('http://kaivalo.test/', {
+					method: 'GET',
+					headers: {
+						'x-forwarded-for': '198.51.100.24',
+						'x-forwarded-proto': 'https'
+					}
+				}),
+				url: new URL('http://kaivalo.test/'),
+				getClientAddress: () => '198.51.100.24',
+				platform: {
+					req: {
+						socket: {
+							remoteAddress: '203.0.113.10'
+						}
+					}
+				}
+			},
+			resolve: async () => new Response('ok', { status: 200 })
+		});
+
+		assert.strictEqual(
+			proxiedResponse.headers.get('Strict-Transport-Security'),
+			'max-age=63072000; includeSubDomains'
+		);
+	});
+
 	it('treats equivalent IPv6 proxy address forms as trusted', async () => {
 		const trustedProxyHandle = createSecurityHeadersHandle({
 			trustForwardedProto: true,

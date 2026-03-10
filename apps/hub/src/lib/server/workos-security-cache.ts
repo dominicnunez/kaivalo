@@ -2,6 +2,7 @@ import { canonicalizeIpAddress } from './ip-address.ts';
 import { SENSITIVE_AUTH_COOKIE_NAMES } from './auth-cookie-names.ts';
 import type { Handle, RequestEvent } from '@sveltejs/kit';
 import type http from 'node:http';
+import { getRequestPeerAddress } from './request-peer-address.ts';
 
 const HSTS_MAX_AGE_SECONDS = 63_072_000;
 const AUTH_ROUTE_PATH_PREFIX = '/auth/';
@@ -135,18 +136,11 @@ function isTrustedProxyHop(
 	event: RequestEvent,
 	trustedProxyIps: Set<string>
 ): boolean {
-	if (
-		trustedProxyIps.size === 0 ||
-		typeof event.getClientAddress !== 'function'
-	) {
+	if (trustedProxyIps.size === 0) {
 		return false;
 	}
 
-	try {
-		return trustedProxyIps.has(canonicalizeIpAddress(event.getClientAddress()));
-	} catch {
-		return false;
-	}
+	return trustedProxyIps.has(getRequestPeerAddress(event));
 }
 
 function hasAuthorizationHeader(event: RequestEvent): boolean {

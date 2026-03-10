@@ -7,6 +7,7 @@ export const RUNTIME_SERVER_FILES = [
 	'node-server.ts',
 	'node-server-request.ts',
 	'node-server-runtime.ts',
+	'request-peer-address.ts',
 	'request-id.ts',
 	'workos-security.ts',
 	'workos-security-cache.ts',
