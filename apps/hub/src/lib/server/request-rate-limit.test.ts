@@ -74,4 +74,53 @@ describe('sliding window rate limiter', () => {
 			retryAfterSeconds: 60
 		});
 	});
+
+	it('evicts the least recently seen active bucket when it exceeds max entries', () => {
+		let now = 1_000;
+		const limiter = createSlidingWindowRateLimiter({
+			limit: 2,
+			windowMs: 60_000,
+			maxEntries: 2,
+			now: () => now
+		});
+
+		expect(limiter.check('203.0.113.10').allowed).toBe(true);
+		now += 1;
+		expect(limiter.check('203.0.113.11').allowed).toBe(true);
+		now += 1;
+		expect(limiter.check('203.0.113.10').allowed).toBe(true);
+		now += 1;
+		expect(limiter.check('203.0.113.12').allowed).toBe(true);
+		now += 1;
+
+		expect(limiter.check('203.0.113.10')).toMatchObject({
+			allowed: false,
+			retryAfterSeconds: 60
+		});
+		expect(limiter.check('203.0.113.11')).toMatchObject({
+			allowed: true,
+			retryAfterSeconds: 0
+		});
+	});
+
+	it('drops stale buckets before evicting active buckets on overflow', () => {
+		let now = 1_000;
+		const limiter = createSlidingWindowRateLimiter({
+			limit: 1,
+			windowMs: 1_000,
+			maxEntries: 1,
+			now: () => now
+		});
+
+		expect(limiter.check('203.0.113.10').allowed).toBe(true);
+		now += 1_001;
+		expect(limiter.check('203.0.113.11')).toMatchObject({
+			allowed: true,
+			retryAfterSeconds: 0
+		});
+		expect(limiter.check('203.0.113.11')).toMatchObject({
+			allowed: false,
+			retryAfterSeconds: 1
+		});
+	});
 });
