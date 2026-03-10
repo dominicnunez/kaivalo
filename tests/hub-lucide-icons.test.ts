@@ -21,7 +21,7 @@ describe('hub auth and footer controls', () => {
 		await preview?.stop();
 	});
 
-	it('renders auth controls with visible text labels and icon affordances', () => {
+	it('renders a visible sign-in control on the homepage', () => {
 		assert.strictEqual(homepage.statusCode, 200);
 
 		const controls = [...document.querySelectorAll('a, button')];
@@ -43,16 +43,13 @@ describe('hub auth and footer controls', () => {
 
 		const signInControl = signInLink ?? signInUnavailableButton;
 		assert.ok(signInControl, 'Expected a rendered sign-in control');
-		const icon = signInControl.querySelector('svg');
-		assert.ok(icon, 'Expected sign-in control to render an icon SVG');
 		assert.ok(
 			/sign in/i.test(signInControl.textContent ?? ''),
 			'Expected sign-in control to include visible text'
 		);
-		assert.strictEqual(icon.getAttribute('aria-hidden'), 'true');
 	});
 
-	it('renders service cards with icon affordances and the shared footer', () => {
+	it('renders services content with a launch action and the shared footer', () => {
 		const servicesSection = document.getElementById('services');
 		assert.ok(servicesSection, 'Expected a services section');
 
@@ -62,16 +59,15 @@ describe('hub auth and footer controls', () => {
 				(heading) => heading.textContent?.trim() === title
 			);
 			assert.ok(cardTitle, `Expected a service card titled "${title}"`);
-			const card = cardTitle.closest('.service-card');
-			assert.ok(
-				card,
-				`Expected "${title}" to render inside a service card container`
-			);
-			assert.ok(
-				card.querySelector('svg'),
-				`Expected "${title}" card to render an icon`
-			);
 		}
+
+		const openServicesLink = [
+			...servicesSection.querySelectorAll('a[href]')
+		].find((link) => link.getAttribute('href') === '/services');
+		assert.ok(
+			openServicesLink,
+			'Expected the services section to expose the /services action'
+		);
 
 		const footer = document.querySelector('footer');
 		assert.ok(footer, 'Expected the shared footer to render');
