@@ -32,6 +32,8 @@ const TOO_MANY_REQUESTS_STATUS = 429;
 const SERVICE_UNAVAILABLE_MESSAGE = 'Service unavailable';
 const SERVICE_UNAVAILABLE_STATUS = 503;
 const PRIVATE_NO_STORE_CACHE_CONTROL = 'private, no-store';
+const AVATAR_RESPONSE_TOO_LARGE_MESSAGE =
+	'Avatar response exceeds maximum allowed size';
 
 type CacheDirectiveMap = Map<string, string | true>;
 type AvatarFailureClass =
@@ -297,6 +299,28 @@ function isTimeoutError(error: unknown): boolean {
 	return error instanceof DOMException && error.name === 'TimeoutError';
 }
 
+function joinAvatarChunks(
+	chunks: Uint8Array[],
+	totalBytes: number
+): Uint8Array {
+	if (chunks.length === 0) {
+		return new Uint8Array();
+	}
+
+	if (chunks.length === 1) {
+		return chunks[0];
+	}
+
+	const body = new Uint8Array(totalBytes);
+	let offset = 0;
+	for (const chunk of chunks) {
+		body.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+
+	return body;
+}
+
 async function readAvatarBody(upstream: Response): Promise<Uint8Array> {
 	const advertisedLength = upstream.headers.get('content-length');
 	if (advertisedLength) {
@@ -305,13 +329,8 @@ async function readAvatarBody(upstream: Response): Promise<Uint8Array> {
 			Number.isFinite(parsedLength) &&
 			parsedLength > AVATAR_MAX_RESPONSE_BYTES
 		) {
-			await cancelUpstreamBody(
-				upstream,
-				'Avatar response exceeds maximum allowed size'
-			);
-			throw new AvatarResponseSizeError(
-				'Avatar response exceeds maximum allowed size'
-			);
+			await cancelUpstreamBody(upstream, AVATAR_RESPONSE_TOO_LARGE_MESSAGE);
+			throw new AvatarResponseSizeError(AVATAR_RESPONSE_TOO_LARGE_MESSAGE);
 		}
 	}
 
@@ -320,7 +339,7 @@ async function readAvatarBody(upstream: Response): Promise<Uint8Array> {
 		return new Uint8Array();
 	}
 
-	const body = new Uint8Array(AVATAR_MAX_RESPONSE_BYTES);
+	const chunks: Uint8Array[] = [];
 	let totalBytes = 0;
 
 	try {
@@ -332,19 +351,17 @@ async function readAvatarBody(upstream: Response): Promise<Uint8Array> {
 
 			totalBytes += value.byteLength;
 			if (totalBytes > AVATAR_MAX_RESPONSE_BYTES) {
-				await reader.cancel('Avatar response exceeds maximum allowed size');
-				throw new AvatarResponseSizeError(
-					'Avatar response exceeds maximum allowed size'
-				);
+				await reader.cancel(AVATAR_RESPONSE_TOO_LARGE_MESSAGE);
+				throw new AvatarResponseSizeError(AVATAR_RESPONSE_TOO_LARGE_MESSAGE);
 			}
 
-			body.set(value, totalBytes - value.byteLength);
+			chunks.push(value);
 		}
 	} finally {
 		reader.releaseLock();
 	}
 
-	return body.subarray(0, totalBytes);
+	return joinAvatarChunks(chunks, totalBytes);
 }
 
 function getAvatarRateLimitKey(

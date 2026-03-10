@@ -453,6 +453,38 @@ describe('avatar proxy route', () => {
 		expect(cancelSpy).toHaveBeenCalledOnce();
 	});
 
+	it('reassembles chunked avatar responses with the exact response size', async () => {
+		const chunks = [
+			new TextEncoder().encode('image-'),
+			new TextEncoder().encode('bytes'),
+			new Uint8Array([33])
+		];
+		const fetch = vi.fn(async () => {
+			const stream = new ReadableStream<Uint8Array>({
+				start(controller) {
+					for (const chunk of chunks) {
+						controller.enqueue(chunk);
+					}
+					controller.close();
+				}
+			});
+
+			return new Response(stream, {
+				status: 200,
+				headers: {
+					'content-type': 'image/png'
+				}
+			});
+		});
+
+		const response = await GET(createAvatarEvent(fetch));
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('cache-control')).toBe('private, no-store');
+		expect(response.headers.get('content-length')).toBe('12');
+		expect(await response.text()).toBe('image-bytes!');
+	});
+
 	it('rejects streamed avatar responses that exceed the byte limit and logs size failures', async () => {
 		const chunk = new Uint8Array(AVATAR_MAX_RESPONSE_BYTES / 2 + 1);
 		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
