@@ -192,3 +192,12 @@ The assignment may be debatable style, but it is not dead code and the behavior 
 **Reason:** The package does rely on Tailwind-generated output.
 `packages/ui/Container.svelte` renders utility classes such as `w-full`, `mx-auto`, `px-4`, `sm:px-6`, `lg:px-8`, and `max-w-screen-*`, so consumers need Tailwind available for that component to render correctly.
 Because the source itself ships Tailwind utility class names, the `tailwindcss` peer dependency is not dead or unnecessary configuration.
+
+### Avatar rate limiting can be spoofed because trusted-proxy mode does not enforce SvelteKit client-IP adapter settings
+
+**Location:** `apps/hub/src/routes/avatar/+server.ts:330` — avatar rate-limit key derivation
+
+**Reason:** The route does not trust arbitrary client-supplied `x-forwarded-for` values.
+`getAvatarRateLimitKey()` delegates to `getTrustedClientAddress()`, which only consults the forwarded chain when the direct peer IP is itself in `TRUSTED_PROXY_IPS`, canonicalizes every hop, rejects malformed chains entirely, and then walks the chain from the right to strip only trusted proxies.
+That means the absence of `ADDRESS_HEADER` or `XFF_DEPTH` does not create the spoofable bucket-key path described in the audit, because this route already reconstructs the client address from the trusted proxy allowlist instead of trusting the left-most forwarded hop.
+When forwarded data is malformed, the code falls back to the shared empty-key bucket rather than accepting an attacker-chosen client address.
