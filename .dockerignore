@@ -9,3 +9,5 @@ npm-debug.log*
 audit
 docs
 tests
+**/*.test.*
+**/__tests__/**

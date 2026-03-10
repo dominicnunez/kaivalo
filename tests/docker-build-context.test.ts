@@ -27,6 +27,21 @@ describe('docker build context', () => {
 			'audit should stay out of the build context'
 		);
 		assert.ok(
+			isIgnoredByDockerIgnore('apps/hub/src/build.test.ts', DOCKERIGNORE),
+			'in-tree application test files should stay out of the build context'
+		);
+		assert.ok(
+			isIgnoredByDockerIgnore('packages/ui/index.test.ts', DOCKERIGNORE),
+			'in-tree workspace package test files should stay out of the build context'
+		);
+		assert.ok(
+			isIgnoredByDockerIgnore(
+				'apps/hub/src/routes/__tests__/unexpected-error/+page.server.ts',
+				DOCKERIGNORE
+			),
+			'workspace-local test fixture routes should stay out of the build context'
+		);
+		assert.ok(
 			!isIgnoredByDockerIgnore(
 				'apps/hub/src/routes/+layout.server.ts',
 				DOCKERIGNORE
