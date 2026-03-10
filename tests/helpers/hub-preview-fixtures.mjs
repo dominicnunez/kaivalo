@@ -1,3 +1,55 @@
+import http from 'node:http';
+
+const PEER_ADDRESS_OVERRIDE_HEADER = 'x-kaivalo-preview-peer-address';
+
+const originalCreateServer = http.createServer.bind(http);
+http.createServer = function patchedCreateServer(...args) {
+	const server = originalCreateServer(...args);
+
+	server.prependListener('request', (req) => {
+		const overrideHeader = req.headers[PEER_ADDRESS_OVERRIDE_HEADER];
+		const overrideValue = Array.isArray(overrideHeader)
+			? overrideHeader[0]
+			: overrideHeader;
+		if (typeof overrideValue !== 'string') {
+			return;
+		}
+
+		const normalizedValue = overrideValue.trim();
+		const remoteAddress =
+			normalizedValue.toLowerCase() === 'missing'
+				? undefined
+				: normalizedValue || undefined;
+
+		applyRemoteAddressOverride(req.socket, remoteAddress);
+		if (req.connection && req.connection !== req.socket) {
+			applyRemoteAddressOverride(req.connection, remoteAddress);
+		}
+
+		const connectionSocket = req.connection?.socket;
+		if (
+			connectionSocket &&
+			typeof connectionSocket === 'object' &&
+			connectionSocket !== req.socket
+		) {
+			applyRemoteAddressOverride(connectionSocket, remoteAddress);
+		}
+	});
+
+	return server;
+};
+
+function applyRemoteAddressOverride(target, remoteAddress) {
+	if (!target || typeof target !== 'object') {
+		return;
+	}
+
+	Object.defineProperty(target, 'remoteAddress', {
+		configurable: true,
+		value: remoteAddress
+	});
+}
+
 const signInFixtureMode = process.env.HUB_PREVIEW_SIGN_IN_FIXTURE_MODE;
 if (signInFixtureMode) {
 	const { authKit } = await import('@workos/authkit-sveltekit');
