@@ -45,8 +45,11 @@ Create a `production` GitHub Environment in this repo and add:
 - `DEPLOY_USER`
 - `DEPLOY_SSH_KEY`
 - `DEPLOY_KNOWN_HOSTS`
+- variable `DEPLOY_ORIGIN`
 
 These values are only for the CI-to-host deployment path.
+`DEPLOY_ORIGIN` should be the public app origin, for example `https://hub.kaivalo.com`,
+so the workflow can verify `/` and `/healthz` after the host deploy command returns.
 
 Recommended:
 

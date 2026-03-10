@@ -128,6 +128,17 @@ function getWorkflowJobCondition(workflow, jobName) {
 	throw new Error(`job ${jobName} is missing an if condition`);
 }
 
+function getWorkflowJobProperty(workflow, jobName, propertyName) {
+	for (const line of getWorkflowJobBlock(workflow, jobName)) {
+		const match = line.match(new RegExp(`^ {4}${propertyName}:\\s*(.+)\\s*$`));
+		if (match) {
+			return match[1];
+		}
+	}
+
+	throw new Error(`job ${jobName} is missing ${propertyName}`);
+}
+
 function parseStepProperty(line) {
 	const propertyMatch = line.match(/^(?: {6}- | {8})([a-z-]+):\s*(.*)$/);
 	if (!propertyMatch) {
@@ -365,6 +376,28 @@ describe('deployment runtime guardrails', () => {
 
 		assert.ok(runCommands.includes('npm ci --ignore-scripts'));
 		assert.ok(runCommands.includes('npm run test:deploy'));
+	});
+
+	it('bounds deployment hangs and verifies application health after rollout', () => {
+		const workflow = readFileSync(DEPLOY_WORKFLOW_PATH, 'utf8');
+		const deployJob = getWorkflowJobBlock(workflow, 'deploy').join('\n');
+
+		assert.strictEqual(
+			getWorkflowJobProperty(workflow, 'deploy', 'timeout-minutes'),
+			'15'
+		);
+		assert.match(
+			deployJob,
+			/- name: Deploy image[\s\S]*ssh \\\s+[\s\S]*-o BatchMode=yes/
+		);
+		assert.match(deployJob, /-o ConnectTimeout=10/);
+		assert.match(deployJob, /-o ServerAliveInterval=15/);
+		assert.match(deployJob, /-o ServerAliveCountMax=3/);
+		assert.match(deployJob, /- name: Verify deployment health/);
+		assert.match(deployJob, /DEPLOY_ORIGIN: \$\{\{ vars\.DEPLOY_ORIGIN \}\}/);
+		assert.match(deployJob, /\/healthz/);
+		assert.match(deployJob, /Expected \/healthz to return plain-text ok/);
+		assert.match(deployJob, /\bcurl\b/);
 	});
 
 	it('runs the full verification lane on a daily schedule', () => {
