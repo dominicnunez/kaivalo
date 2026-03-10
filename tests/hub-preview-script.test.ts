@@ -11,6 +11,9 @@ const STARTUP_TIMEOUT_MS = 15000;
 const STARTUP_DELAY_MS = 250;
 const PROCESS_EXIT_TIMEOUT_MS = 5000;
 const MAX_STARTUP_OUTPUT_LINES = 120;
+type ProcessShutdownResult = {
+	forced: boolean;
+};
 const PREVIEW_ENV_NAMES = [
 	'WORKOS_CLIENT_ID',
 	'WORKOS_API_KEY',
@@ -39,8 +42,10 @@ function delay(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function stopProcessGroup(server: import('node:child_process').ChildProcess) {
-	return new Promise<void>((resolve) => {
+function stopProcessGroup(
+	server: import('node:child_process').ChildProcess
+): Promise<ProcessShutdownResult> {
+	return new Promise((resolve) => {
 		let forced = false;
 		const timeout = setTimeout(() => {
 			try {
@@ -49,24 +54,20 @@ function stopProcessGroup(server: import('node:child_process').ChildProcess) {
 			} catch {
 				// Ignore already-stopped process.
 			}
-			resolve();
+			resolve({ forced });
 		}, PROCESS_EXIT_TIMEOUT_MS);
 		timeout.unref();
 
 		server.once('exit', () => {
 			clearTimeout(timeout);
-			resolve();
+			resolve({ forced });
 		});
 
 		try {
 			process.kill(-server.pid!, 'SIGTERM');
 		} catch {
 			clearTimeout(timeout);
-			resolve();
-		}
-
-		if (forced) {
-			clearTimeout(timeout);
+			resolve({ forced: false });
 		}
 	});
 }
@@ -147,7 +148,12 @@ describe('hub preview script', () => {
 				`preview did not become ready within ${STARTUP_TIMEOUT_MS}ms:\n${output.join('\n')}`
 			);
 		} finally {
-			await stopProcessGroup(preview);
+			const shutdown = await stopProcessGroup(preview);
+			assert.equal(
+				shutdown.forced,
+				false,
+				'expected preview shutdown to exit without requiring SIGKILL fallback'
+			);
 		}
 	});
 });
