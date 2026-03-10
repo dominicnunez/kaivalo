@@ -123,4 +123,33 @@ describe('sliding window rate limiter', () => {
 			retryAfterSeconds: 1
 		});
 	});
+
+	it('keeps the newly inserted bucket when overflow evicts the oldest active key', () => {
+		let now = 1_000;
+		const limiter = createSlidingWindowRateLimiter({
+			limit: 1,
+			windowMs: 60_000,
+			maxEntries: 2,
+			now: () => now
+		});
+
+		expect(limiter.check('203.0.113.10').allowed).toBe(true);
+		now += 1;
+		expect(limiter.check('203.0.113.11').allowed).toBe(true);
+		now += 1;
+		expect(limiter.check('203.0.113.12')).toMatchObject({
+			allowed: true,
+			retryAfterSeconds: 0
+		});
+		now += 1;
+
+		expect(limiter.check('203.0.113.10')).toMatchObject({
+			allowed: true,
+			retryAfterSeconds: 0
+		});
+		expect(limiter.check('203.0.113.12')).toMatchObject({
+			allowed: false,
+			retryAfterSeconds: 60
+		});
+	});
 });

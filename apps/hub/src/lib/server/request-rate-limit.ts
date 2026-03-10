@@ -4,7 +4,6 @@ const BUCKET_COMPACTION_MIN_HEAD_INDEX = 32;
 type SlidingWindowBucket = {
 	timestamps: number[];
 	headIndex: number;
-	lastSeenAt: number;
 };
 
 export type RateLimitResult = {
@@ -108,20 +107,26 @@ function deleteBuckets(
 	}
 }
 
+function touchBucket(
+	buckets: Map<string, SlidingWindowBucket>,
+	key: string,
+	bucket: SlidingWindowBucket
+): void {
+	buckets.delete(key);
+	buckets.set(key, bucket);
+}
+
 function evictOverflowBuckets(
 	buckets: Map<string, SlidingWindowBucket>,
 	maxEntries: number
 ): void {
-	if (buckets.size <= maxEntries) {
-		return;
-	}
+	while (buckets.size > maxEntries) {
+		const oldestKey = buckets.keys().next().value;
+		if (oldestKey === undefined) {
+			return;
+		}
 
-	const evictedKeys = [...buckets.entries()]
-		.sort((left, right) => left[1].lastSeenAt - right[1].lastSeenAt)
-		.slice(0, buckets.size - maxEntries)
-		.map(([key]) => key);
-	for (const key of evictedKeys) {
-		buckets.delete(key);
+		buckets.delete(oldestKey);
 	}
 }
 
@@ -149,15 +154,13 @@ export function createSlidingWindowRateLimiter({
 			const normalizedKey = normalizeRateLimitKey(key);
 			const bucket = buckets.get(normalizedKey) ?? {
 				timestamps: [],
-				headIndex: 0,
-				lastSeenAt: nowMs
+				headIndex: 0
 			};
 			pruneBucket(bucket, nowMs, windowMs);
-			bucket.lastSeenAt = nowMs;
 
 			if (getBucketSize(bucket) >= limit) {
 				const oldestTimestamp = getOldestBucketTimestamp(bucket) ?? nowMs;
-				buckets.set(normalizedKey, bucket);
+				touchBucket(buckets, normalizedKey, bucket);
 				return {
 					allowed: false,
 					retryAfterSeconds: Math.max(
@@ -168,7 +171,7 @@ export function createSlidingWindowRateLimiter({
 			}
 
 			bucket.timestamps.push(nowMs);
-			buckets.set(normalizedKey, bucket);
+			touchBucket(buckets, normalizedKey, bucket);
 
 			if (buckets.size > maxEntries) {
 				deleteBuckets(buckets, sweepStaleBuckets(buckets, nowMs, windowMs));
