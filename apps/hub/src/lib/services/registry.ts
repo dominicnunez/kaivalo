@@ -1,3 +1,5 @@
+import { isValidHostname } from '../server/hostname.ts';
+
 export type ServiceIconKey = 'calendar' | 'mic';
 
 export type ServiceLifecycle = 'planned' | 'active' | 'disabled' | 'retired';
@@ -23,29 +25,51 @@ function cloneService(
 	return { ...service };
 }
 
-function isTrustedServiceAppHostname(hostname: string): boolean {
-	return hostname.toLowerCase().endsWith(TRUSTED_SERVICE_APP_HOST_SUFFIX);
+function hasExplicitUrlPort(value: string): boolean {
+	const authority = value.split('://')[1]?.split(/[/?#]/, 1)[0];
+	const hostWithOptionalCredentials = authority ?? '';
+	const hostnamePortSegment =
+		hostWithOptionalCredentials.split('@').at(-1) ?? '';
+
+	return hostnamePortSegment.includes(':');
+}
+
+export function isTrustedServiceAppHostname(hostname: string): boolean {
+	return (
+		isValidHostname(hostname) &&
+		hostname.toLowerCase().endsWith(TRUSTED_SERVICE_APP_HOST_SUFFIX)
+	);
+}
+
+export function isTrustedServiceAppUrl(appUrl: string): boolean {
+	try {
+		const parsed = new URL(appUrl);
+
+		return (
+			parsed.protocol === 'https:' &&
+			!parsed.username &&
+			!parsed.password &&
+			!hasExplicitUrlPort(appUrl) &&
+			parsed.pathname === '/' &&
+			!parsed.search &&
+			!parsed.hash &&
+			isTrustedServiceAppHostname(parsed.hostname)
+		);
+	} catch {
+		return false;
+	}
 }
 
 function assertValidServiceAppUrl(
 	service: Readonly<ServiceRegistryEntry>
 ): void {
-	let parsed: URL;
 	try {
-		parsed = new URL(service.appUrl);
+		new URL(service.appUrl);
 	} catch {
 		throw new Error(`Service "${service.id}" must use a valid absolute appUrl`);
 	}
 
-	if (
-		parsed.protocol !== 'https:' ||
-		parsed.username ||
-		parsed.password ||
-		parsed.port ||
-		parsed.search ||
-		parsed.hash ||
-		!isTrustedServiceAppHostname(parsed.hostname)
-	) {
+	if (!isTrustedServiceAppUrl(service.appUrl)) {
 		throw new Error(
 			`Service "${service.id}" must use an https appUrl on a trusted Kaivalo host`
 		);

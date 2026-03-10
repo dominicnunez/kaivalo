@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { getLauncherServices, getMarketingServices } from './registry.ts';
+import {
+	getLauncherServices,
+	getMarketingServices,
+	isTrustedServiceAppHostname,
+	isTrustedServiceAppUrl
+} from './registry.ts';
 
 describe('service registry helpers', () => {
 	it('returns the marketing catalog that should appear on the landing page', () => {
@@ -49,7 +54,29 @@ describe('service registry helpers', () => {
 			expect(parsed.port).toBe('');
 			expect(parsed.search).toBe('');
 			expect(parsed.hash).toBe('');
-			expect(parsed.hostname.endsWith('.kaivalo.com')).toBe(true);
+			expect(isTrustedServiceAppHostname(parsed.hostname)).toBe(true);
 		}
+	});
+
+	it.each([
+		'.kaivalo.com',
+		'..kaivalo.com',
+		'-bad.kaivalo.com',
+		'bad-.kaivalo.com',
+		'kaivalo.com',
+		'evil-kaivalo.com'
+	])('rejects malformed or untrusted service app hostname %s', (hostname) => {
+		expect(isTrustedServiceAppHostname(hostname)).toBe(false);
+	});
+
+	it.each([
+		'https://sweep.kaivalo.com:443',
+		'https://sweep.kaivalo.com/launch',
+		'https://sweep.kaivalo.com?tab=launcher',
+		'https://sweep.kaivalo.com/#launcher',
+		'https://user:s3cret@sweep.kaivalo.com',
+		'https://-bad.kaivalo.com'
+	])('rejects malformed or unsafe service app url %s', (appUrl) => {
+		expect(isTrustedServiceAppUrl(appUrl)).toBe(false);
 	});
 });

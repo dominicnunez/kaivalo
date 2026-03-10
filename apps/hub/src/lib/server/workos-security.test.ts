@@ -188,14 +188,25 @@ describe('workos environment protocols', () => {
 	});
 
 	it('rejects malformed WorkOS api hostnames', () => {
-		expect(() =>
-			getValidatedWorkosEnv({
-				...validLocalEnv,
-				WORKOS_API_HOSTNAME: 'https://auth.kaivalo-login.test/path'
-			})
-		).toThrow(
-			/WORKOS_API_HOSTNAME must be a hostname without protocol, path, credentials, or port/
-		);
+		const invalidHostnames = [
+			'https://auth.kaivalo-login.test/path',
+			'.kaivalo-login.com',
+			'..kaivalo-login.com',
+			'-bad.example',
+			'bad-.example',
+			'auth.kaivalo-login.test:443'
+		];
+
+		for (const hostname of invalidHostnames) {
+			expect(() =>
+				getValidatedWorkosEnv({
+					...validLocalEnv,
+					WORKOS_API_HOSTNAME: hostname
+				})
+			).toThrow(
+				/WORKOS_API_HOSTNAME must be a hostname without protocol, path, credentials, or port/
+			);
+		}
 	});
 });
 

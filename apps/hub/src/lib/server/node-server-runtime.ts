@@ -4,6 +4,7 @@ import {
 	getErrorDiagnostics,
 	type ErrorDiagnostics
 } from './error-diagnostics.ts';
+import { isValidHostname } from './hostname.ts';
 import {
 	applyBaselineSecurityHeaders,
 	applyStaticAssetHeaders,
@@ -31,9 +32,6 @@ const PRODUCTION_NODE_ENV = 'production';
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
 const MIN_PORT = 1;
 const MAX_PORT = 65_535;
-const MAX_HOST_LENGTH = 253;
-const HOSTNAME_LABEL_PATTERN = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/i;
-
 type Env = Record<string, string | undefined>;
 
 type FatalReason = 'startup-error' | 'shutdown-timeout';
@@ -151,20 +149,6 @@ function parsePositiveIntegerEnvValue(
 		throw new Error(`${envName} must be less than or equal to ${maxValue}`);
 	}
 	return parsed;
-}
-
-function isValidHostname(host: string): boolean {
-	if (
-		host.length === 0 ||
-		host.length > MAX_HOST_LENGTH ||
-		host.startsWith('.') ||
-		host.endsWith('.') ||
-		host.includes('..')
-	) {
-		return false;
-	}
-
-	return host.split('.').every((label) => HOSTNAME_LABEL_PATTERN.test(label));
 }
 
 function parseHost(hostValue: string | undefined): string {

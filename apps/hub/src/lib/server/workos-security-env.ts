@@ -3,6 +3,7 @@ import {
 	isLoopbackHostname,
 	isLoopbackIpAddress
 } from './ip-address.ts';
+import { parseCanonicalHostname } from './hostname.ts';
 
 const REQUIRED_ENV_VARS = [
 	'WORKOS_CLIENT_ID',
@@ -90,7 +91,8 @@ function parseWorkosApiHostname(value: string | undefined): string {
 		trimmed.includes('/') ||
 		trimmed.includes('?') ||
 		trimmed.includes('#') ||
-		trimmed.includes('@')
+		trimmed.includes('@') ||
+		trimmed.includes(':')
 	) {
 		throw new Error(
 			'WORKOS_API_HOSTNAME must be a hostname without protocol, path, credentials, or port'
@@ -98,12 +100,12 @@ function parseWorkosApiHostname(value: string | undefined): string {
 	}
 
 	try {
-		const parsed = new URL(`https://${trimmed}`);
-		if (!parsed.hostname || parsed.port || parsed.pathname !== '/') {
+		const parsedHostname = parseCanonicalHostname(trimmed);
+		if (!parsedHostname) {
 			throw new Error();
 		}
 
-		return parsed.hostname;
+		return parsedHostname;
 	} catch {
 		throw new Error(
 			'WORKOS_API_HOSTNAME must be a hostname without protocol, path, credentials, or port'
