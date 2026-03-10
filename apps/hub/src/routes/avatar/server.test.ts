@@ -6,6 +6,26 @@ import {
 } from '$lib/server/avatar-proxy.ts';
 import { GET } from './+server';
 
+function createTrackedUpstreamResponse(
+	headers: HeadersInit,
+	status = 200
+): { response: Response; cancelSpy: ReturnType<typeof vi.fn> } {
+	const cancelSpy = vi.fn();
+	const stream = new ReadableStream<Uint8Array>({
+		cancel(reason) {
+			cancelSpy(reason);
+		}
+	});
+
+	return {
+		response: new Response(stream, {
+			status,
+			headers
+		}),
+		cancelSpy
+	};
+}
+
 describe('avatar proxy route', () => {
 	it('rejects untrusted avatar sources before fetching', async () => {
 		const fetch = vi.fn();
@@ -152,15 +172,10 @@ describe('avatar proxy route', () => {
 	});
 
 	it('rejects non-image upstream responses', async () => {
-		const fetch = vi.fn(
-			async () =>
-				new Response('oops', {
-					status: 200,
-					headers: {
-						'content-type': 'text/html'
-					}
-				})
-		);
+		const { response: upstream, cancelSpy } = createTrackedUpstreamResponse({
+			'content-type': 'text/html'
+		});
+		const fetch = vi.fn(async () => upstream);
 
 		const response = await GET({
 			request: new Request(
@@ -173,6 +188,30 @@ describe('avatar proxy route', () => {
 		} as never);
 
 		expect(response.status).toBe(502);
+		expect(cancelSpy).toHaveBeenCalledOnce();
+	});
+
+	it('cancels non-ok upstream avatar responses before returning bad gateway', async () => {
+		const { response: upstream, cancelSpy } = createTrackedUpstreamResponse(
+			{
+				'content-type': 'image/png'
+			},
+			404
+		);
+		const fetch = vi.fn(async () => upstream);
+
+		const response = await GET({
+			request: new Request(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			url: new URL(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			fetch
+		} as never);
+
+		expect(response.status).toBe(502);
+		expect(cancelSpy).toHaveBeenCalledOnce();
 	});
 
 	it('rejects svg avatar responses from trusted upstream hosts', async () => {
@@ -341,17 +380,11 @@ describe('avatar proxy route', () => {
 	});
 
 	it('rejects oversized avatar responses before proxying the body', async () => {
-		const body = 'x'.repeat(AVATAR_MAX_RESPONSE_BYTES + 1);
-		const fetch = vi.fn(
-			async () =>
-				new Response(body, {
-					status: 200,
-					headers: {
-						'content-type': 'image/png',
-						'content-length': String(body.length)
-					}
-				})
-		);
+		const { response: upstream, cancelSpy } = createTrackedUpstreamResponse({
+			'content-type': 'image/png',
+			'content-length': String(AVATAR_MAX_RESPONSE_BYTES + 1)
+		});
+		const fetch = vi.fn(async () => upstream);
 
 		const response = await GET({
 			request: new Request(
@@ -365,6 +398,7 @@ describe('avatar proxy route', () => {
 
 		expect(response.status).toBe(502);
 		expect(response.headers.get('cache-control')).toBe('private, no-store');
+		expect(cancelSpy).toHaveBeenCalledOnce();
 	});
 
 	it('rejects streamed avatar responses that exceed the byte limit', async () => {

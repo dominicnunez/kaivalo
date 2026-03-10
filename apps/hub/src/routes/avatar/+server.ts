@@ -32,6 +32,21 @@ function createGatewayErrorResponse(status: number, message: string): Response {
 	});
 }
 
+async function cancelUpstreamBody(
+	upstream: Response,
+	reason: string
+): Promise<void> {
+	if (!upstream.body || upstream.body.locked) {
+		return;
+	}
+
+	try {
+		await upstream.body.cancel(reason);
+	} catch {
+		// Ignore cleanup failures from already-closed or errored streams.
+	}
+}
+
 function parseCacheControl(headerValue: string | null): CacheDirectiveMap {
 	const directives = new Map<string, string | true>();
 	if (!headerValue) {
@@ -161,6 +176,10 @@ async function readAvatarBody(upstream: Response): Promise<Uint8Array> {
 			Number.isFinite(parsedLength) &&
 			parsedLength > AVATAR_MAX_RESPONSE_BYTES
 		) {
+			await cancelUpstreamBody(
+				upstream,
+				'Avatar response exceeds maximum allowed size'
+			);
 			throw new Error('Avatar response exceeds maximum allowed size');
 		}
 	}
@@ -231,11 +250,13 @@ export const GET: RequestHandler = async ({ request, url, fetch }) => {
 	}
 
 	if (!upstream.ok) {
+		await cancelUpstreamBody(upstream, 'Rejected upstream avatar status');
 		return createGatewayErrorResponse(502, 'Bad gateway');
 	}
 
 	const contentType = getAvatarContentType(upstream);
 	if (!contentType) {
+		await cancelUpstreamBody(upstream, 'Rejected upstream avatar content type');
 		return createGatewayErrorResponse(502, 'Bad gateway');
 	}
 
@@ -244,9 +265,11 @@ export const GET: RequestHandler = async ({ request, url, fetch }) => {
 		body = await readAvatarBody(upstream);
 	} catch (error) {
 		if (isTimeoutError(error)) {
+			await cancelUpstreamBody(upstream, 'Avatar response timed out');
 			return createGatewayErrorResponse(504, 'Gateway timeout');
 		}
 
+		await cancelUpstreamBody(upstream, 'Rejected upstream avatar body');
 		return createGatewayErrorResponse(502, 'Bad gateway');
 	}
 
