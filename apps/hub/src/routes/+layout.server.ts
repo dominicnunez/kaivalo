@@ -16,6 +16,10 @@ import {
 	isLoopbackHostname as isLoopbackHost,
 	isLoopbackIpAddress
 } from '$lib/server/ip-address.ts';
+import {
+	markPrivateNoStoreDocument,
+	markSessionAwareDocument
+} from '$lib/server/workos-security.ts';
 import { authKit } from '@workos/authkit-sveltekit';
 
 const LOCAL_SIGN_IN_PATH = '/auth/sign-in';
@@ -181,14 +185,7 @@ function getDevelopmentAuthBypassUser(
 }
 
 function markAuthFailureNoStore(event: Parameters<LayoutServerLoad>[0]): void {
-	if (typeof event.setHeaders !== 'function') {
-		return;
-	}
-
-	event.setHeaders({
-		'cache-control': 'private, no-store',
-		vary: 'Cookie, Authorization'
-	});
+	markPrivateNoStoreDocument(event, ['Cookie', 'Authorization']);
 }
 
 function logAuthLayoutFailure(
@@ -269,6 +266,8 @@ export const load: LayoutServerLoad = async (event) => {
 						}));
 		if (authError) {
 			markAuthFailureNoStore(event);
+		} else {
+			markSessionAwareDocument(event);
 		}
 
 		return {

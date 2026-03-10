@@ -19,13 +19,15 @@ function createParentData(overrides: Record<string, unknown> = {}) {
 
 describe('services page load', () => {
 	it('redirects unauthenticated users to the trusted sign-in flow', async () => {
+		const setHeaders = vi.fn();
 		try {
 			await load({
 				parent: async () =>
 					createParentData({
 						user: null,
 						signInUrl: '/auth/sign-in'
-					})
+					}),
+				setHeaders
 			} as never);
 			expect.unreachable('expected redirect');
 		} catch (caught) {
@@ -36,6 +38,9 @@ describe('services page load', () => {
 			expect(caught.status).toBe(303);
 			expect(caught.location).toBe('/auth/sign-in');
 		}
+		expect(setHeaders).toHaveBeenCalledWith({
+			'cache-control': 'private, no-store'
+		});
 	});
 
 	it('fails with a controlled error when sign-in is unavailable', async () => {

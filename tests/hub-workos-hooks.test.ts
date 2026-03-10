@@ -1004,7 +1004,7 @@ describe('Security headers on preview responses', () => {
 			'public, max-age=300, stale-while-revalidate=60'
 		);
 		assert.ok(
-			!(homepage.headers['vary'] ?? '').toLowerCase().includes('cookie')
+			(homepage.headers['vary'] ?? '').toLowerCase().includes('cookie')
 		);
 		assert.ok(
 			!(homepage.headers['vary'] ?? '').toLowerCase().includes('authorization')
@@ -1027,6 +1027,17 @@ describe('Security headers on preview responses', () => {
 		assert.ok(!contentSecurityPolicy.includes('api.fontshare.com'));
 		assert.ok(!contentSecurityPolicy.includes('cdn.fontshare.com'));
 		assert.ok(!contentSecurityPolicy.includes('img-src https:'));
+	});
+
+	it('keeps anonymous services redirects out of shared caches', async () => {
+		const response = await httpGet(`${preview.baseUrl}/services`);
+
+		assert.strictEqual(response.statusCode, 303);
+		assert.strictEqual(response.headers.location, '/auth/sign-in');
+		assert.strictEqual(response.headers['cache-control'], 'private, no-store');
+		assert.ok(
+			(response.headers['vary'] ?? '').toLowerCase().includes('cookie')
+		);
 	});
 
 	it('keeps security and no-store headers on framework-generated 500 pages', async () => {

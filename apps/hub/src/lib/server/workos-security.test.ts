@@ -28,7 +28,7 @@ describe('static asset security policy', () => {
 	});
 
 	it('applies static policy to known root assets', () => {
-		const pathname = '/robots.txt';
+		const pathname = '/favicon.svg';
 		expect(getStaticAssetCacheControl(pathname)).toBe(
 			'public, max-age=86400, stale-while-revalidate=600'
 		);

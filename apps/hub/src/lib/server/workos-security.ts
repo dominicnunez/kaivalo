@@ -5,6 +5,8 @@ export {
 	getStaticAssetCacheControl,
 	getStaticAssetCacheControlForResponse,
 	getTrustedForwardedProto,
+	markPrivateNoStoreDocument,
+	markSessionAwareDocument,
 	shouldApplyStaticAssetHeaders
 } from './workos-security-cache.ts';
 export {

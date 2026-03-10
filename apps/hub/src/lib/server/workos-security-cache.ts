@@ -24,10 +24,7 @@ const ROOT_STATIC_ASSET_PATHS = new Set([
 	'/favicon.svg',
 	'/favicon-192.png',
 	'/favicon-512.png',
-	'/og-image.png',
-	'/robots.txt',
-	'/sitemap.xml',
-	'/site.webmanifest'
+	'/og-image.png'
 ]);
 const FONT_ASSET_PATH_PREFIX = '/fonts/';
 const STATIC_ASSET_RESPONSE_CONTENT_TYPE_PREFIXES = [
@@ -63,8 +60,37 @@ type SecurityHeadersOptions = {
 	trustedProxyIps?: Iterable<string>;
 };
 
+type HeaderSettingEvent = Pick<RequestEvent, 'setHeaders'>;
+
 function getResponseMediaType(contentType: string | null | undefined): string {
 	return contentType?.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+}
+
+function setEventHeaders(
+	event: HeaderSettingEvent,
+	headers: Record<string, string>
+): void {
+	if (typeof event.setHeaders !== 'function') {
+		return;
+	}
+
+	event.setHeaders(headers);
+}
+
+export function markSessionAwareDocument(event: HeaderSettingEvent): void {
+	setEventHeaders(event, {
+		vary: CACHE_VARY_COOKIE_HEADER
+	});
+}
+
+export function markPrivateNoStoreDocument(
+	event: HeaderSettingEvent,
+	varyHeaders: readonly string[] = [CACHE_VARY_COOKIE_HEADER]
+): void {
+	setEventHeaders(event, {
+		'cache-control': SENSITIVE_DOCUMENT_CACHE_CONTROL,
+		vary: [...new Set(varyHeaders)].join(', ')
+	});
 }
 
 function isDocumentResponse(response: Response): boolean {

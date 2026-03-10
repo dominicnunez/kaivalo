@@ -85,6 +85,7 @@ describe('layout server load', () => {
 	});
 
 	it('returns a development bypass user without calling WorkOS when enabled', async () => {
+		const setHeaders = vi.fn();
 		mockEnv.NODE_ENV = 'development';
 		mockEnv.DEV_AUTH_BYPASS = 'true';
 		mockEnv.DEV_AUTH_BYPASS_EMAIL = 'local-dev@kaivalo.test';
@@ -92,7 +93,10 @@ describe('layout server load', () => {
 		mockEnv.ORIGIN = 'http://localhost:4173';
 		mockEnv.WORKOS_REDIRECT_URI = 'http://127.0.0.1:4173/auth/callback';
 
-		const result = await load(createEvent('http://localhost:4173/') as never);
+		const result = await load({
+			...createEvent('http://localhost:4173/'),
+			setHeaders
+		} as never);
 
 		expect(mockGetUser).not.toHaveBeenCalled();
 		expect(result).toEqual({
@@ -103,6 +107,9 @@ describe('layout server load', () => {
 			},
 			signInUrl: null,
 			authError: null
+		});
+		expect(setHeaders).toHaveBeenCalledWith({
+			vary: 'Cookie'
 		});
 	});
 
@@ -242,6 +249,7 @@ describe('layout server load', () => {
 	});
 
 	it('returns normalized user data for authenticated requests', async () => {
+		const setHeaders = vi.fn();
 		mockGetValidatedWorkosEnv.mockImplementation(() => {
 			throw new Error('authenticated requests should not validate auth entry');
 		});
@@ -251,7 +259,10 @@ describe('layout server load', () => {
 			profilePictureUrl: 'https://avatars.githubusercontent.com/u/1'
 		} as never);
 
-		const result = await load(baseEvent as never);
+		const result = await load({
+			...baseEvent,
+			setHeaders
+		} as never);
 
 		expect(result).toEqual({
 			user: {
@@ -262,6 +273,9 @@ describe('layout server load', () => {
 			},
 			signInUrl: null,
 			authError: null
+		});
+		expect(setHeaders).toHaveBeenCalledWith({
+			vary: 'Cookie'
 		});
 	});
 
@@ -340,15 +354,22 @@ describe('layout server load', () => {
 	});
 
 	it('returns the local sign-in route for unauthenticated requests', async () => {
+		const setHeaders = vi.fn();
 		mockGetUser.mockResolvedValue(null as never);
 
-		const result = await load(baseEvent as never);
+		const result = await load({
+			...baseEvent,
+			setHeaders
+		} as never);
 
 		expect(mockGetValidatedWorkosEnv).toHaveBeenCalledOnce();
 		expect(result).toEqual({
 			user: null,
 			signInUrl: '/auth/sign-in',
 			authError: null
+		});
+		expect(setHeaders).toHaveBeenCalledWith({
+			vary: 'Cookie'
 		});
 	});
 
@@ -567,21 +588,23 @@ describe('layout server load', () => {
 	});
 
 	it('ignores signed auth callback query errors once the user is authenticated', async () => {
+		const setHeaders = vi.fn();
 		mockGetUser.mockResolvedValue({
 			firstName: 'Kai',
 			email: 'kai@example.com',
 			profilePictureUrl: 'https://avatars.githubusercontent.com/u/1'
 		} as never);
 
-		const result = await load(
-			createEvent(
+		const result = await load({
+			...createEvent(
 				`https://kaivalo.test/?${buildAuthErrorRedirectQuery({
 					incidentId: 'authcb_123e4567-e89b-12d3-a456-426614174000',
 					secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
 					now: Date.now()
 				})}`
-			) as never
-		);
+			),
+			setHeaders
+		} as never);
 
 		expect(result).toEqual({
 			user: {
@@ -593,21 +616,29 @@ describe('layout server load', () => {
 			signInUrl: null,
 			authError: null
 		});
+		expect(setHeaders).toHaveBeenCalledWith({
+			vary: 'Cookie'
+		});
 	});
 
 	it('ignores tampered auth callback query errors', async () => {
+		const setHeaders = vi.fn();
 		mockGetUser.mockResolvedValue(null as never);
 
-		const result = await load(
-			createEvent(
+		const result = await load({
+			...createEvent(
 				'https://kaivalo.test/?error=auth&incident=authcb_123e4567-e89b-12d3-a456-426614174000&ts=1710000000000&sig=forged'
-			) as never
-		);
+			),
+			setHeaders
+		} as never);
 
 		expect(result).toEqual({
 			user: null,
 			signInUrl: '/auth/sign-in',
 			authError: null
+		});
+		expect(setHeaders).toHaveBeenCalledWith({
+			vary: 'Cookie'
 		});
 	});
 });
