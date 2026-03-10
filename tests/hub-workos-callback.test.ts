@@ -275,6 +275,61 @@ describe('WorkOS Auth Callback Route', () => {
 			);
 		});
 
+		it('translates vendor auth error redirects into the signed landing-page error flow', async () => {
+			const logs = [];
+			const redirectErr = {
+				status: 302,
+				location: 'https://kaivalo.test/auth/error?code=AUTH_FAILED'
+			};
+			const handler = createHandler({
+				handleCallback: () => async () => {
+					throw redirectErr;
+				},
+				isRedirect: (value) => value === redirectErr,
+				isHttpError: isHttpError,
+				authErrorSigningSecret,
+				logError: (...args) => logs.push(args)
+			});
+
+			await assert.rejects(
+				() => handler(createEvent({ accept: 'text/html' })),
+				(caught) => {
+					assert.ok(isRedirect(caught));
+					assert.strictEqual(caught.status, 303);
+					const location = new URL(caught.location, 'https://kaivalo.test');
+					assert.strictEqual(location.pathname, '/');
+					assert.strictEqual(
+						location.searchParams.get(AUTH_ERROR_QUERY_NAME),
+						AUTH_ERROR_QUERY_VALUE
+					);
+					assert.match(
+						location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME) ?? '',
+						/^authcb_[0-9a-f-]+$/
+					);
+					assert.deepStrictEqual(
+						readVerifiedAuthError(location.searchParams, {
+							secret: authErrorSigningSecret,
+							now:
+								Number(
+									location.searchParams.get(AUTH_ERROR_TIMESTAMP_QUERY_NAME)
+								) + 1
+						}),
+						{
+							message:
+								'Sign-in is temporarily unavailable. Please try again shortly.',
+							incidentId: location.searchParams.get(
+								AUTH_ERROR_INCIDENT_QUERY_NAME
+							)
+						}
+					);
+					return true;
+				}
+			);
+
+			assert.strictEqual(logs.length, 1);
+			assert.strictEqual(logs[0][0], 'Auth callback failed');
+		});
+
 		it('rejects redirect throws with external locations', async () => {
 			const logs = [];
 			const redirectErr = {
@@ -628,13 +683,38 @@ describe('WorkOS Auth Callback Route', () => {
 					{ accept: 'text/html' }
 				);
 
-				assert.strictEqual(response.statusCode, 302);
+				assert.strictEqual(response.statusCode, 303);
 				const location = new URL(
 					response.headers.location ?? '/',
 					preview.baseUrl
 				);
-				assert.strictEqual(location.pathname, '/auth/error');
-				assert.strictEqual(location.searchParams.get('code'), 'AUTH_FAILED');
+				assert.strictEqual(location.pathname, '/');
+				assert.strictEqual(
+					location.searchParams.get(AUTH_ERROR_QUERY_NAME),
+					AUTH_ERROR_QUERY_VALUE
+				);
+				assert.match(
+					location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME) ?? '',
+					/^authcb_[0-9a-f-]+$/
+				);
+				assert.ok(location.searchParams.has(AUTH_ERROR_TIMESTAMP_QUERY_NAME));
+				assert.ok(location.searchParams.has(AUTH_ERROR_SIGNATURE_QUERY_NAME));
+				assert.deepStrictEqual(
+					readVerifiedAuthError(location.searchParams, {
+						secret: authErrorSigningSecret,
+						now:
+							Number(
+								location.searchParams.get(AUTH_ERROR_TIMESTAMP_QUERY_NAME)
+							) + 1
+					}),
+					{
+						message:
+							'Sign-in is temporarily unavailable. Please try again shortly.',
+						incidentId: location.searchParams.get(
+							AUTH_ERROR_INCIDENT_QUERY_NAME
+						)
+					}
+				);
 				assert.strictEqual(
 					response.headers['cache-control'],
 					'private, no-store'

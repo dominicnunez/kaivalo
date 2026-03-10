@@ -29,6 +29,19 @@ type CreateAuthCallbackGetHandlerOptions = {
 	logError?: (message: string, context: CallbackLogContext) => void;
 };
 
+type CallbackRedirectResolution =
+	| {
+			kind: 'redirect';
+			location: string;
+	  }
+	| {
+			kind: 'auth-error';
+			error: Error;
+	  };
+
+const CALLBACK_AUTH_ERROR_PATHNAME = '/auth/error';
+const CALLBACK_AUTH_ERROR_REDIRECT_CODE = 'WORKOS_CALLBACK_AUTH_ERROR_REDIRECT';
+
 function isRedirectLike(value: unknown): value is RedirectLikeObject {
 	if (isRedirectLikeObject(value)) {
 		return true;
@@ -47,6 +60,57 @@ function cloneRedirectResponse(response: Response, location: string): Response {
 	});
 }
 
+function createAuthErrorRedirectFailure(
+	location: string,
+	origin: string
+): Error {
+	const parsedLocation = new URL(location, origin);
+	const upstreamErrorCode =
+		parsedLocation.searchParams.get('code') ?? undefined;
+
+	return Object.assign(
+		new Error('Auth callback redirected to an unsupported auth error route'),
+		{
+			code: CALLBACK_AUTH_ERROR_REDIRECT_CODE,
+			cause: upstreamErrorCode
+				? Object.assign(
+						new Error(`Upstream auth callback error: ${upstreamErrorCode}`),
+						{
+							code: upstreamErrorCode
+						}
+					)
+				: undefined
+		}
+	);
+}
+
+function normalizeCallbackRedirectLocation(
+	location: string,
+	requestOrigin: string,
+	expectedOrigin: string
+): CallbackRedirectResolution | null {
+	const safeLocation = normalizeSameOriginRedirectLocation(location, {
+		requestOrigin,
+		trustedOrigin: expectedOrigin
+	});
+	if (!safeLocation) {
+		return null;
+	}
+
+	const parsedLocation = new URL(safeLocation, expectedOrigin);
+	if (parsedLocation.pathname === CALLBACK_AUTH_ERROR_PATHNAME) {
+		return {
+			kind: 'auth-error',
+			error: createAuthErrorRedirectFailure(safeLocation, expectedOrigin)
+		};
+	}
+
+	return {
+		kind: 'redirect',
+		location: safeLocation
+	};
+}
+
 function normalizeCallbackResponse(
 	response: Response,
 	requestOrigin: string,
@@ -61,13 +125,19 @@ function normalizeCallbackResponse(
 		return response;
 	}
 
-	const safeLocation = normalizeSameOriginRedirectLocation(location, {
+	const redirectResolution = normalizeCallbackRedirectLocation(
+		location,
 		requestOrigin,
-		trustedOrigin: expectedOrigin
-	});
-	if (!safeLocation) {
+		expectedOrigin
+	);
+	if (!redirectResolution) {
 		throw new Error('Auth callback produced an invalid redirect location');
 	}
+	if (redirectResolution.kind === 'auth-error') {
+		throw redirectResolution.error;
+	}
+
+	const safeLocation = redirectResolution.location;
 
 	return safeLocation === location
 		? response
@@ -130,30 +200,35 @@ export function createAuthCallbackGetHandler({
 					throw err;
 				}
 
-				const safeLocation = normalizeSameOriginRedirectLocation(err.location, {
+				const redirectResolution = normalizeCallbackRedirectLocation(
+					err.location,
 					requestOrigin,
 					trustedOrigin
-				});
-				if (safeLocation) {
+				);
+				if (redirectResolution?.kind === 'redirect') {
+					const safeLocation = redirectResolution.location;
 					if (safeLocation === err.location) {
 						throw err;
 					}
 					throw redirect(err.status, safeLocation);
 				}
-				normalizedError = new Error(
-					'Auth callback produced an invalid redirect location'
-				);
+				normalizedError =
+					redirectResolution?.kind === 'auth-error'
+						? redirectResolution.error
+						: new Error('Auth callback produced an invalid redirect location');
 			} else if (isRedirectLike(err)) {
-				const safeLocation = normalizeSameOriginRedirectLocation(err.location, {
+				const redirectResolution = normalizeCallbackRedirectLocation(
+					err.location,
 					requestOrigin,
 					trustedOrigin
-				});
-				if (safeLocation) {
-					throw redirect(err.status, safeLocation);
-				}
-				normalizedError = new Error(
-					'Auth callback produced an invalid redirect location'
 				);
+				if (redirectResolution?.kind === 'redirect') {
+					throw redirect(err.status, redirectResolution.location);
+				}
+				normalizedError =
+					redirectResolution?.kind === 'auth-error'
+						? redirectResolution.error
+						: new Error('Auth callback produced an invalid redirect location');
 			}
 
 			if (isHttpError(normalizedError)) {

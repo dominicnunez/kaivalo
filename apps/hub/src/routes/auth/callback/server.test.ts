@@ -1,6 +1,14 @@
 import { type Handle } from '@sveltejs/kit';
 import type { User } from '@workos/authkit-sveltekit';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+	AUTH_ERROR_INCIDENT_QUERY_NAME,
+	AUTH_ERROR_QUERY_NAME,
+	AUTH_ERROR_QUERY_VALUE,
+	AUTH_ERROR_SIGNATURE_QUERY_NAME,
+	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
+	readVerifiedAuthError
+} from '$lib/auth/auth-error-query.ts';
 
 const SESSION_COOKIE_NAME = 'wos_session';
 const SESSION_COOKIE_PAIR = `${SESSION_COOKIE_NAME}=callback-session`;
@@ -188,5 +196,60 @@ describe('auth callback route', () => {
 		expect(servicesData.plannedServices.map((service) => service.id)).toEqual([
 			'podstudio'
 		]);
+	});
+
+	it('translates vendor auth error redirects into the signed landing-page error flow', async () => {
+		mockHandleCallback.mockReturnValue(async () => {
+			throw {
+				status: 302,
+				location: 'https://kaivalo.test/auth/error?code=AUTH_FAILED'
+			};
+		});
+
+		const { GET } = await import('./+server');
+
+		try {
+			await GET(
+				createEvent(
+					{
+						accept: 'text/html',
+						'sec-fetch-mode': 'navigate'
+					},
+					'https://kaivalo.test/auth/callback?code=test-code&state=test-state'
+				)
+			);
+			throw new Error('expected callback route to redirect');
+		} catch (caught) {
+			const redirectLike = caught as { status: number; location: string };
+			expect(redirectLike).toMatchObject({
+				status: 303
+			});
+			const location = new URL(redirectLike.location, 'https://kaivalo.test');
+			expect(location.pathname).toBe('/');
+			expect(location.searchParams.get(AUTH_ERROR_QUERY_NAME)).toBe(
+				AUTH_ERROR_QUERY_VALUE
+			);
+			expect(
+				location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME) ?? ''
+			).toMatch(/^authcb_[0-9a-f-]+$/);
+			expect(location.searchParams.has(AUTH_ERROR_TIMESTAMP_QUERY_NAME)).toBe(
+				true
+			);
+			expect(location.searchParams.has(AUTH_ERROR_SIGNATURE_QUERY_NAME)).toBe(
+				true
+			);
+			expect(
+				readVerifiedAuthError(location.searchParams, {
+					secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
+					now:
+						Number(location.searchParams.get(AUTH_ERROR_TIMESTAMP_QUERY_NAME)) +
+						1
+				})
+			).toEqual({
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
+				incidentId: location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME)
+			});
+		}
 	});
 });
