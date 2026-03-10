@@ -19,10 +19,12 @@ function delay(ms) {
 
 /**
  * @param {number} previewPort
+ * @param {Record<string, string | undefined>} [envOverrides]
+ * @param {string[]} [imports]
  */
-function createPreviewEnv(previewPort) {
+function createPreviewEnv(previewPort, envOverrides = {}, imports = []) {
 	const origin = `http://127.0.0.1:${previewPort}`;
-	return {
+	const previewEnv = {
 		NODE_ENV: 'test',
 		WORKOS_CLIENT_ID: 'client_test_fixture',
 		WORKOS_API_KEY: 'sk_test_fixture',
@@ -33,6 +35,32 @@ function createPreviewEnv(previewPort) {
 		HOST: '127.0.0.1',
 		PORT: String(previewPort)
 	};
+	Object.assign(previewEnv, envOverrides);
+
+	const nodeOptions = buildPreviewNodeOptions(previewEnv.NODE_OPTIONS, imports);
+	if (nodeOptions) {
+		previewEnv.NODE_OPTIONS = nodeOptions;
+	} else {
+		delete previewEnv.NODE_OPTIONS;
+	}
+
+	return previewEnv;
+}
+
+function buildPreviewNodeOptions(existingNodeOptions, imports = []) {
+	const importOptions = imports.map(
+		(moduleSpecifier) => `--import=${moduleSpecifier}`
+	);
+	return [existingNodeOptions, ...importOptions]
+		.filter(Boolean)
+		.join(' ')
+		.trim();
+}
+
+function shouldUseSharedPreview(options = {}) {
+	const hasCustomEnv = Object.keys(options.env ?? {}).length > 0;
+	const hasCustomImports = (options.imports?.length ?? 0) > 0;
+	return options.shared !== false && !hasCustomEnv && !hasCustomImports;
 }
 
 export function httpGet(url, headers = {}) {
@@ -87,7 +115,11 @@ function decodeTextBody(body, contentTypeHeader) {
 	return body.toString('utf8');
 }
 
-export async function startHubPreview() {
+export async function startHubPreview(options = {}) {
+	if (!shouldUseSharedPreview(options)) {
+		return createHubPreview(options);
+	}
+
 	return acquireSharedHubPreview();
 }
 
@@ -178,7 +210,7 @@ async function acquireSharedHubPreview(retryOnStale = true) {
 	};
 }
 
-async function createHubPreview() {
+async function createHubPreview(options = {}) {
 	ensureHubBuild();
 
 	const hubDir = path.join(
@@ -194,7 +226,8 @@ async function createHubPreview() {
 			return await startPreviewProcess(
 				hubDir,
 				reservedPort.port,
-				reservedPort.release
+				reservedPort.release,
+				options
 			);
 		} catch (error) {
 			lastError = error;
@@ -217,7 +250,8 @@ async function createHubPreview() {
 async function startPreviewProcess(
 	hubDir,
 	previewPort,
-	releasePortReservation
+	releasePortReservation,
+	options = {}
 ) {
 	const baseUrl = `http://127.0.0.1:${previewPort}`;
 	const output = [];
@@ -237,7 +271,7 @@ async function startPreviewProcess(
 		detached: true,
 		env: {
 			...process.env,
-			...createPreviewEnv(previewPort)
+			...createPreviewEnv(previewPort, options.env, options.imports)
 		}
 	});
 	server.stdout?.on('data', appendOutput);
