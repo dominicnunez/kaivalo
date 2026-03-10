@@ -193,6 +193,15 @@ The assignment may be debatable style, but it is not dead code and the behavior 
 `packages/ui/Container.svelte` renders utility classes such as `w-full`, `mx-auto`, `px-4`, `sm:px-6`, `lg:px-8`, and `max-w-screen-*`, so consumers need Tailwind available for that component to render correctly.
 Because the source itself ships Tailwind utility class names, the `tailwindcss` peer dependency is not dead or unnecessary configuration.
 
+### Framework-served HTTPS responses lose HSTS when trusted proxy forwarding rewrites `getClientAddress()`
+
+**Location:** `apps/hub/src/lib/server/workos-security-cache.ts:134` — hook-level secure-request detection
+
+**Reason:** The hook helper does compare `event.getClientAddress()` against `TRUSTED_PROXY_IPS`, and the runtime docs say `ADDRESS_HEADER=x-forwarded-for` with `XFF_DEPTH` makes `getClientAddress()` resolve to the real client IP.
+But the shipped app does not rely on that hook decision to emit HSTS for production traffic.
+`apps/hub/server.ts` starts the custom Node server, and that runtime applies baseline security headers from the raw socket layer via `evaluateSecureRequest()` in `apps/hub/src/lib/server/node-server-request.ts` and `createHubServer()` in `apps/hub/src/lib/server/node-server-runtime.ts`.
+That means trusted proxied HTTPS requests still receive HSTS in the deployed server path even when SvelteKit rewrites `getClientAddress()`, so the runtime regression described by the audit does not actually occur.
+
 ### Avatar rate limiting can be spoofed because trusted-proxy mode does not enforce SvelteKit client-IP adapter settings
 
 **Location:** `apps/hub/src/routes/avatar/+server.ts:330` — avatar rate-limit key derivation
