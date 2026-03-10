@@ -73,7 +73,7 @@
 		}
 
 		if (value.startsWith('#')) {
-			return parsed.hash;
+			return value === '#' ? '#' : parsed.hash;
 		}
 
 		return `${parsed.pathname}${parsed.search}${parsed.hash}`;

@@ -121,6 +121,18 @@ describe('@kaivalo/ui public api', () => {
 		).not.toBeNull();
 	});
 
+	it('preserves fragment-only card links from the package root', () => {
+		const { container } = render(Card, {
+			variant: 'link',
+			href: '#',
+			children: snippet
+		});
+
+		const link = container.querySelector('a');
+		expect(link).not.toBeNull();
+		expect(link?.getAttribute('href')).toBe('#');
+	});
+
 	it('does not render card link anchors for unsafe relative href variants', () => {
 		const unsafeRelativeHrefs = [
 			'/\n//evil.example/path',
