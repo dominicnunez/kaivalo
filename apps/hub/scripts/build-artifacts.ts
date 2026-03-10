@@ -39,10 +39,6 @@ function sanitizeFilenameMetadata(code: string): string {
 		aliases.add(match[1]);
 	}
 
-	if (aliases.size === 0) {
-		return code;
-	}
-
 	const aliasPattern = [...aliases].map(escapeRegExp).join('|');
 	const filenameAssignmentPattern = new RegExp(
 		`(\\b[A-Za-z_$][\\w$]*)\\[((?:${aliasPattern}))\\]\\s*=\\s*(['"])([^"'\\\\]*(?:\\\\.[^"'\\\\]*)*)\\3`,
