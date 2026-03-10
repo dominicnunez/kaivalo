@@ -107,27 +107,17 @@ function deleteBuckets(
 	}
 }
 
-function touchBucket(
-	buckets: Map<string, SlidingWindowBucket>,
-	key: string,
-	bucket: SlidingWindowBucket
-): void {
-	buckets.delete(key);
-	buckets.set(key, bucket);
-}
-
-function evictOverflowBuckets(
-	buckets: Map<string, SlidingWindowBucket>,
-	maxEntries: number
-): void {
-	while (buckets.size > maxEntries) {
-		const oldestKey = buckets.keys().next().value;
-		if (oldestKey === undefined) {
-			return;
-		}
-
-		buckets.delete(oldestKey);
+function sweepOverflowBucket(
+	overflowBucket: SlidingWindowBucket | null,
+	now: number,
+	windowMs: number
+): SlidingWindowBucket | null {
+	if (!overflowBucket) {
+		return null;
 	}
+
+	pruneBucket(overflowBucket, now, windowMs);
+	return getBucketSize(overflowBucket) === 0 ? null : overflowBucket;
 }
 
 export function createSlidingWindowRateLimiter({
@@ -141,6 +131,7 @@ export function createSlidingWindowRateLimiter({
 	validatePositiveInteger(maxEntries, 'maxEntries');
 
 	const buckets = new Map<string, SlidingWindowBucket>();
+	let overflowBucket: SlidingWindowBucket | null = null;
 	let nextSweepAt = 0;
 
 	return {
@@ -148,19 +139,42 @@ export function createSlidingWindowRateLimiter({
 			const nowMs = now();
 			if (nowMs >= nextSweepAt) {
 				deleteBuckets(buckets, sweepStaleBuckets(buckets, nowMs, windowMs));
+				overflowBucket = sweepOverflowBucket(overflowBucket, nowMs, windowMs);
 				nextSweepAt = nowMs + windowMs;
 			}
 
 			const normalizedKey = normalizeRateLimitKey(key);
-			const bucket = buckets.get(normalizedKey) ?? {
-				timestamps: [],
-				headIndex: 0
-			};
+			let bucket = buckets.get(normalizedKey);
+			let usesOverflowBucket = false;
+
+			if (!bucket) {
+				if (buckets.size >= maxEntries) {
+					deleteBuckets(buckets, sweepStaleBuckets(buckets, nowMs, windowMs));
+					overflowBucket = sweepOverflowBucket(overflowBucket, nowMs, windowMs);
+				}
+
+				if (buckets.size >= maxEntries) {
+					bucket = overflowBucket ?? {
+						timestamps: [],
+						headIndex: 0
+					};
+					usesOverflowBucket = true;
+				} else {
+					bucket = {
+						timestamps: [],
+						headIndex: 0
+					};
+				}
+			}
+
 			pruneBucket(bucket, nowMs, windowMs);
 
 			if (getBucketSize(bucket) >= limit) {
 				const oldestTimestamp = getOldestBucketTimestamp(bucket) ?? nowMs;
-				touchBucket(buckets, normalizedKey, bucket);
+				if (usesOverflowBucket) {
+					overflowBucket = bucket;
+				}
+
 				return {
 					allowed: false,
 					retryAfterSeconds: Math.max(
@@ -171,12 +185,10 @@ export function createSlidingWindowRateLimiter({
 			}
 
 			bucket.timestamps.push(nowMs);
-			touchBucket(buckets, normalizedKey, bucket);
-
-			if (buckets.size > maxEntries) {
-				deleteBuckets(buckets, sweepStaleBuckets(buckets, nowMs, windowMs));
-				evictOverflowBuckets(buckets, maxEntries);
-				nextSweepAt = nowMs + windowMs;
+			if (usesOverflowBucket) {
+				overflowBucket = bucket;
+			} else if (!buckets.has(normalizedKey)) {
+				buckets.set(normalizedKey, bucket);
 			}
 
 			return {
@@ -186,6 +198,7 @@ export function createSlidingWindowRateLimiter({
 		},
 		clear(): void {
 			buckets.clear();
+			overflowBucket = null;
 			nextSweepAt = 0;
 		}
 	};
