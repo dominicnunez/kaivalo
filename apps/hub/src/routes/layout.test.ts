@@ -587,6 +587,45 @@ describe('layout server load', () => {
 		});
 	});
 
+	it('verifies signed auth callback query errors with the trimmed auth secret', async () => {
+		mockEnv.AUTH_ERROR_SIGNING_SECRET = `  ${'cd'.repeat(32)}  `;
+		mockGetValidatedWorkosEnv.mockReturnValue({
+			origin: 'https://kaivalo.test',
+			redirectUri: 'https://kaivalo.test/auth/callback',
+			apiHostname: 'api.workos.com',
+			authErrorSigningSecret: 'cd'.repeat(32)
+		} as never);
+		mockGetUser.mockResolvedValue(null as never);
+		const setHeaders = vi.fn();
+		const event = {
+			url: new URL(
+				`https://kaivalo.test/?${buildAuthErrorRedirectQuery({
+					incidentId: 'authcb_123e4567-e89b-12d3-a456-426614174000',
+					secret: 'cd'.repeat(32),
+					now: Date.now()
+				})}`
+			),
+			request: new Request('https://kaivalo.test/'),
+			setHeaders
+		} as never;
+
+		const result = await load(event);
+
+		expect(result).toEqual({
+			user: null,
+			signInUrl: '/auth/sign-in',
+			authError: {
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
+				incidentId: 'authcb_123e4567-e89b-12d3-a456-426614174000'
+			}
+		});
+		expect(setHeaders).toHaveBeenCalledWith({
+			'cache-control': 'private, no-store',
+			vary: 'Cookie, Authorization'
+		});
+	});
+
 	it('ignores signed auth callback query errors once the user is authenticated', async () => {
 		const setHeaders = vi.fn();
 		mockGetUser.mockResolvedValue({

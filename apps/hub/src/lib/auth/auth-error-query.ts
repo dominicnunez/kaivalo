@@ -51,6 +51,10 @@ function signAuthErrorIncident(
 		.digest('base64url');
 }
 
+function normalizeSigningSecret(secret: string): string {
+	return secret.trim();
+}
+
 function signaturesMatch(
 	actualSignature: string,
 	expectedSignature: string
@@ -69,10 +73,12 @@ export function buildAuthErrorRedirectQuery({
 	secret,
 	now = Date.now()
 }: BuildAuthErrorRedirectQueryOptions): string {
+	const normalizedSecret =
+		typeof secret === 'string' ? normalizeSigningSecret(secret) : '';
 	if (!isValidCallbackIncidentId(incidentId)) {
 		throw new Error('incidentId must be a valid auth callback incident id');
 	}
-	if (typeof secret !== 'string' || secret.trim() === '') {
+	if (normalizedSecret === '') {
 		throw new Error('secret must be a non-empty string');
 	}
 
@@ -83,7 +89,7 @@ export function buildAuthErrorRedirectQuery({
 	params.set(AUTH_ERROR_TIMESTAMP_QUERY_NAME, timestamp);
 	params.set(
 		AUTH_ERROR_SIGNATURE_QUERY_NAME,
-		signAuthErrorIncident(incidentId, timestamp, secret)
+		signAuthErrorIncident(incidentId, timestamp, normalizedSecret)
 	);
 	return params.toString();
 }
@@ -92,10 +98,11 @@ export function readVerifiedAuthError(
 	searchParams: URLSearchParams,
 	{ secret, now = Date.now() }: ReadVerifiedAuthErrorOptions
 ): VerifiedAuthError | null {
+	const normalizedSecret =
+		typeof secret === 'string' ? normalizeSigningSecret(secret) : '';
 	if (
 		searchParams.get(AUTH_ERROR_QUERY_NAME) !== AUTH_ERROR_QUERY_VALUE ||
-		typeof secret !== 'string' ||
-		secret.trim() === ''
+		normalizedSecret === ''
 	) {
 		return null;
 	}
@@ -121,7 +128,7 @@ export function readVerifiedAuthError(
 	const expectedSignature = signAuthErrorIncident(
 		incidentId,
 		timestamp,
-		secret
+		normalizedSecret
 	);
 	if (!signaturesMatch(signature, expectedSignature)) {
 		return null;
