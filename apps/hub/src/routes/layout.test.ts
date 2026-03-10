@@ -174,8 +174,9 @@ describe('layout server load', () => {
 					incidentId: expect.stringMatching(/^authlayout_/)
 				}
 			});
+			expect(errorSpy).toHaveBeenCalledOnce();
 			expect(errorSpy).toHaveBeenCalledWith(
-				'Auth layout load failed',
+				expect.any(String),
 				expect.objectContaining({
 					errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
 					errorMessage:
@@ -210,9 +211,14 @@ describe('layout server load', () => {
 				incidentId: expect.stringMatching(/^authlayout_/)
 			}
 		});
+		expect(errorSpy).toHaveBeenCalledOnce();
 		expect(errorSpy).toHaveBeenCalledWith(
-			'Auth layout load failed',
+			expect.any(String),
 			expect.objectContaining({
+				errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
+				method: 'GET',
+				pathname: '/',
+				incidentId: expect.stringMatching(/^authlayout_/),
 				errorMessage:
 					'DEV_AUTH_BYPASS only serves requests from loopback hosts and loopback clients.'
 			})
@@ -239,9 +245,14 @@ describe('layout server load', () => {
 				incidentId: expect.stringMatching(/^authlayout_/)
 			}
 		});
+		expect(errorSpy).toHaveBeenCalledOnce();
 		expect(errorSpy).toHaveBeenCalledWith(
-			'Auth layout load failed',
+			expect.any(String),
 			expect.objectContaining({
+				errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
+				method: 'GET',
+				pathname: '/',
+				incidentId: expect.stringMatching(/^authlayout_/),
 				errorMessage:
 					'DEV_AUTH_BYPASS only serves requests from loopback hosts and loopback clients.'
 			})
@@ -390,8 +401,9 @@ describe('layout server load', () => {
 				incidentId: expect.stringMatching(/^authlayout_/)
 			}
 		});
+		expect(errorSpy).toHaveBeenCalledOnce();
 		expect(errorSpy).toHaveBeenCalledWith(
-			'Auth layout load failed',
+			expect.any(String),
 			expect.objectContaining({
 				errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
 				errorMessage: 'Missing required environment variable: WORKOS_API_KEY',
@@ -430,8 +442,9 @@ describe('layout server load', () => {
 			'cache-control': 'private, no-store',
 			vary: 'Cookie, Authorization'
 		});
+		expect(errorSpy).toHaveBeenCalledOnce();
 		expect(errorSpy).toHaveBeenCalledWith(
-			'Auth layout load failed',
+			expect.any(String),
 			expect.objectContaining({
 				errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
 				errorMessage: 'AuthKit upstream timeout',
@@ -505,8 +518,9 @@ describe('layout server load', () => {
 				'cache-control': 'private, no-store',
 				vary: 'Cookie, Authorization'
 			});
+			expect(errorSpy).toHaveBeenCalledOnce();
 			expect(errorSpy).toHaveBeenCalledWith(
-				'Auth layout load failed',
+				expect.any(String),
 				expect.objectContaining({
 					errorCode: 'AUTH_LAYOUT_UNEXPECTED_FAILURE',
 					errorMessage: expectedMessage,

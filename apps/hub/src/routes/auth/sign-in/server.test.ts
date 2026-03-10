@@ -118,7 +118,15 @@ describe('auth sign-in route', () => {
 			}
 		});
 		expect(errorSpy).toHaveBeenCalledOnce();
-		expect(errorSpy.mock.calls.at(-1)?.[0]).toBe('Sign-in failed');
+		expect(errorSpy).toHaveBeenLastCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				errorCode: 'AUTH_SIGN_IN_UNEXPECTED_FAILURE',
+				pathname: '/auth/sign-in',
+				method: 'GET',
+				incidentId: expect.stringMatching(/^authsign_/)
+			})
+		);
 	});
 
 	it('rejects sign-in URLs on untrusted origins', async () => {
@@ -139,7 +147,15 @@ describe('auth sign-in route', () => {
 			}
 		});
 		expect(errorSpy).toHaveBeenCalledOnce();
-		expect(errorSpy.mock.calls.at(-1)?.[0]).toBe('Sign-in failed');
+		expect(errorSpy).toHaveBeenLastCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				errorCode: 'AUTH_SIGN_IN_UNEXPECTED_FAILURE',
+				pathname: '/auth/sign-in',
+				method: 'GET',
+				incidentId: expect.stringMatching(/^authsign_/)
+			})
+		);
 	});
 
 	it('redirects browser failures back to the landing page with a signed auth error', async () => {
@@ -188,7 +204,15 @@ describe('auth sign-in route', () => {
 				incidentId: expect.stringMatching(/^authsign_/)
 			});
 			expect(errorSpy).toHaveBeenCalledOnce();
-			expect(errorSpy.mock.calls.at(-1)?.[0]).toBe('Sign-in failed');
+			expect(errorSpy).toHaveBeenLastCalledWith(
+				expect.any(String),
+				expect.objectContaining({
+					errorCode: 'AUTH_SIGN_IN_UNEXPECTED_FAILURE',
+					pathname: '/auth/sign-in',
+					method: 'GET',
+					incidentId: expect.stringMatching(/^authsign_/)
+				})
+			);
 		}
 	});
 });

@@ -202,7 +202,16 @@ describe('hooks server behavior', () => {
 			incidentId: expect.stringMatching(/^hook_/)
 		});
 		expect(errorSpy).toHaveBeenCalledOnce();
-		expect(errorSpy.mock.calls.at(-1)?.[0]).toBe('Unhandled request error');
+		expect(errorSpy).toHaveBeenLastCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				errorCode: 'HOOK_UNEXPECTED_FAILURE',
+				pathname: '/broken',
+				method: 'GET',
+				status: 500,
+				incidentId: expect.stringMatching(/^hook_/)
+			})
+		);
 		errorSpy.mockRestore();
 	});
 
@@ -240,7 +249,16 @@ describe('hooks server behavior', () => {
 			incidentId: expect.stringMatching(/^hook_/)
 		});
 		expect(errorSpy).toHaveBeenCalledOnce();
-		expect(errorSpy.mock.calls.at(-1)?.[0]).toBe('Unhandled request error');
+		expect(errorSpy).toHaveBeenLastCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				errorCode: 'HOOK_UNEXPECTED_FAILURE',
+				pathname: '/broken',
+				method: 'GET',
+				status: 500,
+				incidentId: expect.stringMatching(/^hook_/)
+			})
+		);
 		errorSpy.mockRestore();
 	});
 
@@ -275,7 +293,16 @@ describe('hooks server behavior', () => {
 			incidentId: expect.stringMatching(/^hook_/)
 		});
 		expect(errorSpy).toHaveBeenCalledOnce();
-		expect(errorSpy.mock.calls.at(-1)?.[0]).toBe('Unhandled request error');
+		expect(errorSpy).toHaveBeenLastCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				errorCode: 'HOOK_UNEXPECTED_FAILURE',
+				pathname: '/broken',
+				method: 'GET',
+				status: 500,
+				incidentId: expect.stringMatching(/^hook_/)
+			})
+		);
 		errorSpy.mockRestore();
 	});
 
