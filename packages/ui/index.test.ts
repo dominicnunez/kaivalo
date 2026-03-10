@@ -41,6 +41,11 @@ describe('@kaivalo/ui public api', () => {
 			header: 'Header',
 			children: snippet
 		});
+		const disallowedAbsoluteRender = render(Card, {
+			variant: 'link',
+			href: 'https://kaivalo.com/services',
+			children: snippet
+		});
 		const allowedAbsoluteRender = render(Card, {
 			variant: 'link',
 			href: 'https://kaivalo.com/services',
@@ -53,14 +58,92 @@ describe('@kaivalo/ui public api', () => {
 			href: 'javascript:alert(1)',
 			children: snippet
 		});
+		const insecureAbsoluteRender = render(Card, {
+			variant: 'link',
+			href: 'http://kaivalo.com/services',
+			allowExternal: true,
+			allowedExternalHosts: ['kaivalo.com'],
+			children: snippet
+		});
+		const credentialedAbsoluteRender = render(Card, {
+			variant: 'link',
+			href: 'https://user:pass@kaivalo.com/services',
+			allowExternal: true,
+			allowedExternalHosts: ['kaivalo.com'],
+			children: snippet
+		});
+		const nonDefaultPortRender = render(Card, {
+			variant: 'link',
+			href: 'https://kaivalo.com:8443/services',
+			allowExternal: true,
+			allowedExternalHosts: ['kaivalo.com'],
+			children: snippet
+		});
+		const normalizedAllowlistRender = render(Card, {
+			variant: 'link',
+			href: 'https://Kaivalo.com:443/services',
+			allowExternal: true,
+			allowedExternalHosts: [' KAIVALO.COM '],
+			children: snippet
+		});
 
-		expect(safeRender.container.querySelector('a')?.getAttribute('href')).toBe(
-			'/services'
+		const safeLink = safeRender.container.querySelector('a');
+		const disallowedAbsoluteLink =
+			disallowedAbsoluteRender.container.querySelector('a');
+		const allowedAbsoluteLink =
+			allowedAbsoluteRender.container.querySelector('a');
+		const unsafeLink = unsafeRender.container.querySelector('a');
+		const insecureAbsoluteLink =
+			insecureAbsoluteRender.container.querySelector('a');
+		const credentialedAbsoluteLink =
+			credentialedAbsoluteRender.container.querySelector('a');
+		const nonDefaultPortLink =
+			nonDefaultPortRender.container.querySelector('a');
+		const normalizedAllowlistLink =
+			normalizedAllowlistRender.container.querySelector('a');
+
+		expect(safeLink).not.toBeNull();
+		expect(safeLink?.getAttribute('href')).toBe('/services');
+		expect(disallowedAbsoluteLink).toBeNull();
+		expect(allowedAbsoluteLink?.getAttribute('href')).toBe(
+			'https://kaivalo.com/services'
+		);
+		expect(safeRender.container.textContent).toContain('Header');
+		expect(unsafeLink).toBeNull();
+		expect(insecureAbsoluteLink).toBeNull();
+		expect(credentialedAbsoluteLink).toBeNull();
+		expect(nonDefaultPortLink).toBeNull();
+		expect(normalizedAllowlistLink?.getAttribute('href')).toBe(
+			'https://kaivalo.com/services'
 		);
 		expect(
-			allowedAbsoluteRender.container.querySelector('a')?.getAttribute('href')
-		).toBe('https://kaivalo.com/services');
-		expect(unsafeRender.container.querySelector('a')).toBeNull();
+			unsafeRender.container.querySelector('[data-ui="card"]')
+		).not.toBeNull();
+	});
+
+	it('does not render card link anchors for unsafe relative href variants', () => {
+		const unsafeRelativeHrefs = [
+			'/\n//evil.example/path',
+			'/\t//evil.example/path',
+			'/\\//evil.example/path',
+			' /services',
+			'/services ',
+			'#/fragment ',
+			'/%0A//evil.example/path',
+			'/%09//evil.example/path',
+			'/%2F%2Fevil.example/path',
+			'/%5C//evil.example/path'
+		];
+
+		for (const href of unsafeRelativeHrefs) {
+			const testRender = render(Card, {
+				variant: 'link',
+				href,
+				children: snippet
+			});
+
+			expect(testRender.container.querySelector('a')).toBeNull();
+		}
 	});
 
 	it('renders container sizing from the package root', () => {
