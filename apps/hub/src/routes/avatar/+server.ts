@@ -11,12 +11,23 @@ import {
 	getErrorLogContext,
 	shouldIncludeErrorMessage
 } from '$lib/server/error-diagnostics.ts';
+import { canonicalizeIpAddress } from '$lib/server/ip-address.ts';
+import {
+	createSlidingWindowRateLimiter,
+	type SlidingWindowRateLimiter
+} from '$lib/server/request-rate-limit.ts';
 import { normalizeRequestId } from '$lib/server/request-id.ts';
 
 const AVATAR_CACHE_CONTROL = 'public';
 const AVATAR_CACHE_MAX_AGE_SECONDS = 300;
 const AVATAR_CACHE_STALE_WHILE_REVALIDATE_SECONDS = 86400;
+const AVATAR_RATE_LIMIT_MAX_REQUESTS = 30;
+const AVATAR_RATE_LIMIT_WINDOW_MS = 60_000;
+const AVATAR_RATE_LIMIT_MAX_ENTRIES = 10_000;
 const AVATAR_PROXY_ERROR_CODE = 'AVATAR_PROXY_FAILURE';
+const TOO_MANY_REQUESTS_MESSAGE = 'Too many requests';
+const TOO_MANY_REQUESTS_STATUS = 429;
+const UNKNOWN_CLIENT_RATE_LIMIT_KEY = 'unknown';
 const PRIVATE_NO_STORE_CACHE_CONTROL = 'private, no-store';
 
 type CacheDirectiveMap = Map<string, string | true>;
@@ -59,6 +70,16 @@ function createGatewayErrorResponse(status: number, message: string): Response {
 		status,
 		headers: {
 			'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL
+		}
+	});
+}
+
+function createTooManyRequestsResponse(retryAfterSeconds: number): Response {
+	return new Response(TOO_MANY_REQUESTS_MESSAGE, {
+		status: TOO_MANY_REQUESTS_STATUS,
+		headers: {
+			'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL,
+			'retry-after': String(retryAfterSeconds)
 		}
 	});
 }
@@ -306,122 +327,160 @@ async function readAvatarBody(upstream: Response): Promise<Uint8Array> {
 	return body.subarray(0, totalBytes);
 }
 
-export const GET: RequestHandler = async ({ request, url, fetch }) => {
-	const source = sanitizeAvatarUrl(url.searchParams.get('source'));
-	if (!source) {
-		return createGatewayErrorResponse(404, 'Not found');
+function getAvatarRateLimitKey(event: Parameters<RequestHandler>[0]): string {
+	if (typeof event.getClientAddress !== 'function') {
+		return UNKNOWN_CLIENT_RATE_LIMIT_KEY;
 	}
 
-	let upstream: Response;
 	try {
-		const timeoutSignal = AbortSignal.timeout(AVATAR_FETCH_TIMEOUT_MS);
-		upstream = await fetch(source, {
-			headers: getConditionalHeaders(request),
-			redirect: 'error',
-			signal: timeoutSignal
-		});
-	} catch (error) {
-		if (isTimeoutError(error)) {
+		return (
+			canonicalizeIpAddress(event.getClientAddress()) ||
+			UNKNOWN_CLIENT_RATE_LIMIT_KEY
+		);
+	} catch {
+		return UNKNOWN_CLIENT_RATE_LIMIT_KEY;
+	}
+}
+
+type CreateAvatarGetHandlerOptions = {
+	rateLimiter?: SlidingWindowRateLimiter;
+};
+
+export function createAvatarGetHandler({
+	rateLimiter = createSlidingWindowRateLimiter({
+		limit: AVATAR_RATE_LIMIT_MAX_REQUESTS,
+		windowMs: AVATAR_RATE_LIMIT_WINDOW_MS,
+		maxEntries: AVATAR_RATE_LIMIT_MAX_ENTRIES
+	})
+}: CreateAvatarGetHandlerOptions = {}): RequestHandler {
+	return async (event) => {
+		const { request, url, fetch } = event;
+		const source = sanitizeAvatarUrl(url.searchParams.get('source'));
+		if (!source) {
+			return createGatewayErrorResponse(404, 'Not found');
+		}
+
+		const rateLimitResult = rateLimiter.check(getAvatarRateLimitKey(event));
+		if (!rateLimitResult.allowed) {
+			return createTooManyRequestsResponse(rateLimitResult.retryAfterSeconds);
+		}
+
+		let upstream: Response;
+		try {
+			const timeoutSignal = AbortSignal.timeout(AVATAR_FETCH_TIMEOUT_MS);
+			upstream = await fetch(source, {
+				headers: getConditionalHeaders(request),
+				redirect: 'error',
+				signal: timeoutSignal
+			});
+		} catch (error) {
+			if (isTimeoutError(error)) {
+				logAvatarFailure({
+					request,
+					pathname: url.pathname,
+					source,
+					failureClass: 'fetch',
+					responseStatus: 504,
+					error
+				});
+				return createGatewayErrorResponse(504, 'Gateway timeout');
+			}
+
 			logAvatarFailure({
 				request,
 				pathname: url.pathname,
 				source,
 				failureClass: 'fetch',
-				responseStatus: 504,
+				responseStatus: 502,
 				error
 			});
-			return createGatewayErrorResponse(504, 'Gateway timeout');
+			return createGatewayErrorResponse(502, 'Bad gateway');
 		}
 
-		logAvatarFailure({
-			request,
-			pathname: url.pathname,
-			source,
-			failureClass: 'fetch',
-			responseStatus: 502,
-			error
+		const headers = new Headers({
+			'cache-control': buildAvatarCacheControl(upstream),
+			'x-content-type-options': 'nosniff'
 		});
-		return createGatewayErrorResponse(502, 'Bad gateway');
-	}
+		copyCacheValidators(upstream, headers);
 
-	const headers = new Headers({
-		'cache-control': buildAvatarCacheControl(upstream),
-		'x-content-type-options': 'nosniff'
-	});
-	copyCacheValidators(upstream, headers);
+		if (upstream.status === 304) {
+			return new Response(null, {
+				status: 304,
+				headers
+			});
+		}
 
-	if (upstream.status === 304) {
-		return new Response(null, {
-			status: 304,
-			headers
-		});
-	}
-
-	if (!upstream.ok) {
-		await cancelUpstreamBody(upstream, 'Rejected upstream avatar status');
-		logAvatarFailure({
-			request,
-			pathname: url.pathname,
-			source,
-			failureClass: 'status',
-			responseStatus: 502,
-			upstreamStatus: upstream.status
-		});
-		return createGatewayErrorResponse(502, 'Bad gateway');
-	}
-
-	const contentType = getAvatarContentType(upstream);
-	if (!contentType) {
-		await cancelUpstreamBody(upstream, 'Rejected upstream avatar content type');
-		logAvatarFailure({
-			request,
-			pathname: url.pathname,
-			source,
-			failureClass: 'content-type',
-			responseStatus: 502,
-			upstreamContentType: getLoggedContentType(
-				upstream.headers.get('content-type')
-			)
-		});
-		return createGatewayErrorResponse(502, 'Bad gateway');
-	}
-
-	let body: Uint8Array;
-	try {
-		body = await readAvatarBody(upstream);
-	} catch (error) {
-		if (isTimeoutError(error)) {
-			await cancelUpstreamBody(upstream, 'Avatar response timed out');
+		if (!upstream.ok) {
+			await cancelUpstreamBody(upstream, 'Rejected upstream avatar status');
 			logAvatarFailure({
 				request,
 				pathname: url.pathname,
 				source,
-				failureClass: 'stream',
-				responseStatus: 504,
-				error
+				failureClass: 'status',
+				responseStatus: 502,
+				upstreamStatus: upstream.status
 			});
-			return createGatewayErrorResponse(504, 'Gateway timeout');
+			return createGatewayErrorResponse(502, 'Bad gateway');
 		}
 
-		await cancelUpstreamBody(upstream, 'Rejected upstream avatar body');
-		logAvatarFailure({
-			request,
-			pathname: url.pathname,
-			source,
-			failureClass:
-				error instanceof AvatarResponseSizeError ? 'size' : 'stream',
-			responseStatus: 502,
-			error
+		const contentType = getAvatarContentType(upstream);
+		if (!contentType) {
+			await cancelUpstreamBody(
+				upstream,
+				'Rejected upstream avatar content type'
+			);
+			logAvatarFailure({
+				request,
+				pathname: url.pathname,
+				source,
+				failureClass: 'content-type',
+				responseStatus: 502,
+				upstreamContentType: getLoggedContentType(
+					upstream.headers.get('content-type')
+				)
+			});
+			return createGatewayErrorResponse(502, 'Bad gateway');
+		}
+
+		let body: Uint8Array;
+		try {
+			body = await readAvatarBody(upstream);
+		} catch (error) {
+			if (isTimeoutError(error)) {
+				await cancelUpstreamBody(upstream, 'Avatar response timed out');
+				logAvatarFailure({
+					request,
+					pathname: url.pathname,
+					source,
+					failureClass: 'stream',
+					responseStatus: 504,
+					error
+				});
+				return createGatewayErrorResponse(504, 'Gateway timeout');
+			}
+
+			await cancelUpstreamBody(upstream, 'Rejected upstream avatar body');
+			logAvatarFailure({
+				request,
+				pathname: url.pathname,
+				source,
+				failureClass:
+					error instanceof AvatarResponseSizeError ? 'size' : 'stream',
+				responseStatus: 502,
+				error
+			});
+			return createGatewayErrorResponse(502, 'Bad gateway');
+		}
+
+		headers.set('content-type', contentType);
+		headers.set('content-length', String(body.byteLength));
+		const responseBody = body as unknown as BodyInit;
+
+		return new Response(responseBody, {
+			status: 200,
+			headers
 		});
-		return createGatewayErrorResponse(502, 'Bad gateway');
-	}
+	};
+}
 
-	headers.set('content-type', contentType);
-	headers.set('content-length', String(body.byteLength));
-	const responseBody = body as unknown as BodyInit;
-
-	return new Response(responseBody, {
-		status: 200,
-		headers
-	});
-};
+export const GET: RequestHandler = createAvatarGetHandler();

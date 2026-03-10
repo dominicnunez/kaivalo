@@ -1,10 +1,17 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
 	AVATAR_FETCH_TIMEOUT_MS,
 	AVATAR_MAX_RESPONSE_BYTES
 } from '$lib/server/avatar-proxy.ts';
-import { GET } from './+server';
+import { createSlidingWindowRateLimiter } from '$lib/server/request-rate-limit.ts';
+import { createAvatarGetHandler } from './+server';
+
+let GET: ReturnType<typeof createAvatarGetHandler>;
+
+beforeEach(() => {
+	GET = createAvatarGetHandler();
+});
 
 afterEach(() => {
 	vi.restoreAllMocks();
@@ -554,5 +561,132 @@ describe('avatar proxy route', () => {
 				errorMessage: 'Avatar response exceeds maximum allowed size'
 			})
 		);
+	});
+
+	it('rate limits repeated avatar fetches from the same client address', async () => {
+		const GET = createAvatarGetHandler({
+			rateLimiter: createSlidingWindowRateLimiter({
+				limit: 2,
+				windowMs: 60_000,
+				maxEntries: 128,
+				now: () => 1_000
+			})
+		});
+		const fetch = vi.fn(
+			async () =>
+				new Response('image-bytes', {
+					status: 200,
+					headers: {
+						'cache-control': 'public, max-age=60',
+						'content-type': 'image/png',
+						'content-length': '11'
+					}
+				})
+		);
+		const event = {
+			request: new Request(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			url: new URL(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			fetch,
+			getClientAddress: () => '203.0.113.10'
+		} as never;
+
+		expect((await GET(event)).status).toBe(200);
+		expect((await GET(event)).status).toBe(200);
+
+		const limited = await GET(event);
+
+		expect(limited.status).toBe(429);
+		expect(fetch).toHaveBeenCalledTimes(2);
+		expect(limited.headers.get('cache-control')).toBe('private, no-store');
+		expect(limited.headers.get('retry-after')).toBe('60');
+		await expect(limited.text()).resolves.toBe('Too many requests');
+	});
+
+	it('shares quotas across equivalent normalized client addresses', async () => {
+		let now = 1_000;
+		const GET = createAvatarGetHandler({
+			rateLimiter: createSlidingWindowRateLimiter({
+				limit: 2,
+				windowMs: 60_000,
+				maxEntries: 128,
+				now: () => now
+			})
+		});
+		const fetch = vi.fn(
+			async () =>
+				new Response('image-bytes', {
+					status: 200,
+					headers: {
+						'cache-control': 'public, max-age=60',
+						'content-type': 'image/png',
+						'content-length': '11'
+					}
+				})
+		);
+
+		const createEvent = (clientAddress: string) =>
+			({
+				request: new Request(
+					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+				),
+				url: new URL(
+					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+				),
+				fetch,
+				getClientAddress: () => clientAddress
+			}) as never;
+
+		expect((await GET(createEvent('::ffff:203.0.113.10'))).status).toBe(200);
+		now += 1;
+		expect((await GET(createEvent('203.0.113.10'))).status).toBe(200);
+		now += 1;
+
+		const limited = await GET(createEvent('203.0.113.10'));
+
+		expect(limited.status).toBe(429);
+		expect(fetch).toHaveBeenCalledTimes(2);
+	});
+
+	it('keeps avatar quotas independent for different client addresses', async () => {
+		const GET = createAvatarGetHandler({
+			rateLimiter: createSlidingWindowRateLimiter({
+				limit: 2,
+				windowMs: 60_000,
+				maxEntries: 128,
+				now: () => 1_000
+			})
+		});
+		const fetch = vi.fn(
+			async () =>
+				new Response('image-bytes', {
+					status: 200,
+					headers: {
+						'cache-control': 'public, max-age=60',
+						'content-type': 'image/png',
+						'content-length': '11'
+					}
+				})
+		);
+
+		const createEvent = (clientAddress: string) =>
+			({
+				request: new Request(
+					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+				),
+				url: new URL(
+					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+				),
+				fetch,
+				getClientAddress: () => clientAddress
+			}) as never;
+
+		expect((await GET(createEvent('203.0.113.10'))).status).toBe(200);
+		expect((await GET(createEvent('203.0.113.10'))).status).toBe(200);
+		expect((await GET(createEvent('203.0.113.11'))).status).toBe(200);
+		expect(fetch).toHaveBeenCalledTimes(3);
 	});
 });
