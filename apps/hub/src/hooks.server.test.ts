@@ -76,6 +76,10 @@ describe('hooks server behavior', () => {
 		setRequiredWorkosEnv();
 	});
 
+	it('uses a host-prefixed session cookie name for AuthKit', () => {
+		expect(AUTHKIT_COOKIE_NAME).toMatch(/^__Host-/);
+	});
+
 	it('keeps auth route documents private and no-store for cookie-bearing requests', async () => {
 		const { handle } = await import('./hooks.server');
 		const response = await handle({

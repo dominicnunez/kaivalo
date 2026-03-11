@@ -9,9 +9,9 @@ import {
 	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
 	readVerifiedAuthError
 } from '$lib/auth/auth-error-query.ts';
+import { AUTHKIT_COOKIE_NAME } from '$lib/server/authkit-config.ts';
 
-const SESSION_COOKIE_NAME = 'wos_session';
-const SESSION_COOKIE_PAIR = `${SESSION_COOKIE_NAME}=callback-session`;
+const SESSION_COOKIE_PAIR = `${AUTHKIT_COOKIE_NAME}=callback-session`;
 const AUTHENTICATED_USER: User = {
 	object: 'user',
 	id: 'user_123',
