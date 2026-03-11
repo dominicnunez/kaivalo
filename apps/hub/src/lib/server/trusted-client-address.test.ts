@@ -42,4 +42,28 @@ describe('trusted client address', () => {
 			})
 		).toBe('');
 	});
+
+	it.each([
+		[
+			'ipv4 hops with appended client ports',
+			'198.51.100.10:43124, 203.0.113.1',
+			'198.51.100.10'
+		],
+		[
+			'bracketed ipv6 hops with appended client ports',
+			'[2001:db8::10]:43124, 2001:db8::1',
+			'2001:db8::10'
+		]
+	])(
+		'returns the client hop for trusted proxy chains that include %s',
+		(_label, forwardedForHeader, expectedAddress) => {
+			expect(
+				getTrustedClientAddress({
+					directClientAddress: '203.0.113.2',
+					forwardedForHeader,
+					trustedProxyIps: ['203.0.113.1', '203.0.113.2', '2001:db8::1']
+				})
+			).toBe(expectedAddress);
+		}
+	);
 });

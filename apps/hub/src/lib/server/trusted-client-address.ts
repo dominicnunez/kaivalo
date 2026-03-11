@@ -6,6 +6,8 @@ type TrustedClientAddressOptions = {
 	trustedProxyIps?: Iterable<string>;
 };
 
+const MAX_PORT_NUMBER = 65_535;
+
 function buildTrustedProxySet(trustedProxyIps: Iterable<string>): Set<string> {
 	const trustedProxySet = new Set<string>();
 
@@ -21,6 +23,54 @@ function buildTrustedProxySet(trustedProxyIps: Iterable<string>): Set<string> {
 	return trustedProxySet;
 }
 
+function isValidForwardedHopPort(candidatePort: string): boolean {
+	if (!/^\d+$/.test(candidatePort)) {
+		return false;
+	}
+
+	const parsedPort = Number.parseInt(candidatePort, 10);
+	return parsedPort >= 0 && parsedPort <= MAX_PORT_NUMBER;
+}
+
+function normalizeForwardedForHop(hop: string): string {
+	const trimmedHop = hop.trim();
+	if (!trimmedHop) {
+		return '';
+	}
+
+	if (trimmedHop.startsWith('[')) {
+		const bracketEndIndex = trimmedHop.indexOf(']');
+		if (bracketEndIndex < 0) {
+			return '';
+		}
+
+		const candidateAddress = trimmedHop.slice(0, bracketEndIndex + 1);
+		const remainder = trimmedHop.slice(bracketEndIndex + 1);
+		if (remainder && !/^:\d+$/.test(remainder)) {
+			return '';
+		}
+		if (remainder && !isValidForwardedHopPort(remainder.slice(1))) {
+			return '';
+		}
+
+		return canonicalizeIpAddress(candidateAddress);
+	}
+
+	const lastColonIndex = trimmedHop.lastIndexOf(':');
+	if (lastColonIndex > 0 && trimmedHop.includes('.')) {
+		const candidateAddress = trimmedHop.slice(0, lastColonIndex);
+		const candidatePort = trimmedHop.slice(lastColonIndex + 1);
+		if (isValidForwardedHopPort(candidatePort)) {
+			const normalizedAddress = canonicalizeIpAddress(candidateAddress);
+			if (normalizedAddress) {
+				return normalizedAddress;
+			}
+		}
+	}
+
+	return canonicalizeIpAddress(trimmedHop);
+}
+
 function parseForwardedForHeader(
 	forwardedForHeader: string | undefined | null
 ): string[] {
@@ -28,21 +78,19 @@ function parseForwardedForHeader(
 		return [];
 	}
 
-	const forwardedHops = forwardedForHeader
+	const rawForwardedHops = forwardedForHeader
 		.split(',')
-		.map((hop) => canonicalizeIpAddress(hop))
+		.map((hop) => hop.trim())
+		.filter(Boolean);
+	const forwardedHops = rawForwardedHops
+		.map((hop) => normalizeForwardedForHop(hop))
 		.filter(Boolean);
 
 	if (forwardedHops.length === 0) {
 		return [];
 	}
 
-	const rawHopCount = forwardedForHeader
-		.split(',')
-		.map((hop) => hop.trim())
-		.filter(Boolean).length;
-
-	return forwardedHops.length === rawHopCount ? forwardedHops : [];
+	return forwardedHops.length === rawForwardedHops.length ? forwardedHops : [];
 }
 
 export function getTrustedClientAddress({
