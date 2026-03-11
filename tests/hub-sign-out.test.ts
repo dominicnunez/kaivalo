@@ -3,7 +3,13 @@ import assert from 'node:assert';
 import http from 'node:http';
 import { createSignOutPostHandler } from '../apps/hub/src/lib/auth/sign-out-handler.ts';
 import { isHttpError, isRedirect } from '@sveltejs/kit';
-import { startHubPreview } from './helpers/hub-preview.ts';
+import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
+
+const AUTHKIT_COOKIE_NAME = '__Host-wos_session';
+const previewFixtureImport = new URL(
+	'./helpers/hub-preview-fixtures.mjs',
+	import.meta.url
+).href;
 
 /**
  * @param {string} url
@@ -46,6 +52,14 @@ function getSetCookieHeaders(headers) {
 		return [];
 	}
 	return Array.isArray(values) ? values : [values];
+}
+
+function getCookiePair(headers, cookieName) {
+	const cookieHeader = getSetCookieHeaders(headers).find((value) =>
+		value.startsWith(`${cookieName}=`)
+	);
+	assert.ok(cookieHeader, `Expected ${cookieName} to be set`);
+	return cookieHeader.split(';', 1)[0];
 }
 
 describe('sign-out handler unit behavior', () => {
@@ -907,5 +921,80 @@ describe('sign-out route integration behavior', () => {
 		});
 
 		assert.strictEqual(response.statusCode, 403);
+	});
+
+	it('clears a callback-established session before redirecting to the trusted logout origin', async () => {
+		const fixturePreview = await startHubPreview({
+			shared: false,
+			env: {
+				HUB_PREVIEW_CALLBACK_FIXTURE_MODE: 'signed-in',
+				HUB_PREVIEW_SIGN_OUT_FIXTURE_MODE: 'signed-in'
+			},
+			imports: [previewFixtureImport]
+		});
+
+		try {
+			const callbackResponse = await httpGet(
+				`${fixturePreview.baseUrl}/auth/callback?code=test-code&state=test-state`,
+				{
+					accept: 'text/html',
+					'sec-fetch-mode': 'navigate'
+				}
+			);
+			assert.strictEqual(callbackResponse.statusCode, 302);
+			const sessionCookie = getCookiePair(
+				callbackResponse.headers,
+				AUTHKIT_COOKIE_NAME
+			);
+
+			const response = await post(`${fixturePreview.baseUrl}/auth/sign-out`, {
+				origin: fixturePreview.baseUrl,
+				'sec-fetch-site': 'same-origin',
+				cookie: sessionCookie
+			});
+
+			assert.strictEqual(response.statusCode, 302);
+			const logoutLocation = new URL(
+				String(response.headers.location),
+				fixturePreview.baseUrl
+			);
+			assert.strictEqual(logoutLocation.origin, 'https://api.workos.com');
+			assert.strictEqual(
+				logoutLocation.pathname,
+				'/user_management/sessions/logout'
+			);
+			assert.strictEqual(
+				logoutLocation.searchParams.get('session_id'),
+				'preview-session'
+			);
+			assert.strictEqual(
+				logoutLocation.searchParams.get('return_to'),
+				fixturePreview.baseUrl
+			);
+			const clearedSessionCookie = getCookiePair(
+				response.headers,
+				AUTHKIT_COOKIE_NAME
+			);
+			assert.ok(
+				getSetCookieHeaders(response.headers).some(
+					(cookie) =>
+						cookie.startsWith(`${AUTHKIT_COOKIE_NAME}=`) &&
+						/max-age=0/i.test(cookie)
+				),
+				'sign-out should clear the established session cookie'
+			);
+
+			const servicesResponse = await httpGet(
+				`${fixturePreview.baseUrl}/services`,
+				{
+					accept: 'text/html',
+					cookie: clearedSessionCookie
+				}
+			);
+			assert.strictEqual(servicesResponse.statusCode, 303);
+			assert.strictEqual(servicesResponse.headers.location, '/auth/sign-in');
+		} finally {
+			await fixturePreview.stop();
+		}
 	});
 });

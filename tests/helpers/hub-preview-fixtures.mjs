@@ -70,6 +70,27 @@ function applyRemoteAddressOverride(target, remoteAddress) {
 	});
 }
 
+function getPreviewAuthOrigin() {
+	return `https://${process.env.WORKOS_API_HOSTNAME || 'api.workos.com'}`;
+}
+
+function createSignedInSignOutResponse() {
+	const headers = new Headers();
+	headers.set(
+		'location',
+		`${getPreviewAuthOrigin()}/user_management/sessions/logout?session_id=${encodeURIComponent(PREVIEW_SESSION_COOKIE_VALUE)}&return_to=${encodeURIComponent(process.env.ORIGIN || '')}`
+	);
+	headers.append(
+		'set-cookie',
+		`${PREVIEW_SESSION_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+	);
+
+	return new Response(null, {
+		status: 302,
+		headers
+	});
+}
+
 const signInFixtureMode = process.env.HUB_PREVIEW_SIGN_IN_FIXTURE_MODE;
 if (signInFixtureMode) {
 	const { authKit } = await import('@workos/authkit-sveltekit');
@@ -137,8 +158,16 @@ if (callbackFixtureMode) {
 const signOutFixtureMode = process.env.HUB_PREVIEW_SIGN_OUT_FIXTURE_MODE;
 if (signOutFixtureMode) {
 	const { authKit } = await import('@workos/authkit-sveltekit');
-	authKit.signOut = async () => {
+	authKit.signOut = async (event) => {
 		switch (signOutFixtureMode) {
+			case 'signed-in': {
+				const cookieHeader = event.request.headers.get('cookie') ?? '';
+				if (cookieHeader.includes(PREVIEW_SESSION_COOKIE_PAIR)) {
+					return createSignedInSignOutResponse();
+				}
+
+				return Response.redirect(`${process.env.ORIGIN || '/'}/`, 302);
+			}
 			case 'throw':
 				throw new Error('fixture sign-out failure: preview secret');
 			default:

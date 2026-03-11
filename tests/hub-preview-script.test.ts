@@ -37,6 +37,7 @@ type ProcessShutdownResult = {
 type PreviewScriptOptions = {
 	envOverrides?: Record<string, string | undefined>;
 	imports?: readonly string[];
+	nodeEnv?: string;
 };
 type StartedPreviewScript = {
 	baseUrl: string;
@@ -235,7 +236,8 @@ function stopProcessGroup(
 
 async function startPreviewScript({
 	envOverrides = {},
-	imports = [PREVIEW_FIXTURE_IMPORT]
+	imports = [PREVIEW_FIXTURE_IMPORT],
+	nodeEnv = 'production'
 }: PreviewScriptOptions = {}): Promise<StartedPreviewScript> {
 	assertHubBuildAvailable();
 	const reservation = await reserveLocalPort();
@@ -263,7 +265,8 @@ async function startPreviewScript({
 		env: createHubPreviewScriptEnv({
 			port,
 			envOverrides,
-			imports
+			imports,
+			nodeEnv
 		})
 	});
 	preview.stdout?.on('data', appendOutput);
@@ -445,6 +448,56 @@ describe('hub preview script', () => {
 				'sign-out failures should not leak upstream error details'
 			);
 			assert.deepStrictEqual(getSetCookieHeaders(response.headers), []);
+		} finally {
+			await assertCleanPreviewShutdown(preview);
+		}
+	});
+
+	it('only enables DEV_AUTH_BYPASS for loopback hosts and loopback clients in the built runtime', async () => {
+		const preview = await startPreviewScript({
+			nodeEnv: 'development',
+			envOverrides: {
+				DEV_AUTH_BYPASS: 'true',
+				DEV_AUTH_BYPASS_EMAIL: 'local-dev@kaivalo.test',
+				DEV_AUTH_BYPASS_FIRST_NAME: 'Local'
+			},
+			imports: [PREVIEW_FIXTURE_IMPORT]
+		});
+
+		try {
+			const allowedResponse = await httpGet(`${preview.baseUrl}/services`, {
+				accept: 'text/html'
+			});
+			assert.strictEqual(allowedResponse.statusCode, 200);
+			assert.match(allowedResponse.data, /Local/);
+			assert.match(allowedResponse.data, /local-dev@kaivalo\.test/i);
+
+			const rejectedClientResponse = await httpGet(
+				`${preview.baseUrl}/services`,
+				{
+					accept: 'text/html',
+					'x-kaivalo-preview-peer-address': '203.0.113.25'
+				}
+			);
+			assert.strictEqual(rejectedClientResponse.statusCode, 503);
+			assert.doesNotMatch(
+				rejectedClientResponse.data,
+				/local-dev@kaivalo\.test/i
+			);
+
+			const previewPort = new URL(preview.baseUrl).port;
+			const rejectedHostResponse = await httpGet(
+				`${preview.baseUrl}/services`,
+				{
+					accept: 'text/html',
+					host: `staging.kaivalo.test:${previewPort}`
+				}
+			);
+			assert.strictEqual(rejectedHostResponse.statusCode, 503);
+			assert.doesNotMatch(
+				rejectedHostResponse.data,
+				/local-dev@kaivalo\.test/i
+			);
 		} finally {
 			await assertCleanPreviewShutdown(preview);
 		}

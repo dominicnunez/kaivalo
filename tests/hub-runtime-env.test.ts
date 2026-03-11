@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
 	createHubBuiltRuntimeEnv,
 	createHubPreviewEnv,
+	createHubPreviewScriptEnv,
 	sanitizeHubRuntimeEnv
 } from './helpers/hub-runtime-env.ts';
 
@@ -33,5 +34,16 @@ describe('hub runtime env helpers', () => {
 		assert.strictEqual(builtEnv.ADDRESS_HEADER, undefined);
 		assert.strictEqual(builtEnv.XFF_DEPTH, undefined);
 		assert.strictEqual(builtEnv.KEEP_ME, 'present');
+	});
+
+	it('allows preview script envs to opt into a non-production node environment', () => {
+		const previewScriptEnv = createHubPreviewScriptEnv({
+			port: 4173,
+			nodeEnv: 'development'
+		});
+
+		assert.strictEqual(previewScriptEnv.NODE_ENV, 'development');
+		assert.strictEqual(previewScriptEnv.HOST, '127.0.0.1');
+		assert.strictEqual(previewScriptEnv.PORT, '4173');
 	});
 });

@@ -20,7 +20,6 @@ const HUB_RUNTIME_ENV_NAMES = [
 	'TRUST_X_FORWARDED_PROTO',
 	'WORKOS_API_HOSTNAME',
 	'WORKOS_API_KEY',
-	'WORKOS_AUTHKIT_HOSTNAME',
 	'WORKOS_CLIENT_ID',
 	'WORKOS_COOKIE_PASSWORD',
 	'WORKOS_REDIRECT_URI',
@@ -41,6 +40,10 @@ type HubServerEnvOptions = {
 	port: number;
 	envOverrides?: Record<string, string | undefined>;
 	imports?: readonly string[];
+};
+
+type HubPreviewScriptEnvOptions = HubServerEnvOptions & {
+	nodeEnv?: string;
 };
 
 function formatOriginHost(host: string): string {
@@ -169,13 +172,14 @@ export function createHubPreviewScriptEnv({
 	baseEnv,
 	port,
 	envOverrides = {},
-	imports = []
-}: HubServerEnvOptions): NodeJS.ProcessEnv {
+	imports = [],
+	nodeEnv = 'production'
+}: HubPreviewScriptEnvOptions): NodeJS.ProcessEnv {
 	return createHubSpawnEnv({
 		baseEnv,
 		port,
 		host: '127.0.0.1',
-		nodeEnv: 'production',
+		nodeEnv,
 		imports,
 		envOverrides
 	});
