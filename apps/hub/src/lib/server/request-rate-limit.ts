@@ -42,6 +42,10 @@ function getOldestBucketTimestamp(bucket: SlidingWindowBucket): number | null {
 	return bucket.timestamps[bucket.headIndex] ?? null;
 }
 
+function getNewestBucketTimestamp(bucket: SlidingWindowBucket): number | null {
+	return bucket.timestamps[bucket.timestamps.length - 1] ?? null;
+}
+
 function compactBucket(bucket: SlidingWindowBucket): void {
 	if (bucket.headIndex === 0) {
 		return;
@@ -107,23 +111,33 @@ function deleteBuckets(
 	}
 }
 
-function getLeastRecentlyUsedBucketKey(
-	buckets: ReadonlyMap<string, SlidingWindowBucket>
-): string | null {
-	const oldestBucketKey = buckets.keys().next().value;
-	return typeof oldestBucketKey === 'string' ? oldestBucketKey : null;
-}
+function getSaturatedBucketRetryAfterSeconds(
+	buckets: ReadonlyMap<string, SlidingWindowBucket>,
+	now: number,
+	windowMs: number
+): number {
+	let earliestBucketResetAt: number | null = null;
 
-function touchBucket(
-	buckets: Map<string, SlidingWindowBucket>,
-	key: string,
-	bucket: SlidingWindowBucket
-): void {
-	if (buckets.get(key) === bucket) {
-		buckets.delete(key);
+	for (const bucket of buckets.values()) {
+		const newestTimestamp = getNewestBucketTimestamp(bucket);
+		if (newestTimestamp === null) {
+			continue;
+		}
+
+		const bucketResetAt = newestTimestamp + windowMs;
+		if (
+			earliestBucketResetAt === null ||
+			bucketResetAt < earliestBucketResetAt
+		) {
+			earliestBucketResetAt = bucketResetAt;
+		}
 	}
 
-	buckets.set(key, bucket);
+	if (earliestBucketResetAt === null) {
+		return Math.max(1, Math.ceil(windowMs / 1000));
+	}
+
+	return Math.max(1, Math.ceil((earliestBucketResetAt - now) / 1000));
 }
 
 export function createSlidingWindowRateLimiter({
@@ -156,20 +170,24 @@ export function createSlidingWindowRateLimiter({
 				}
 
 				if (buckets.size >= maxEntries) {
-					const oldestBucketKey = getLeastRecentlyUsedBucketKey(buckets);
-					if (oldestBucketKey) {
-						buckets.delete(oldestBucketKey);
-					}
+					return {
+						allowed: false,
+						retryAfterSeconds: getSaturatedBucketRetryAfterSeconds(
+							buckets,
+							nowMs,
+							windowMs
+						)
+					};
 				}
 
 				bucket = {
 					timestamps: [],
 					headIndex: 0
 				};
+				buckets.set(normalizedKey, bucket);
+			} else {
+				pruneBucket(bucket, nowMs, windowMs);
 			}
-
-			pruneBucket(bucket, nowMs, windowMs);
-			touchBucket(buckets, normalizedKey, bucket);
 
 			if (getBucketSize(bucket) >= limit) {
 				const oldestTimestamp = getOldestBucketTimestamp(bucket) ?? nowMs;
@@ -183,7 +201,6 @@ export function createSlidingWindowRateLimiter({
 			}
 
 			bucket.timestamps.push(nowMs);
-			touchBucket(buckets, normalizedKey, bucket);
 
 			return {
 				allowed: true,

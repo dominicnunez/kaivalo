@@ -90,7 +90,10 @@ describe('sliding window rate limiter', () => {
 		now += 1;
 		expect(limiter.check('203.0.113.10').allowed).toBe(true);
 		now += 1;
-		expect(limiter.check('203.0.113.12').allowed).toBe(true);
+		expect(limiter.check('203.0.113.12')).toMatchObject({
+			allowed: false,
+			retryAfterSeconds: 60
+		});
 		now += 1;
 
 		expect(limiter.check('203.0.113.10')).toMatchObject({
@@ -124,7 +127,7 @@ describe('sliding window rate limiter', () => {
 		});
 	});
 
-	it('assigns isolated quotas to new keys after the table reaches capacity', () => {
+	it('rejects new keys until an active bucket ages out of the table', () => {
 		let now = 1_000;
 		const limiter = createSlidingWindowRateLimiter({
 			limit: 1,
@@ -138,10 +141,10 @@ describe('sliding window rate limiter', () => {
 		expect(limiter.check('203.0.113.11').allowed).toBe(true);
 		now += 1;
 		expect(limiter.check('203.0.113.12')).toMatchObject({
-			allowed: true,
-			retryAfterSeconds: 0
+			allowed: false,
+			retryAfterSeconds: 60
 		});
-		now += 1;
+		now += 60_000;
 
 		expect(limiter.check('203.0.113.13')).toMatchObject({
 			allowed: true,
@@ -149,10 +152,10 @@ describe('sliding window rate limiter', () => {
 		});
 	});
 
-	it('evicts the least recently used bucket before a recently active bucket', () => {
+	it('reports overflow retry-after from the earliest bucket reset time', () => {
 		let now = 1_000;
 		const limiter = createSlidingWindowRateLimiter({
-			limit: 1,
+			limit: 3,
 			windowMs: 60_000,
 			maxEntries: 2,
 			now: () => now
@@ -160,25 +163,22 @@ describe('sliding window rate limiter', () => {
 
 		expect(limiter.check('203.0.113.10').allowed).toBe(true);
 		now += 1;
+		expect(limiter.check('203.0.113.10').allowed).toBe(true);
+		now += 1;
 		expect(limiter.check('203.0.113.11').allowed).toBe(true);
 		now += 1;
-		expect(limiter.check('203.0.113.10')).toMatchObject({
-			allowed: false,
-			retryAfterSeconds: 60
-		});
+		expect(limiter.check('203.0.113.11').allowed).toBe(true);
 		now += 1;
+
 		expect(limiter.check('203.0.113.12')).toMatchObject({
-			allowed: true,
-			retryAfterSeconds: 0
-		});
-		now += 1;
-		expect(limiter.check('203.0.113.10')).toMatchObject({
 			allowed: false,
 			retryAfterSeconds: 60
 		});
-		expect(limiter.check('203.0.113.11')).toMatchObject({
-			allowed: true,
-			retryAfterSeconds: 0
+
+		now = 31_100;
+		expect(limiter.check('203.0.113.12')).toMatchObject({
+			allowed: false,
+			retryAfterSeconds: 30
 		});
 	});
 });
