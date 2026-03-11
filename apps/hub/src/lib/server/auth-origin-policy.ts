@@ -1,9 +1,9 @@
 type WorkosOriginPolicyEnv = {
-	authkitHostname: string;
+	apiHostname: string;
 };
 
 export function getTrustedWorkosAuthOrigin(
 	workosEnv: WorkosOriginPolicyEnv
 ): string {
-	return `https://${workosEnv.authkitHostname}`;
+	return `https://${workosEnv.apiHostname}`;
 }

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { SPLIT_WORKOS_HOSTNAME_ERROR_MESSAGE } from '$lib/server/workos-security.ts';
 
 const { mockEnv, mockShouldIncludeErrorMessage, mockAuthKit } = vi.hoisted(
 	() => ({
@@ -68,30 +69,23 @@ describe('auth sign-out route', () => {
 		);
 	});
 
-	it('trusts a dedicated AuthKit hostname when it differs from the api host', async () => {
+	it('rejects split WorkOS api and AuthKit hostnames before sign-out starts', async () => {
 		mockEnv.WORKOS_API_HOSTNAME = 'api-auth.kaivalo-login.com';
 		mockEnv.WORKOS_AUTHKIT_HOSTNAME = 'login.kaivalo-login.com';
-		mockAuthKit.signOut.mockResolvedValueOnce(
-			Response.redirect(
-				'https://login.kaivalo-login.com/user_management/sessions/logout?session_id=session_123&return_to=https%3A%2F%2Fkaivalo.test',
-				302
-			)
-		);
 
 		const { POST } = await import('./+server');
-		const response = await POST({
-			request: new Request('https://attacker.test/auth/sign-out', {
-				method: 'POST',
-				headers: {
-					origin: 'https://kaivalo.test'
-				}
-			}),
-			url: new URL('https://attacker.test/auth/sign-out')
-		} as never);
 
-		expect(response.status).toBe(302);
-		expect(response.headers.get('location')).toBe(
-			'https://login.kaivalo-login.com/user_management/sessions/logout?session_id=session_123&return_to=https%3A%2F%2Fkaivalo.test'
-		);
+		expect(() =>
+			POST({
+				request: new Request('https://attacker.test/auth/sign-out', {
+					method: 'POST',
+					headers: {
+						origin: 'https://kaivalo.test'
+					}
+				}),
+				url: new URL('https://attacker.test/auth/sign-out')
+			} as never)
+		).toThrow(SPLIT_WORKOS_HOSTNAME_ERROR_MESSAGE);
+		expect(mockAuthKit.signOut).not.toHaveBeenCalled();
 	});
 });

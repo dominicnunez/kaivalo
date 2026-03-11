@@ -164,16 +164,16 @@ describe('apps/hub/.env.example behavior', () => {
 		assert.match(content, /strip or overwrite any inbound x-forwarded-proto/i);
 		assert.match(content, /innermost proxy address/i);
 		assert.match(content, /proxy hops sit in front of the app/i);
-		assert.match(content, /authentication api is configured on a custom/i);
-		assert.match(content, /sdk\s+# should call/i);
-		assert.match(
-			content,
-			/authkit\/login custom domains are configured separately/i
-		);
-		assert.match(content, /WORKOS_AUTHKIT_HOSTNAME=login\.kaivalo\.com/);
+		assert.match(content, /hosted auth urls from this value/i);
+		assert.match(content, /split api\/authkit hostnames are unsupported/i);
+		assert.match(content, /WORKOS_AUTHKIT_HOSTNAME=auth\.kaivalo\.com/);
 		assert.match(runtimeEnvDoc, /placeholder-safe image builds/i);
 		assert.match(runtimeEnvDoc, /runtime-only secrets/i);
 		assert.match(runtimeEnvDoc, /WORKOS_AUTHKIT_HOSTNAME/i);
+		assert.match(
+			runtimeEnvDoc,
+			/current authkit sdk still builds hosted sign-in\/sign-out urls from/i
+		);
 		assert.match(runtimeEnvDoc, /ADDRESS_HEADER=x-forwarded-for/i);
 		assert.match(runtimeEnvDoc, /XFF_DEPTH=1/i);
 		assert.match(

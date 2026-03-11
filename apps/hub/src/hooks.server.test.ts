@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AUTHKIT_COOKIE_NAME } from '$lib/server/authkit-config.ts';
+import { SPLIT_WORKOS_HOSTNAME_ERROR_MESSAGE } from '$lib/server/workos-security.ts';
 
 type HookInput = {
 	event: unknown;
@@ -106,6 +107,16 @@ describe('hooks server behavior', () => {
 				cookieName: AUTHKIT_COOKIE_NAME
 			})
 		);
+	});
+
+	it('fails startup when WorkOS AuthKit hostname differs from the api hostname', async () => {
+		privateEnv.WORKOS_API_HOSTNAME = 'api-auth.kaivalo-login.com';
+		privateEnv.WORKOS_AUTHKIT_HOSTNAME = 'login.kaivalo-login.com';
+
+		await expect(import('./hooks.server')).rejects.toThrow(
+			SPLIT_WORKOS_HOSTNAME_ERROR_MESSAGE
+		);
+		expect(configureAuthKit).not.toHaveBeenCalled();
 	});
 
 	it('applies reusable caching for public html responses without auth context', async () => {
