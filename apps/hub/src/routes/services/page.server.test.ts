@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { isRedirect } from '@sveltejs/kit';
+import { AUTH_ERROR_MESSAGE } from '$lib/auth/auth-error-query-shared.ts';
 
 import { load } from './+page.server';
 
@@ -16,9 +17,32 @@ function createParentData(overrides: Record<string, unknown> = {}) {
 	};
 }
 
+function createSingleAssignmentSetHeaders(
+	initialHeaders: Record<string, string> = {}
+) {
+	const assignedHeaders = new Map(
+		Object.entries(initialHeaders).map(([name, value]) => [
+			name.toLowerCase(),
+			value
+		])
+	);
+
+	return vi.fn((headers: Record<string, string>) => {
+		for (const [name, value] of Object.entries(headers)) {
+			const normalizedName = name.toLowerCase();
+			if (assignedHeaders.has(normalizedName)) {
+				throw new Error(`"${normalizedName}" header is already set`);
+			}
+			assignedHeaders.set(normalizedName, value);
+		}
+	});
+}
+
 describe('services page load', () => {
 	it('redirects unauthenticated users to the trusted sign-in flow', async () => {
-		const setHeaders = vi.fn();
+		const setHeaders = createSingleAssignmentSetHeaders({
+			vary: 'Cookie'
+		});
 		try {
 			await load({
 				parent: async () =>
@@ -37,9 +61,36 @@ describe('services page load', () => {
 			expect(caught.status).toBe(303);
 			expect(caught.location).toBe('/auth/sign-in');
 		}
-		expect(setHeaders).toHaveBeenCalledWith({
-			'cache-control': 'private, no-store'
+		expect(setHeaders).not.toHaveBeenCalled();
+	});
+
+	it('fails with a controlled error when auth is unavailable even if sign-in remains configured', async () => {
+		const setHeaders = createSingleAssignmentSetHeaders({
+			'cache-control': 'private, no-store',
+			vary: 'Cookie, Authorization'
 		});
+
+		await expect(
+			load({
+				parent: async () =>
+					createParentData({
+						user: null,
+						signInUrl: '/auth/sign-in',
+						authError: {
+							message: AUTH_ERROR_MESSAGE,
+							incidentId: 'authlayout_test-incident'
+						}
+					}),
+				setHeaders
+			} as never)
+		).rejects.toMatchObject({
+			status: 503,
+			body: {
+				message: AUTH_ERROR_MESSAGE
+			}
+		});
+
+		expect(setHeaders).not.toHaveBeenCalled();
 	});
 
 	it('fails with a controlled error when sign-in is unavailable', async () => {
@@ -54,7 +105,7 @@ describe('services page load', () => {
 		).rejects.toMatchObject({
 			status: 503,
 			body: {
-				message: 'Sign-in is temporarily unavailable.'
+				message: AUTH_ERROR_MESSAGE
 			}
 		});
 	});
