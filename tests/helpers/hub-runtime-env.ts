@@ -1,6 +1,7 @@
 import { isIP } from 'node:net';
 
 const HUB_RUNTIME_ENV_NAMES = [
+	'ADDRESS_HEADER',
 	'AUTH_ERROR_SIGNING_SECRET',
 	'DEV_AUTH_BYPASS',
 	'DEV_AUTH_BYPASS_EMAIL',
@@ -22,7 +23,8 @@ const HUB_RUNTIME_ENV_NAMES = [
 	'WORKOS_AUTHKIT_HOSTNAME',
 	'WORKOS_CLIENT_ID',
 	'WORKOS_COOKIE_PASSWORD',
-	'WORKOS_REDIRECT_URI'
+	'WORKOS_REDIRECT_URI',
+	'XFF_DEPTH'
 ] as const;
 
 type HubSpawnEnvOptions = {
@@ -91,7 +93,7 @@ function createHubSpawnEnv({
 	envOverrides = {},
 	imports = []
 }: HubSpawnEnvOptions): NodeJS.ProcessEnv {
-	const env = {
+	const env: NodeJS.ProcessEnv = {
 		...sanitizeHubRuntimeEnv(baseEnv),
 		...envOverrides,
 		HOST: host,
