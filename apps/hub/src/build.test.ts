@@ -8,6 +8,7 @@ import {
 	findProductionArtifactLeaks,
 	getHubBuildPaths
 } from '../scripts/build-artifacts.ts';
+import { createHubBuiltRuntimeEnv } from '../../../tests/helpers/hub-runtime-env.ts';
 
 const hubDir = process.cwd();
 const { buildDir, repoRoot } = getHubBuildPaths(hubDir);
@@ -138,22 +139,10 @@ async function startBuiltServer() {
 		cwd: hubDir,
 		stdio: ['ignore', 'pipe', 'pipe'],
 		detached: true,
-		env: {
-			...process.env,
-			NODE_ENV: 'test',
-			PORT: String(port),
-			HOST: '127.0.0.1',
-			WORKOS_REDIRECT_URI:
-				process.env.WORKOS_REDIRECT_URI ??
-				`http://127.0.0.1:${port}/auth/callback`,
-			WORKOS_CLIENT_ID: process.env.WORKOS_CLIENT_ID ?? 'client_test_fixture',
-			WORKOS_API_KEY: process.env.WORKOS_API_KEY ?? 'sk_test_fixture',
-			WORKOS_COOKIE_PASSWORD:
-				process.env.WORKOS_COOKIE_PASSWORD ?? 'ab'.repeat(32),
-			AUTH_ERROR_SIGNING_SECRET:
-				process.env.AUTH_ERROR_SIGNING_SECRET ?? 'cd'.repeat(32),
-			ORIGIN: process.env.ORIGIN ?? `http://127.0.0.1:${port}`
-		}
+		env: createHubBuiltRuntimeEnv({
+			baseEnv: process.env,
+			port
+		})
 	});
 
 	const baseUrl = `http://127.0.0.1:${port}`;
