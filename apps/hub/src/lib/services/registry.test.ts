@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	getLauncherServices,
 	getMarketingServices,
+	isLauncherServiceAvailable,
 	isTrustedServiceAppHostname,
 	isTrustedServiceAppUrl
 } from './registry.ts';
@@ -19,6 +20,27 @@ describe('service registry helpers', () => {
 			activeServices: [{ id: 'sweep' }],
 			plannedServices: [{ id: 'podstudio' }]
 		});
+	});
+
+	it('uses one availability rule for launchable services', () => {
+		expect(
+			isLauncherServiceAvailable({
+				lifecycle: 'active',
+				enabled: true
+			})
+		).toBe(true);
+		expect(
+			isLauncherServiceAvailable({
+				lifecycle: 'active',
+				enabled: false
+			})
+		).toBe(false);
+		expect(
+			isLauncherServiceAvailable({
+				lifecycle: 'planned',
+				enabled: true
+			})
+		).toBe(false);
 	});
 
 	it('returns defensive copies for marketing services', () => {

@@ -180,6 +180,36 @@ describe('home page content', () => {
 		).toBeTruthy();
 	});
 
+	it('treats active but disabled marketing services as not yet available', () => {
+		const { container } = renderPage({
+			marketingServices: [
+				{
+					id: 'sweep',
+					name: 'Sweep',
+					tagline: 'Stay on schedule',
+					description: 'Smart scheduling for chimney professionals.',
+					icon: 'calendar',
+					lifecycle: 'active',
+					marketingVisible: true,
+					launcherVisible: true,
+					enabled: false,
+					appUrl: 'https://sweep.kaivalo.com'
+				}
+			]
+		});
+
+		const servicesSection = container.querySelector('#services');
+		expect(servicesSection).not.toBeNull();
+		expect(
+			within(servicesSection as HTMLElement).getByText('Soon')
+		).toBeTruthy();
+		expect(
+			within(servicesSection as HTMLElement).queryByRole('link', {
+				name: /open from your services/i
+			})
+		).toBeNull();
+	});
+
 	it('renders the shared footer mark and the current year', () => {
 		const { container } = renderPage();
 

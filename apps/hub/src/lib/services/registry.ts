@@ -17,6 +17,12 @@ export type ServiceRegistryEntry = {
 	appUrl: string;
 };
 
+export function isLauncherServiceAvailable(
+	service: Pick<ServiceRegistryEntry, 'lifecycle' | 'enabled'>
+): boolean {
+	return service.lifecycle === 'active' && service.enabled;
+}
+
 const TRUSTED_SERVICE_APP_HOST_SUFFIX = '.kaivalo.com';
 
 function cloneService(
@@ -127,7 +133,7 @@ export function getLauncherServices(): {
 
 	return {
 		activeServices: visibleServices
-			.filter((service) => service.lifecycle === 'active' && service.enabled)
+			.filter(isLauncherServiceAvailable)
 			.map(cloneService),
 		plannedServices: visibleServices
 			.filter((service) => service.lifecycle === 'planned')

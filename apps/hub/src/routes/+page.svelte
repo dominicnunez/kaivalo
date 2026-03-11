@@ -2,7 +2,10 @@
 	import { Container } from '@kaivalo/ui';
 	import { ArrowRight, Calendar, Mic } from 'lucide-svelte';
 	import type { PageData } from './$types';
-	import type { ServiceIconKey } from '$lib/services/registry.ts';
+	import {
+		isLauncherServiceAvailable,
+		type ServiceIconKey
+	} from '$lib/services/registry.ts';
 	import ShellHeader from '$lib/components/shell-header.svelte';
 	import ShellFooter from '$lib/components/shell-footer.svelte';
 	import { onMount } from 'svelte';
@@ -200,6 +203,7 @@
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
 			{#each data.marketingServices as service}
 				{@const Icon = serviceIcons[service.icon]}
+				{@const isAvailable = isLauncherServiceAvailable(service)}
 				<div
 					class="service-card-shell group rounded-xl border p-6 sm:p-8 service-card"
 				>
@@ -211,7 +215,7 @@
 								class="text-muted w-5 h-5 transition-colors duration-300 icon-muted"
 							/>
 						</div>
-						{#if service.lifecycle === 'active'}
+						{#if isAvailable}
 							<span
 								class="badge-soon inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium transition-colors duration-300 soon-badge"
 							>
@@ -235,7 +239,7 @@
 					<p class="text-muted text-sm leading-relaxed">
 						{service.description}
 					</p>
-					{#if service.lifecycle === 'active'}
+					{#if isAvailable}
 						<div class="mt-5">
 							<a
 								href="/services"
