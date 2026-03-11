@@ -3,9 +3,13 @@ import { randomUUID } from 'node:crypto';
 import { env } from '$env/dynamic/private';
 import {
 	AVATAR_ALLOWED_CONTENT_TYPES,
-	AVATAR_FETCH_TIMEOUT_MS,
-	AVATAR_MAX_RESPONSE_BYTES
+	AVATAR_FETCH_TIMEOUT_MS
 } from '$lib/server/avatar-proxy.ts';
+import {
+	AvatarResponseSizeError,
+	cancelResponseBody,
+	readAvatarBody
+} from '$lib/server/avatar-body.ts';
 import { sanitizeAvatarUrl } from '$lib/server/avatar-url.ts';
 import {
 	getErrorLogContext,
@@ -32,8 +36,6 @@ const TOO_MANY_REQUESTS_STATUS = 429;
 const SERVICE_UNAVAILABLE_MESSAGE = 'Service unavailable';
 const SERVICE_UNAVAILABLE_STATUS = 503;
 const PRIVATE_NO_STORE_CACHE_CONTROL = 'private, no-store';
-const AVATAR_RESPONSE_TOO_LARGE_MESSAGE =
-	'Avatar response exceeds maximum allowed size';
 
 type CacheDirectiveMap = Map<string, string | true>;
 type AvatarFailureClass =
@@ -53,13 +55,6 @@ type AvatarFailureLogOptions = {
 	upstreamStatus?: number;
 	upstreamContentType?: string | null;
 };
-
-class AvatarResponseSizeError extends Error {
-	constructor(message: string) {
-		super(message);
-		this.name = 'AvatarResponseSizeError';
-	}
-}
 
 function getAvatarContentType(upstream: Response): string | null {
 	const contentType = upstream.headers.get('content-type');
@@ -170,21 +165,6 @@ function logAvatarClientAddressFailure({
 		failureClass: 'client-address',
 		responseStatus: SERVICE_UNAVAILABLE_STATUS
 	});
-}
-
-async function cancelUpstreamBody(
-	upstream: Response,
-	reason: string
-): Promise<void> {
-	if (!upstream.body || upstream.body.locked) {
-		return;
-	}
-
-	try {
-		await upstream.body.cancel(reason);
-	} catch {
-		// Ignore cleanup failures from already-closed or errored streams.
-	}
 }
 
 function parseCacheControl(headerValue: string | null): CacheDirectiveMap {
@@ -314,71 +294,6 @@ function isTimeoutError(error: unknown): boolean {
 	return error instanceof DOMException && error.name === 'TimeoutError';
 }
 
-function joinAvatarChunks(
-	chunks: Uint8Array[],
-	totalBytes: number
-): Uint8Array {
-	if (chunks.length === 0) {
-		return new Uint8Array();
-	}
-
-	if (chunks.length === 1) {
-		return chunks[0];
-	}
-
-	const body = new Uint8Array(totalBytes);
-	let offset = 0;
-	for (const chunk of chunks) {
-		body.set(chunk, offset);
-		offset += chunk.byteLength;
-	}
-
-	return body;
-}
-
-async function readAvatarBody(upstream: Response): Promise<Uint8Array> {
-	const advertisedLength = upstream.headers.get('content-length');
-	if (advertisedLength) {
-		const parsedLength = Number.parseInt(advertisedLength, 10);
-		if (
-			Number.isFinite(parsedLength) &&
-			parsedLength > AVATAR_MAX_RESPONSE_BYTES
-		) {
-			await cancelUpstreamBody(upstream, AVATAR_RESPONSE_TOO_LARGE_MESSAGE);
-			throw new AvatarResponseSizeError(AVATAR_RESPONSE_TOO_LARGE_MESSAGE);
-		}
-	}
-
-	const reader = upstream.body?.getReader();
-	if (!reader) {
-		return new Uint8Array();
-	}
-
-	const chunks: Uint8Array[] = [];
-	let totalBytes = 0;
-
-	try {
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) {
-				break;
-			}
-
-			totalBytes += value.byteLength;
-			if (totalBytes > AVATAR_MAX_RESPONSE_BYTES) {
-				await reader.cancel(AVATAR_RESPONSE_TOO_LARGE_MESSAGE);
-				throw new AvatarResponseSizeError(AVATAR_RESPONSE_TOO_LARGE_MESSAGE);
-			}
-
-			chunks.push(value);
-		}
-	} finally {
-		reader.releaseLock();
-	}
-
-	return joinAvatarChunks(chunks, totalBytes);
-}
-
 function getAvatarRateLimitKey(
 	event: Parameters<RequestHandler>[0],
 	trustedProxyIps: readonly string[]
@@ -500,7 +415,7 @@ export function _createAvatarGetHandler({
 		}
 
 		if (!upstream.ok) {
-			await cancelUpstreamBody(upstream, 'Rejected upstream avatar status');
+			await cancelResponseBody(upstream, 'Rejected upstream avatar status');
 			logAvatarFailure({
 				request,
 				pathname: url.pathname,
@@ -514,7 +429,7 @@ export function _createAvatarGetHandler({
 
 		const contentType = getAvatarContentType(upstream);
 		if (!contentType) {
-			await cancelUpstreamBody(
+			await cancelResponseBody(
 				upstream,
 				'Rejected upstream avatar content type'
 			);
@@ -536,7 +451,7 @@ export function _createAvatarGetHandler({
 			body = await readAvatarBody(upstream);
 		} catch (error) {
 			if (isTimeoutError(error)) {
-				await cancelUpstreamBody(upstream, 'Avatar response timed out');
+				await cancelResponseBody(upstream, 'Avatar response timed out');
 				logAvatarFailure({
 					request,
 					pathname: url.pathname,
@@ -548,7 +463,7 @@ export function _createAvatarGetHandler({
 				return createGatewayErrorResponse(504, 'Gateway timeout');
 			}
 
-			await cancelUpstreamBody(upstream, 'Rejected upstream avatar body');
+			await cancelResponseBody(upstream, 'Rejected upstream avatar body');
 			logAvatarFailure({
 				request,
 				pathname: url.pathname,
