@@ -61,7 +61,9 @@ describe('services page load', () => {
 			expect(caught.status).toBe(303);
 			expect(caught.location).toBe('/auth/sign-in');
 		}
-		expect(setHeaders).not.toHaveBeenCalled();
+		expect(setHeaders).toHaveBeenCalledWith({
+			'cache-control': 'private, no-store'
+		});
 	});
 
 	it('fails with a controlled error when auth is unavailable even if sign-in remains configured', async () => {

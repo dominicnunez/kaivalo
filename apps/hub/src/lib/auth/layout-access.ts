@@ -1,6 +1,8 @@
 import { error, redirect } from '@sveltejs/kit';
 import { AUTH_ERROR_MESSAGE } from './auth-error-query-shared.ts';
 
+const PRIVATE_NO_STORE_CACHE_CONTROL = 'private, no-store';
+
 type LayoutAuthError = {
 	message: string;
 	incidentId: string | null;
@@ -12,8 +14,13 @@ type LayoutAuthState<User> = {
 	authError: LayoutAuthError | null;
 };
 
+type HeaderSettingEvent = {
+	setHeaders?: ((headers: Record<string, string>) => void) | undefined;
+};
+
 export function requireAuthenticatedLayoutUser<User>(
-	state: LayoutAuthState<User>
+	state: LayoutAuthState<User>,
+	event?: HeaderSettingEvent
 ): User {
 	if (state.user) {
 		return state.user;
@@ -24,6 +31,9 @@ export function requireAuthenticatedLayoutUser<User>(
 	}
 
 	if (state.signInUrl) {
+		event?.setHeaders?.({
+			'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL
+		});
 		throw redirect(303, state.signInUrl);
 	}
 

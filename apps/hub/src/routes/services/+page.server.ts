@@ -4,7 +4,7 @@ import { requireAuthenticatedLayoutUser } from '$lib/auth/layout-access.ts';
 
 export const load: PageServerLoad = async (event) => {
 	const parentData = await event.parent();
-	requireAuthenticatedLayoutUser(parentData);
+	requireAuthenticatedLayoutUser(parentData, event);
 
 	return {
 		meta: {
