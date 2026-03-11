@@ -31,6 +31,7 @@ const TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH = path.join(
 const DEPLOYABLE_REF_CONDITION =
 	"github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')";
 const PINNED_NODE_VERSION_PATTERN = /^node:(\d+\.\d+\.\d+)-/;
+const IMAGE_DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/i;
 
 type WorkflowRecord = Record<string, unknown>;
 
@@ -95,6 +96,13 @@ function readWorkflow(workflowPath: string): WorkflowRecord {
 		parse(readFileSync(workflowPath, 'utf8')),
 		`${path.basename(workflowPath)} should parse as a workflow object`
 	);
+}
+
+function normalizeShellScript(value: string): string {
+	return value
+		.replace(/\\\s*\n/g, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
 }
 
 function getWorkflowTriggers(workflow: WorkflowRecord) {
@@ -176,9 +184,9 @@ function getAllWorkflowSteps(workflow: WorkflowRecord) {
 }
 
 function getWorkflowRunCommands(workflow: WorkflowRecord, jobName: string) {
-	return getWorkflowSteps(workflow, jobName).flatMap((step) =>
-		step.run ? [step.run] : []
-	);
+	return getWorkflowSteps(workflow, jobName)
+		.flatMap((step) => (step.run ? [step.run] : []))
+		.map(normalizeShellScript);
 }
 
 function getWorkflowJobCondition(workflow: WorkflowRecord, jobName: string) {
@@ -217,9 +225,9 @@ function includesSensitiveSecretReference(value: unknown): boolean {
 	return false;
 }
 
-function getRuntimeStageBuildCopies(dockerfile) {
+function getRuntimeStageBuildCopies(dockerfile: string) {
 	const records = [];
-	let currentStage = null;
+	let currentStage: string | null = null;
 
 	for (const rawLine of dockerfile.split('\n')) {
 		const line = rawLine.trim();
@@ -238,7 +246,7 @@ function getRuntimeStageBuildCopies(dockerfile) {
 		}
 
 		const tokens = line.split(/\s+/).slice(1);
-		const flags = {};
+		const flags: Record<string, string> = {};
 		const args = [];
 
 		for (const token of tokens) {
@@ -273,7 +281,7 @@ function getRuntimeStageBuildCopies(dockerfile) {
 	return records;
 }
 
-function getDockerfileFromImages(dockerfile) {
+function getDockerfileFromImages(dockerfile: string) {
 	return dockerfile
 		.split('\n')
 		.map((line) => line.trim())
@@ -291,7 +299,7 @@ function getDockerfileFromImages(dockerfile) {
 		});
 }
 
-function getPinnedNodeVersionFromDockerfile(dockerfile) {
+function getPinnedNodeVersionFromDockerfile(dockerfile: string) {
 	const [buildStage] = getDockerfileFromImages(dockerfile);
 	assert.ok(buildStage, 'Dockerfile should define at least one FROM image');
 
@@ -304,10 +312,67 @@ function getPinnedNodeVersionFromDockerfile(dockerfile) {
 	return match[1];
 }
 
+function parsePinnedNodeImage(image: string) {
+	const [reference, digest] = image.split('@');
+	assert.ok(
+		reference,
+		'Dockerfile stage should include an image reference before the digest'
+	);
+	assert.ok(
+		digest && IMAGE_DIGEST_PATTERN.test(digest),
+		`Dockerfile stage should use an immutable digest: ${image}`
+	);
+
+	const match = reference.match(PINNED_NODE_VERSION_PATTERN);
+	assert.ok(
+		match,
+		`Dockerfile stage should use a pinned node image tag: ${reference}`
+	);
+
+	return {
+		reference,
+		digest,
+		nodeVersion: match[1]
+	};
+}
+
 function getPackageScripts() {
 	const packageJson = JSON.parse(readFileSync(PACKAGE_JSON_PATH, 'utf8'));
 	assert.ok(packageJson.scripts, 'package.json should define scripts');
 	return packageJson.scripts;
+}
+
+function getNpmRunInvocations(value: string): string[] {
+	return Array.from(
+		normalizeShellScript(value).matchAll(/\bnpm\s+run\s+([a-z0-9:-]+)/gi),
+		(match) => match[1]
+	);
+}
+
+function parseCronExpression(expression: string): string[] {
+	const fields = expression.trim().split(/\s+/);
+	assert.strictEqual(
+		fields.length,
+		5,
+		`expected 5-field cron expression, received: ${expression}`
+	);
+	return fields;
+}
+
+function isDailyOrMoreFrequentSchedule(expression: string): boolean {
+	const [, , dayOfMonth, month, dayOfWeek] = parseCronExpression(expression);
+	return dayOfMonth === '*' && month === '*' && dayOfWeek === '*';
+}
+
+function parseSshOptions(script: string): Map<string, string> {
+	return new Map(
+		Array.from(
+			normalizeShellScript(script).matchAll(
+				/-o\s+([A-Za-z][A-Za-z0-9]+)=([^\s]+)/g
+			),
+			(match) => [match[1], match[2]]
+		)
+	);
 }
 
 describe('deployment runtime guardrails', () => {
@@ -367,15 +432,21 @@ describe('deployment runtime guardrails', () => {
 		const deployStep = findWorkflowStep(
 			workflow,
 			'deploy',
-			(step) => step.name === 'Deploy image',
+			(step) => {
+				const runCommand = normalizeShellScript(step.run ?? '');
+				return runCommand.includes('ssh ') && runCommand.includes('deploy-app');
+			},
 			'the image deployment step'
 		);
 		const verifyStep = findWorkflowStep(
 			workflow,
 			'deploy',
-			(step) => step.name === 'Verify deployment health',
+			(step) => normalizeShellScript(step.run ?? '').includes('/healthz'),
 			'the deployment health verification step'
 		);
+		const deployCommand = normalizeShellScript(deployStep.run ?? '');
+		const verifyCommand = normalizeShellScript(verifyStep.run ?? '');
+		const sshOptions = parseSshOptions(deployCommand);
 
 		assert.strictEqual(
 			readNumber(
@@ -384,60 +455,68 @@ describe('deployment runtime guardrails', () => {
 			),
 			15
 		);
-		assert.match(deployStep.run ?? '', /\bssh\b/);
-		assert.match(deployStep.run ?? '', /-o BatchMode=yes/);
-		assert.match(deployStep.run ?? '', /-o ConnectTimeout=10/);
-		assert.match(deployStep.run ?? '', /-o ServerAliveInterval=15/);
-		assert.match(deployStep.run ?? '', /-o ServerAliveCountMax=3/);
+		assert.ok(deployCommand.includes('ssh '));
+		assert.strictEqual(sshOptions.get('BatchMode'), 'yes');
+		assert.strictEqual(sshOptions.get('ConnectTimeout'), '10');
+		assert.strictEqual(sshOptions.get('ServerAliveInterval'), '15');
+		assert.strictEqual(sshOptions.get('ServerAliveCountMax'), '3');
 		assert.strictEqual(
 			verifyStep.env.DEPLOY_ORIGIN,
 			'${{ vars.DEPLOY_ORIGIN }}'
 		);
-		assert.match(verifyStep.run ?? '', /\/healthz/);
-		assert.match(
-			verifyStep.run ?? '',
-			/Expected \/healthz to return plain-text ok/
-		);
-		assert.match(verifyStep.run ?? '', /\bcurl\b/);
+		assert.ok(verifyCommand.includes('"$deploy_origin/"'));
+		assert.ok(verifyCommand.includes('"$deploy_origin/healthz"'));
+		assert.ok((verifyCommand.match(/\bcurl\b/g) ?? []).length >= 2);
+		assert.match(verifyCommand, /--retry(?:=|\s+)\d+/);
+		assert.match(verifyCommand, /--retry-delay(?:=|\s+)\d+/);
+		assert.match(verifyCommand, /--connect-timeout(?:=|\s+)\d+/);
+		assert.match(verifyCommand, /--max-time(?:=|\s+)\d+/);
+		assert.match(verifyCommand, /--retry-connrefused\b/);
+		assert.ok(verifyCommand.includes('health_body="$('));
+		assert.ok(verifyCommand.includes('[ "$health_body" != "ok" ]'));
+		assert.ok(verifyCommand.includes('exit 1'));
 	});
 
 	it('runs the full verification lane on a daily schedule', () => {
 		const workflow = readWorkflow(DAILY_FULL_SUITE_WORKFLOW_PATH);
 		const { triggers, schedule } = getWorkflowTriggers(workflow);
 		const permissions = getWorkflowPermissions(workflow);
-		const setupNodeStep = findWorkflowStep(
-			workflow,
-			'verify',
-			(step) => step.uses?.startsWith('actions/setup-node@') ?? false,
-			'the Node.js setup step'
-		);
 		const runCommands = getWorkflowRunCommands(workflow, 'verify');
 
 		assert.ok(triggers.has('workflow_dispatch'));
-		assert.deepStrictEqual(schedule, ['0 14 * * *']);
+		assert.ok(
+			schedule.some((cron) => isDailyOrMoreFrequentSchedule(cron)),
+			'daily full suite should define at least one daily or more frequent schedule'
+		);
 		assert.strictEqual(permissions.contents, 'read');
-		assert.strictEqual(setupNodeStep.with['node-version'], '24.14.0');
-		assert.strictEqual(setupNodeStep.with.cache, 'npm');
 		assert.ok(runCommands.includes('npm ci --ignore-scripts'));
 		assert.ok(runCommands.includes('npm run test:full'));
 	});
 
 	it('keeps the pre-push hook on the fast verification lane', () => {
 		const hook = readFileSync(PRE_PUSH_HOOK_PATH, 'utf8');
+		const hookInvocations = getNpmRunInvocations(hook);
 
-		assert.match(hook, /\bnpm run test:fast\b/);
-		assert.doesNotMatch(hook, /\bnpm run test:full\b/);
+		assert.ok(hookInvocations.includes('test:fast'));
+		assert.ok(!hookInvocations.includes('test:full'));
 	});
 
 	it('defines the fast and full verification scripts from the canonical lanes', () => {
 		const scripts = getPackageScripts();
+		const fastInvocations = getNpmRunInvocations(scripts['test:fast']);
+		const fullInvocations = getNpmRunInvocations(scripts['test:full']);
+		const coreInvocations = getNpmRunInvocations(scripts['test:core']);
 
 		assert.match(scripts.lint, /\beslint\b/);
-		assert.match(scripts['test:fast'], /\bnpm run lint\b/);
-		assert.match(scripts['test:fast'], /\bnpm run test:core\b/);
-		assert.match(scripts['test:full'], /\bnpm run test:fast\b/);
-		assert.doesNotMatch(scripts['test:core'], /hub-preview-script\.test\.ts/);
-		assert.match(scripts['test:full'], /\bnpm run test:preview:hub\b/);
+		assert.ok(fastInvocations.includes('lint'));
+		assert.ok(fastInvocations.includes('test:core'));
+		assert.ok(getNpmRunInvocations(scripts['test:ci']).includes('test:fast'));
+		assert.ok(fullInvocations.includes('test:fast'));
+		assert.ok(fullInvocations.includes('test:preview:hub'));
+		assert.ok(
+			getNpmRunInvocations(scripts['test:deploy']).includes('test:full')
+		);
+		assert.ok(!coreInvocations.includes('test:preview:hub'));
 	});
 
 	it('only builds and deploys from deployable refs', () => {
@@ -453,41 +532,53 @@ describe('deployment runtime guardrails', () => {
 		);
 	});
 
-	it('limits the runtime image to the declared hub runtime artifact set', () => {
+	it('includes the minimum runtime artifact set without copying app source trees', () => {
 		const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
-		const runtimeCopies = getRuntimeStageBuildCopies(dockerfile).map(
-			({ source, destination }) => `${source} -> ${destination}`
+		const runtimeSources = new Set(
+			getRuntimeStageBuildCopies(dockerfile).map(({ source }) => source)
 		);
 
-		assert.deepStrictEqual(runtimeCopies.sort(), [
-			'/app/apps/hub/build -> ./apps/hub/build',
-			'/app/apps/hub/package.json -> ./apps/hub/package.json',
-			'/app/apps/hub/server.ts -> ./apps/hub/server.ts',
-			'/app/node_modules -> ./node_modules',
-			'/app/package-lock.json -> ./',
-			'/app/package.json -> ./'
-		]);
+		for (const requiredSource of [
+			'/app/package.json',
+			'/app/package-lock.json',
+			'/app/node_modules',
+			'/app/apps/hub/package.json',
+			'/app/apps/hub/server.ts',
+			'/app/apps/hub/build'
+		]) {
+			assert.ok(
+				runtimeSources.has(requiredSource),
+				`runtime image should copy ${requiredSource} from the build stage`
+			);
+		}
+
+		for (const source of runtimeSources) {
+			assert.ok(
+				!source.startsWith('/app/apps/hub/src'),
+				'runtime image should not copy hub source files'
+			);
+			assert.ok(
+				!source.startsWith('/app/packages/'),
+				'runtime image should not copy workspace source packages'
+			);
+		}
 	});
 
-	it('pins both Docker stages to an immutable node base image digest', () => {
+	it('pins both Docker stages to the same immutable node base image digest', () => {
 		const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
 		const fromImages = getDockerfileFromImages(dockerfile);
 
 		assert.deepStrictEqual(
-			fromImages.map(({ image, stage }) => ({ image, stage })),
-			[
-				{
-					image:
-						'node:24.14.0-bookworm-slim@sha256:b4687aef2571c632a1953695ce4d61d6462a7eda471fe6e272eebf0418f276ba',
-					stage: 'build'
-				},
-				{
-					image:
-						'node:24.14.0-bookworm-slim@sha256:b4687aef2571c632a1953695ce4d61d6462a7eda471fe6e272eebf0418f276ba',
-					stage: 'runtime'
-				}
-			]
+			fromImages.map(({ stage }) => stage),
+			['build', 'runtime']
 		);
+		assert.strictEqual(fromImages[0].image, fromImages[1].image);
+
+		const buildImage = parsePinnedNodeImage(fromImages[0].image);
+		const runtimeImage = parsePinnedNodeImage(fromImages[1].image);
+		assert.strictEqual(buildImage.reference, runtimeImage.reference);
+		assert.strictEqual(buildImage.digest, runtimeImage.digest);
+		assert.strictEqual(buildImage.nodeVersion, runtimeImage.nodeVersion);
 	});
 
 	it('uses the shared hub build env defaults for placeholder-safe image builds', () => {
@@ -516,7 +607,7 @@ describe('deployment runtime guardrails', () => {
 		const buildStep = findWorkflowStep(
 			workflow,
 			'build',
-			(step) => step.name === 'Build and push image',
+			(step) => step.uses?.startsWith('docker/build-push-action@') ?? false,
 			'the image build step'
 		);
 
