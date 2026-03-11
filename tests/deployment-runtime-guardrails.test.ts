@@ -27,6 +27,11 @@ const DEPLOY_HEALTH_SCRIPT_PATH = path.join(
 	'scripts',
 	'verify-deploy-health.sh'
 );
+const PRODUCTION_IMAGE_SMOKE_BUILD_SCRIPT_PATH = path.join(
+	ROOT,
+	'scripts',
+	'build-production-image-smoke.sh'
+);
 const TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH = path.join(
 	ROOT,
 	'.github',
@@ -208,6 +213,23 @@ function getWorkflowJobCondition(workflow: WorkflowRecord, jobName: string) {
 		getWorkflowJob(workflow, jobName).if,
 		`job ${jobName} is missing an if condition`
 	);
+}
+
+function getWorkflowJobNeeds(workflow: WorkflowRecord, jobName: string) {
+	const needs = getWorkflowJob(workflow, jobName).needs;
+	if (Array.isArray(needs)) {
+		return needs.map((value, index) =>
+			readString(
+				value,
+				`job ${jobName} needs entry ${index + 1} should be a string`
+			)
+		);
+	}
+	if (typeof needs === 'string') {
+		return [needs];
+	}
+
+	assert.fail(`job ${jobName} should define needs`);
 }
 
 function findWorkflowStep(
@@ -468,6 +490,34 @@ describe('deployment runtime guardrails', () => {
 		assert.ok(runCommands.includes('npm run test:deploy'));
 	});
 
+	it('smoke builds the production image before deployment', () => {
+		const workflow = readWorkflow(DEPLOY_WORKFLOW_PATH);
+		const runCommands = getWorkflowRunCommands(workflow, 'smoke_build');
+
+		assert.deepStrictEqual(getWorkflowJobNeeds(workflow, 'smoke_build'), [
+			'test'
+		]);
+		assert.deepStrictEqual(getWorkflowJobNeeds(workflow, 'build'), [
+			'smoke_build'
+		]);
+		assert.strictEqual(
+			getWorkflowJobCondition(workflow, 'smoke_build'),
+			DEPLOYABLE_REF_CONDITION
+		);
+		assert.deepStrictEqual(getWorkflowJobPermissions(workflow, 'smoke_build'), {
+			contents: 'read'
+		});
+		assert.ok(
+			runCommands.includes('./scripts/build-production-image-smoke.sh')
+		);
+		assert.ok(
+			readFileSync(PRODUCTION_IMAGE_SMOKE_BUILD_SCRIPT_PATH, 'utf8').startsWith(
+				'#!/usr/bin/env bash'
+			),
+			'production image smoke build should be implemented in the shared script'
+		);
+	});
+
 	it('bounds deployment hangs and verifies application health after rollout', () => {
 		const workflow = readWorkflow(DEPLOY_WORKFLOW_PATH);
 		const deployJob = getWorkflowJob(workflow, 'deploy');
@@ -534,6 +584,18 @@ describe('deployment runtime guardrails', () => {
 		assert.ok(runCommands.includes('npm run test:full'));
 	});
 
+	it('smoke builds the production image on daily full-suite runs', () => {
+		const workflow = readWorkflow(DAILY_FULL_SUITE_WORKFLOW_PATH);
+		const runCommands = getWorkflowRunCommands(workflow, 'docker_smoke');
+
+		assert.deepStrictEqual(getWorkflowJobNeeds(workflow, 'docker_smoke'), [
+			'verify'
+		]);
+		assert.ok(
+			runCommands.includes('./scripts/build-production-image-smoke.sh')
+		);
+	});
+
 	it('keeps workflow permissions scoped to the minimum required access', () => {
 		const ciWorkflow = readWorkflow(CI_WORKFLOW_PATH);
 		const dailyFullSuiteWorkflow = readWorkflow(DAILY_FULL_SUITE_WORKFLOW_PATH);
@@ -563,6 +625,12 @@ describe('deployment runtime guardrails', () => {
 		assert.deepStrictEqual(getWorkflowJobPermissions(deployWorkflow, 'test'), {
 			contents: 'read'
 		});
+		assert.deepStrictEqual(
+			getWorkflowJobPermissions(deployWorkflow, 'smoke_build'),
+			{
+				contents: 'read'
+			}
+		);
 		assert.deepStrictEqual(getWorkflowJobPermissions(deployWorkflow, 'build'), {
 			contents: 'read',
 			packages: 'write'
