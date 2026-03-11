@@ -85,6 +85,13 @@ describe('auth callback route', () => {
 		mockConfigureAuthKit.mockReset();
 		mockGetUser.mockClear();
 		mockHandleCallback.mockReset();
+		mockEnv.WORKOS_CLIENT_ID = 'client_123';
+		mockEnv.WORKOS_API_KEY = 'sk_test_123';
+		mockEnv.WORKOS_REDIRECT_URI = 'https://kaivalo.test/auth/callback';
+		mockEnv.WORKOS_COOKIE_PASSWORD = 'ab'.repeat(32);
+		mockEnv.AUTH_ERROR_SIGNING_SECRET = 'cd'.repeat(32);
+		mockEnv.ORIGIN = 'https://kaivalo.test';
+		mockEnv.NODE_ENV = 'production';
 		delete mockEnv.TRUST_X_FORWARDED_PROTO;
 		delete mockEnv.TRUSTED_PROXY_IPS;
 	});
@@ -251,5 +258,125 @@ describe('auth callback route', () => {
 				incidentId: location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME)
 			});
 		}
+	});
+
+	it('fails fast when the callback route is initialized without required auth env', async () => {
+		delete mockEnv.WORKOS_CLIENT_ID;
+
+		const { GET } = await import('./+server');
+
+		expect(() => GET(createEvent())).toThrow(
+			/Missing required environment variable: WORKOS_CLIENT_ID/
+		);
+		expect(mockHandleCallback).not.toHaveBeenCalled();
+	});
+
+	it('returns a 503 error for non-browser callback factory failures', async () => {
+		const errorSpy = vi
+			.spyOn(console, 'error')
+			.mockImplementation(() => undefined);
+		mockHandleCallback.mockImplementation(() => {
+			throw new Error('upstream unavailable');
+		});
+
+		const { GET } = await import('./+server');
+
+		await expect(
+			GET(
+				createEvent({
+					accept: 'application/json'
+				})
+			)
+		).rejects.toMatchObject({
+			status: 503,
+			body: {
+				message: expect.stringMatching(
+					/^Auth callback failed\. Reference: authcb_/
+				)
+			}
+		});
+		expect(errorSpy).toHaveBeenCalledOnce();
+		expect(errorSpy).toHaveBeenCalledWith(
+			'Auth callback failed',
+			expect.objectContaining({
+				errorCode: 'AUTH_CALLBACK_UNEXPECTED_FAILURE',
+				pathname: '/auth/callback',
+				method: 'GET',
+				incidentId: expect.stringMatching(/^authcb_/),
+				errorName: 'Error'
+			})
+		);
+	});
+
+	it('treats redirect responses without a location header as route failures', async () => {
+		mockEnv.NODE_ENV = 'development';
+		const errorSpy = vi
+			.spyOn(console, 'error')
+			.mockImplementation(() => undefined);
+		mockHandleCallback.mockReturnValue(
+			async () =>
+				new Response(null, {
+					status: 302
+				})
+		);
+
+		const { GET } = await import('./+server');
+
+		await expect(
+			GET(
+				createEvent({
+					accept: 'application/json'
+				})
+			)
+		).rejects.toMatchObject({
+			status: 503,
+			body: {
+				message: expect.stringMatching(
+					/^Auth callback failed\. Reference: authcb_/
+				)
+			}
+		});
+		expect(errorSpy).toHaveBeenCalledWith(
+			'Auth callback failed',
+			expect.objectContaining({
+				errorCode: 'AUTH_CALLBACK_UNEXPECTED_FAILURE',
+				errorMessage:
+					'Auth callback produced a redirect response without a location header'
+			})
+		);
+	});
+
+	it('treats invalid redirect responses as route failures', async () => {
+		mockEnv.NODE_ENV = 'development';
+		const errorSpy = vi
+			.spyOn(console, 'error')
+			.mockImplementation(() => undefined);
+		mockHandleCallback.mockReturnValue(async () =>
+			Response.redirect('https://evil.example/auth/callback', 302)
+		);
+
+		const { GET } = await import('./+server');
+
+		await expect(
+			GET(
+				createEvent({
+					accept: 'application/json'
+				})
+			)
+		).rejects.toMatchObject({
+			status: 503,
+			body: {
+				message: expect.stringMatching(
+					/^Auth callback failed\. Reference: authcb_/
+				)
+			}
+		});
+		expect(errorSpy).toHaveBeenCalledWith(
+			'Auth callback failed',
+			expect.objectContaining({
+				errorCode: 'AUTH_CALLBACK_UNEXPECTED_FAILURE',
+				errorMessage: 'Auth callback produced an invalid redirect location'
+			})
+		);
 	});
 });
