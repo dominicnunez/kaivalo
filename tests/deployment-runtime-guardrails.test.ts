@@ -37,6 +37,8 @@ const DEPLOYABLE_REF_CONDITION =
 	"github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')";
 const PINNED_NODE_VERSION_PATTERN = /^node:(\d+\.\d+\.\d+)-/;
 const IMAGE_DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/i;
+const FULL_LENGTH_ACTION_REF_PATTERN =
+	/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[a-f0-9]{40}$/;
 
 type WorkflowRecord = Record<string, unknown>;
 
@@ -137,6 +139,13 @@ function getWorkflowPermissions(workflow: WorkflowRecord) {
 	return readStringRecord(
 		workflow.permissions,
 		'workflow should define permissions'
+	);
+}
+
+function getWorkflowJobPermissions(workflow: WorkflowRecord, jobName: string) {
+	return readStringRecord(
+		getWorkflowJob(workflow, jobName).permissions,
+		`job ${jobName} should define permissions`
 	);
 }
 
@@ -423,6 +432,34 @@ describe('deployment runtime guardrails', () => {
 		}
 	});
 
+	it('pins every external workflow action to a full commit sha', () => {
+		const workflowPaths = [
+			CI_WORKFLOW_PATH,
+			DEPLOY_WORKFLOW_PATH,
+			DAILY_FULL_SUITE_WORKFLOW_PATH,
+			TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH
+		];
+
+		for (const workflowPath of workflowPaths) {
+			const workflow = readWorkflow(workflowPath);
+			const externalActionSteps = getAllWorkflowSteps(workflow).filter(
+				(step) => typeof step.uses === 'string' && !step.uses.startsWith('./')
+			);
+
+			assert.ok(
+				externalActionSteps.length > 0,
+				`${path.basename(workflowPath)} should define at least one external action`
+			);
+			for (const step of externalActionSteps) {
+				assert.match(
+					step.uses!,
+					FULL_LENGTH_ACTION_REF_PATTERN,
+					`${path.basename(workflowPath)} step ${step.name ?? '(unnamed)'} should pin actions by full commit sha`
+				);
+			}
+		}
+	});
+
 	it('runs the full verification lane before deployment', () => {
 		const workflow = readWorkflow(DEPLOY_WORKFLOW_PATH);
 		const runCommands = getWorkflowRunCommands(workflow, 'test');
@@ -495,6 +532,47 @@ describe('deployment runtime guardrails', () => {
 		assert.strictEqual(permissions.contents, 'read');
 		assert.ok(runCommands.includes('npm ci --ignore-scripts'));
 		assert.ok(runCommands.includes('npm run test:full'));
+	});
+
+	it('keeps workflow permissions scoped to the minimum required access', () => {
+		const ciWorkflow = readWorkflow(CI_WORKFLOW_PATH);
+		const dailyFullSuiteWorkflow = readWorkflow(DAILY_FULL_SUITE_WORKFLOW_PATH);
+		const deployWorkflow = readWorkflow(DEPLOY_WORKFLOW_PATH);
+		const trackSvelteKitUpstreamWorkflow = readWorkflow(
+			TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH
+		);
+
+		assert.deepStrictEqual(getWorkflowPermissions(ciWorkflow), {
+			contents: 'read'
+		});
+		assert.deepStrictEqual(getWorkflowPermissions(dailyFullSuiteWorkflow), {
+			contents: 'read'
+		});
+		assert.deepStrictEqual(
+			getWorkflowPermissions(trackSvelteKitUpstreamWorkflow),
+			{
+				contents: 'read',
+				issues: 'write'
+			}
+		);
+		assert.strictEqual(
+			deployWorkflow.permissions,
+			undefined,
+			'deploy workflow should scope permissions per job rather than globally'
+		);
+		assert.deepStrictEqual(getWorkflowJobPermissions(deployWorkflow, 'test'), {
+			contents: 'read'
+		});
+		assert.deepStrictEqual(getWorkflowJobPermissions(deployWorkflow, 'build'), {
+			contents: 'read',
+			packages: 'write'
+		});
+		assert.deepStrictEqual(
+			getWorkflowJobPermissions(deployWorkflow, 'deploy'),
+			{
+				contents: 'read'
+			}
+		);
 	});
 
 	it('keeps the pre-push hook on the fast verification lane', () => {
