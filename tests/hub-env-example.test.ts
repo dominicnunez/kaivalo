@@ -30,6 +30,7 @@ if (!runtimeEnvExampleMatch) {
 }
 
 const runtimeEnvExample = parseEnvTemplate(runtimeEnvExampleMatch[1]);
+const commentedEnvValues = parseCommentedEnvTemplate(content);
 
 function parseEnvTemplate(value) {
 	const parsed = {};
@@ -50,6 +51,23 @@ function parseEnvTemplate(value) {
 	}
 
 	return parsed;
+}
+
+function parseCommentedEnvTemplate(value) {
+	return parseEnvTemplate(
+		value
+			.split('\n')
+			.map((line) => line.trim())
+			.filter((line) => /^#\s*[A-Z0-9_]+=/.test(line))
+			.map((line) => line.replace(/^#\s*/, ''))
+			.join('\n')
+	);
+}
+
+function assertEnvValues(actual, expected) {
+	for (const [key, value] of Object.entries(expected)) {
+		assert.strictEqual(actual[key], value);
+	}
 }
 
 describe('apps/hub/.env.example behavior', () => {
@@ -79,9 +97,15 @@ describe('apps/hub/.env.example behavior', () => {
 		);
 	});
 
-	it('documents the default development port used by the runtime examples', () => {
-		assert.strictEqual(envValues.PORT, '3100');
-		assert.match(runtimeEnvDoc, /PORT=3100/);
+	it('documents local development defaults with machine-checkable example values', () => {
+		assertEnvValues(envValues, {
+			WORKOS_REDIRECT_URI: 'http://localhost:5173/auth/callback',
+			ORIGIN: 'http://localhost:5173',
+			TRUST_X_FORWARDED_PROTO: 'false',
+			HOST: '127.0.0.1',
+			PORT: '3100',
+			SHUTDOWN_TIMEOUT_MS: '30000'
+		});
 	});
 
 	it('keeps local development proxy trust disabled by default', () => {
@@ -106,19 +130,8 @@ describe('apps/hub/.env.example behavior', () => {
 	});
 
 	it('documents a production example that validates with real secrets', () => {
-		const commentedPairs = content
-			.split('\n')
-			.map((line) => line.trim())
-			.filter(
-				(line) =>
-					line.startsWith('# WORKOS_REDIRECT_URI=') ||
-					line.startsWith('# ORIGIN=')
-			)
-			.map((line) => line.slice(2));
-
-		const parsedPairs = parseEnvTemplate(commentedPairs.join('\n'));
 		const validated = getValidatedWorkosEnv({
-			...parsedPairs,
+			...commentedEnvValues,
 			...fixtureSecrets,
 			NODE_ENV: 'production'
 		});
@@ -130,7 +143,7 @@ describe('apps/hub/.env.example behavior', () => {
 		assert.strictEqual(validated.origin, 'https://hub.kaivalo.com');
 	});
 
-	it('documents deployment guidance that matches runtime validation expectations', () => {
+	it('keeps production examples aligned with runtime validation contracts', () => {
 		const proxyConfig = getProxyTrustConfiguration(
 			{
 				...runtimeEnvExample,
@@ -156,39 +169,32 @@ describe('apps/hub/.env.example behavior', () => {
 			/TRUSTED_PROXY_IPS must be configured when TRUST_X_FORWARDED_PROTO=true/
 		);
 
-		assert.match(content, /64 hex chars/i);
-		assert.match(content, /mandatory for production https origins/i);
-		assert.match(content, /TRUST_X_FORWARDED_PROTO=true/i);
-		assert.match(content, /ADDRESS_HEADER=x-forwarded-for/i);
-		assert.match(content, /XFF_DEPTH=1/i);
-		assert.match(content, /strip or overwrite any inbound x-forwarded-proto/i);
-		assert.match(content, /innermost proxy address/i);
-		assert.match(content, /proxy hops sit in front of the app/i);
-		assert.match(content, /hosted auth urls from this value/i);
-		assert.match(content, /split api\/authkit hostnames are unsupported/i);
-		assert.match(content, /WORKOS_AUTHKIT_HOSTNAME=auth\.kaivalo\.com/);
-		assert.match(runtimeEnvDoc, /placeholder-safe image builds/i);
-		assert.match(runtimeEnvDoc, /runtime-only secrets/i);
-		assert.match(runtimeEnvDoc, /WORKOS_AUTHKIT_HOSTNAME/i);
+		assertEnvValues(commentedEnvValues, {
+			WORKOS_REDIRECT_URI: 'https://hub.kaivalo.com/auth/callback',
+			ORIGIN: 'https://hub.kaivalo.com',
+			WORKOS_API_HOSTNAME: 'auth.kaivalo.com',
+			WORKOS_AUTHKIT_HOSTNAME: 'auth.kaivalo.com',
+			TRUSTED_PROXY_IPS: '203.0.113.10,2001:db8::10',
+			ADDRESS_HEADER: 'x-forwarded-for',
+			XFF_DEPTH: '1'
+		});
+		assertEnvValues(runtimeEnvExample, {
+			PORT: '3100',
+			HOST: '0.0.0.0',
+			ORIGIN: 'https://hub.kaivalo.com',
+			WORKOS_REDIRECT_URI: 'https://hub.kaivalo.com/auth/callback',
+			WORKOS_CLIENT_ID: 'client_...',
+			WORKOS_API_KEY: 'sk_...',
+			TRUST_X_FORWARDED_PROTO: 'true',
+			TRUSTED_PROXY_IPS: '203.0.113.10,2001:db8::10',
+			ADDRESS_HEADER: 'x-forwarded-for',
+			XFF_DEPTH: '1',
+			SHUTDOWN_TIMEOUT_MS: '30000'
+		});
+		assert.match(runtimeEnvExample.WORKOS_COOKIE_PASSWORD, /^[a-f0-9]{64}$/i);
 		assert.match(
-			runtimeEnvDoc,
-			/current authkit sdk still builds hosted sign-in\/sign-out urls from/i
-		);
-		assert.match(runtimeEnvDoc, /ADDRESS_HEADER=x-forwarded-for/i);
-		assert.match(runtimeEnvDoc, /XFF_DEPTH=1/i);
-		assert.match(
-			runtimeEnvDoc,
-			/strip or overwrite inbound `x-forwarded-proto`/i
-		);
-		assert.match(runtimeEnvDoc, /right-most value/i);
-		assert.match(runtimeEnvDoc, /innermost proxy's IP address/i);
-	});
-
-	it('keeps the production origin example aligned with runtime documentation', () => {
-		assert.match(runtimeEnvDoc, /ORIGIN=https:\/\/hub\.kaivalo\.com/);
-		assert.match(
-			runtimeEnvDoc,
-			/WORKOS_REDIRECT_URI=https:\/\/hub\.kaivalo\.com\/auth\/callback/
+			runtimeEnvExample.AUTH_ERROR_SIGNING_SECRET,
+			/^[a-f0-9]{64}$/i
 		);
 	});
 });
