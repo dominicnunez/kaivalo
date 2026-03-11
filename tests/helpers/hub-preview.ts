@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { ensureHubBuild } from './hub-build.ts';
 import { reserveLocalPort } from './network.ts';
+import { createHubPreviewEnv } from './hub-runtime-env.ts';
 
 const REQUEST_TIMEOUT_MS = 5000;
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
@@ -23,38 +24,11 @@ function delay(ms) {
  * @param {string[]} [imports]
  */
 function createPreviewEnv(previewPort, envOverrides = {}, imports = []) {
-	const origin = `http://127.0.0.1:${previewPort}`;
-	const previewEnv = {
-		NODE_ENV: 'test',
-		WORKOS_CLIENT_ID: 'client_test_fixture',
-		WORKOS_API_KEY: 'sk_test_fixture',
-		WORKOS_REDIRECT_URI: `${origin}/auth/callback`,
-		WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
-		AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
-		ORIGIN: origin,
-		HOST: '127.0.0.1',
-		PORT: String(previewPort)
-	};
-	Object.assign(previewEnv, envOverrides);
-
-	const nodeOptions = buildPreviewNodeOptions(previewEnv.NODE_OPTIONS, imports);
-	if (nodeOptions) {
-		previewEnv.NODE_OPTIONS = nodeOptions;
-	} else {
-		delete previewEnv.NODE_OPTIONS;
-	}
-
-	return previewEnv;
-}
-
-function buildPreviewNodeOptions(existingNodeOptions, imports = []) {
-	const importOptions = imports.map(
-		(moduleSpecifier) => `--import=${moduleSpecifier}`
-	);
-	return [existingNodeOptions, ...importOptions]
-		.filter(Boolean)
-		.join(' ')
-		.trim();
+	return createHubPreviewEnv({
+		port: previewPort,
+		envOverrides,
+		imports
+	});
 }
 
 function shouldUseSharedPreview(options = {}) {

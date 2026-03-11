@@ -6,6 +6,7 @@ import http from 'node:http';
 import { ensureHubBuild } from './helpers/hub-build.ts';
 import { httpGet } from './helpers/hub-preview.ts';
 import { reserveLocalPort } from './helpers/network.ts';
+import { createHubBuiltRuntimeEnv } from './helpers/hub-runtime-env.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const HUB_DIR = path.join(ROOT, 'apps', 'hub');
@@ -25,24 +26,10 @@ function delay(ms) {
 }
 
 function createFixtureEnv(port, overrides = {}) {
-	const baseOrigin = overrides.ORIGIN ?? `http://127.0.0.1:${port}`;
-	const redirectUri =
-		overrides.WORKOS_REDIRECT_URI ?? `${baseOrigin}/auth/callback`;
-
-	return {
-		...process.env,
-		PORT: String(port),
-		NODE_ENV: 'production',
-		WORKOS_CLIENT_ID: process.env.WORKOS_CLIENT_ID ?? 'client_test_fixture',
-		WORKOS_API_KEY: process.env.WORKOS_API_KEY ?? 'sk_test_fixture',
-		WORKOS_REDIRECT_URI: redirectUri,
-		WORKOS_COOKIE_PASSWORD:
-			process.env.WORKOS_COOKIE_PASSWORD ?? 'ab'.repeat(32),
-		AUTH_ERROR_SIGNING_SECRET:
-			process.env.AUTH_ERROR_SIGNING_SECRET ?? 'cd'.repeat(32),
-		ORIGIN: baseOrigin,
-		...overrides
-	};
+	return createHubBuiltRuntimeEnv({
+		port,
+		envOverrides: overrides
+	});
 }
 
 async function startBuiltServer(envOverrides = {}) {

@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { RUNTIME_SERVER_FILES } from '../../apps/hub/scripts/runtime-server-files.ts';
 import { getHubBuildEnv } from '../../apps/hub/scripts/build-env.ts';
 import { clearNewestMtimeCache, getNewestMtimeMs } from './build-freshness.ts';
+import { sanitizeHubRuntimeEnv } from './hub-runtime-env.ts';
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const HUB_DIR = join(ROOT, 'apps', 'hub');
@@ -69,7 +70,7 @@ export function ensureHubBuild() {
 				timeout: 180000,
 				encoding: 'utf8',
 				env: getHubBuildEnv({
-					...process.env,
+					...sanitizeHubRuntimeEnv(process.env),
 					NODE_ENV: 'test'
 				})
 			})

@@ -1,6 +1,24 @@
 import http from 'node:http';
 
 const PEER_ADDRESS_OVERRIDE_HEADER = 'x-kaivalo-preview-peer-address';
+const PREVIEW_SESSION_COOKIE_NAME = '__Host-wos_session';
+const PREVIEW_SESSION_COOKIE_VALUE = 'preview-session';
+const PREVIEW_SESSION_COOKIE_PAIR = `${PREVIEW_SESSION_COOKIE_NAME}=${PREVIEW_SESSION_COOKIE_VALUE}`;
+const PREVIEW_USER = Object.freeze({
+	object: 'user',
+	id: 'user_preview_fixture',
+	firstName: 'Preview User',
+	email: 'preview-user@example.com',
+	emailVerified: true,
+	profilePictureUrl: null,
+	lastName: null,
+	lastSignInAt: '2026-03-10T12:00:00.000Z',
+	locale: 'en',
+	createdAt: '2026-03-01T12:00:00.000Z',
+	updatedAt: '2026-03-10T12:00:00.000Z',
+	externalId: null,
+	metadata: {}
+});
 
 const originalCreateServer = http.createServer.bind(http);
 http.createServer = function patchedCreateServer(...args) {
@@ -68,6 +86,42 @@ if (signInFixtureMode) {
 					`Unsupported HUB_PREVIEW_SIGN_IN_FIXTURE_MODE: ${signInFixtureMode}`
 				);
 		}
+	};
+}
+
+const callbackFixtureMode = process.env.HUB_PREVIEW_CALLBACK_FIXTURE_MODE;
+if (callbackFixtureMode) {
+	const { authKit } = await import('@workos/authkit-sveltekit');
+	const originalGetUser = authKit.getUser.bind(authKit);
+
+	authKit.handleCallback = () => async () => {
+		switch (callbackFixtureMode) {
+			case 'signed-in': {
+				const headers = new Headers();
+				headers.set('location', `${process.env.ORIGIN}/services?welcome=1`);
+				headers.set(
+					'set-cookie',
+					`${PREVIEW_SESSION_COOKIE_PAIR}; Path=/; HttpOnly; Secure; SameSite=Lax`
+				);
+				return new Response(null, {
+					status: 302,
+					headers
+				});
+			}
+			default:
+				throw new Error(
+					`Unsupported HUB_PREVIEW_CALLBACK_FIXTURE_MODE: ${callbackFixtureMode}`
+				);
+		}
+	};
+
+	authKit.getUser = async (event) => {
+		const cookieHeader = event.request.headers.get('cookie') ?? '';
+		if (cookieHeader.includes(PREVIEW_SESSION_COOKIE_PAIR)) {
+			return PREVIEW_USER;
+		}
+
+		return originalGetUser(event);
 	};
 }
 

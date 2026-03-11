@@ -6,38 +6,25 @@ import { spawn } from 'node:child_process';
 import { httpGet } from './helpers/hub-preview.ts';
 import { assertHubBuildAvailable } from './helpers/hub-build.ts';
 import { reserveLocalPort } from './helpers/network.ts';
+import { createHubPreviewScriptEnv } from './helpers/hub-runtime-env.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const STARTUP_TIMEOUT_MS = 15000;
 const STARTUP_DELAY_MS = 250;
 const PROCESS_EXIT_TIMEOUT_MS = 5000;
 const MAX_STARTUP_OUTPUT_LINES = 120;
+const PREVIEW_FIXTURE_IMPORT = new URL(
+	'./helpers/hub-preview-fixtures.mjs',
+	import.meta.url
+).href;
+const AUTHKIT_COOKIE_NAME = '__Host-wos_session';
+const PREVIEW_POLLUTION_ENV = {
+	TRUST_X_FORWARDED_PROTO: 'true',
+	WORKOS_API_HOSTNAME: 'accounts.example.test'
+} as const;
 type ProcessShutdownResult = {
 	forced: boolean;
 };
-const PREVIEW_ENV_NAMES = [
-	'WORKOS_CLIENT_ID',
-	'WORKOS_API_KEY',
-	'WORKOS_REDIRECT_URI',
-	'WORKOS_COOKIE_PASSWORD',
-	'AUTH_ERROR_SIGNING_SECRET',
-	'ORIGIN'
-];
-
-function createPreviewScriptEnv(port: number): NodeJS.ProcessEnv {
-	const env = {
-		...process.env,
-		HOST: '127.0.0.1',
-		PORT: String(port),
-		NODE_ENV: 'production'
-	};
-
-	for (const envName of PREVIEW_ENV_NAMES) {
-		delete env[envName];
-	}
-
-	return env;
-}
 
 function delay(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -78,6 +65,60 @@ function post(url: string, headers: Record<string, string> = {}) {
 	});
 }
 
+function setProcessEnv(
+	overrides: Record<string, string | undefined>
+): () => void {
+	const previousValues = new Map<string, string | undefined>();
+
+	for (const [name, value] of Object.entries(overrides)) {
+		previousValues.set(name, process.env[name]);
+		if (value === undefined) {
+			delete process.env[name];
+			continue;
+		}
+		process.env[name] = value;
+	}
+
+	return () => {
+		for (const [name, value] of previousValues) {
+			if (value === undefined) {
+				delete process.env[name];
+				continue;
+			}
+			process.env[name] = value;
+		}
+	};
+}
+
+function getSetCookieHeaders(headers: http.IncomingHttpHeaders): string[] {
+	const values = headers['set-cookie'];
+	if (!values) {
+		return [];
+	}
+
+	return Array.isArray(values) ? values : [values];
+}
+
+function getCookiePair(
+	headers: http.IncomingHttpHeaders,
+	cookieName: string
+): string {
+	const cookieHeader = getSetCookieHeaders(headers).find((value) =>
+		value.startsWith(`${cookieName}=`)
+	);
+	assert.ok(cookieHeader, `Expected ${cookieName} to be set`);
+	return cookieHeader.split(';', 1)[0];
+}
+
+async function probePreviewReady(baseUrl: string): Promise<boolean> {
+	try {
+		const response = await httpGet(`${baseUrl}/healthz`);
+		return response.statusCode === 200 && response.data.trim() === 'ok';
+	} catch {
+		return false;
+	}
+}
+
 async function assertPreviewAuthRoutes(baseUrl: string): Promise<void> {
 	const signOutResponse = await post(`${baseUrl}/auth/sign-out`, {
 		origin: baseUrl,
@@ -107,6 +148,42 @@ async function assertPreviewAuthRoutes(baseUrl: string): Promise<void> {
 		redirectLocation.searchParams.get('redirect_uri'),
 		`${baseUrl}/auth/callback`
 	);
+}
+
+async function assertAuthenticatedPreviewSession(
+	baseUrl: string
+): Promise<void> {
+	const callbackResponse = await httpGet(
+		`${baseUrl}/auth/callback?code=test-code&state=test-state`,
+		{
+			accept: 'text/html',
+			'sec-fetch-mode': 'navigate'
+		}
+	);
+	assert.strictEqual(callbackResponse.statusCode, 302);
+	assert.ok(callbackResponse.headers.location, 'Expected callback redirect');
+
+	const redirectLocation = new URL(
+		String(callbackResponse.headers.location),
+		baseUrl
+	);
+	assert.strictEqual(redirectLocation.pathname, '/services');
+	assert.strictEqual(redirectLocation.searchParams.get('welcome'), '1');
+
+	const sessionCookie = getCookiePair(
+		callbackResponse.headers,
+		AUTHKIT_COOKIE_NAME
+	);
+	assert.match(sessionCookie, /^__Host-wos_session=preview-session$/);
+
+	const servicesResponse = await httpGet(`${baseUrl}/services`, {
+		accept: 'text/html',
+		cookie: sessionCookie
+	});
+	assert.strictEqual(servicesResponse.statusCode, 200);
+	assert.match(servicesResponse.data, /Preview User/i);
+	assert.match(servicesResponse.data, /Open Sweep/i);
+	assert.match(servicesResponse.data, /Sign out/i);
 }
 
 function stopProcessGroup(
@@ -140,88 +217,94 @@ function stopProcessGroup(
 }
 
 describe('hub preview script', () => {
-	it('starts the built node runtime without requiring local auth secrets', async () => {
+	it('starts the built node runtime with hermetic envs and an authenticated callback flow', async () => {
 		assertHubBuildAvailable();
-
-		const reservation = await reserveLocalPort();
-		const port = reservation.port;
-		const baseUrl = `http://127.0.0.1:${port}`;
-		const output: string[] = [];
-		const appendOutput = (chunk: Buffer | string) => {
-			const text = chunk.toString();
-			for (const line of text.split(/\r?\n/)) {
-				if (!line) {
-					continue;
-				}
-
-				output.push(line);
-				if (output.length > MAX_STARTUP_OUTPUT_LINES) {
-					output.shift();
-				}
-			}
-		};
-
-		const preview = spawn('npm', ['--prefix', 'apps/hub', 'run', 'preview'], {
-			cwd: ROOT,
-			stdio: ['ignore', 'pipe', 'pipe'],
-			detached: true,
-			env: createPreviewScriptEnv(port)
-		});
-		preview.stdout?.on('data', appendOutput);
-		preview.stderr?.on('data', appendOutput);
-
-		await reservation.release();
-
-		let exitCode: number | null = null;
-		let exitSignal: NodeJS.Signals | null = null;
-		let spawnError: Error | null = null;
-		preview.once('error', (error) => {
-			spawnError = error;
-		});
-		preview.once('exit', (code, signal) => {
-			exitCode = code;
-			exitSignal = signal;
-		});
-
+		const restoreEnv = setProcessEnv(PREVIEW_POLLUTION_ENV);
 		try {
+			const reservation = await reserveLocalPort();
+			const port = reservation.port;
+			const baseUrl = `http://127.0.0.1:${port}`;
+			const output: string[] = [];
+			const appendOutput = (chunk: Buffer | string) => {
+				const text = chunk.toString();
+				for (const line of text.split(/\r?\n/)) {
+					if (!line) {
+						continue;
+					}
+
+					output.push(line);
+					if (output.length > MAX_STARTUP_OUTPUT_LINES) {
+						output.shift();
+					}
+				}
+			};
+
+			const preview = spawn('npm', ['--prefix', 'apps/hub', 'run', 'preview'], {
+				cwd: ROOT,
+				stdio: ['ignore', 'pipe', 'pipe'],
+				detached: true,
+				env: createHubPreviewScriptEnv({
+					port,
+					envOverrides: {
+						HUB_PREVIEW_CALLBACK_FIXTURE_MODE: 'signed-in'
+					},
+					imports: [PREVIEW_FIXTURE_IMPORT]
+				})
+			});
+			preview.stdout?.on('data', appendOutput);
+			preview.stderr?.on('data', appendOutput);
+
+			await reservation.release();
+
+			let exitCode: number | null = null;
+			let exitSignal: NodeJS.Signals | null = null;
+			let spawnError: Error | null = null;
+			preview.once('error', (error) => {
+				spawnError = error;
+			});
+			preview.once('exit', (code, signal) => {
+				exitCode = code;
+				exitSignal = signal;
+			});
+
 			const deadline = Date.now() + STARTUP_TIMEOUT_MS;
-			while (Date.now() < deadline) {
-				if (spawnError) {
-					throw spawnError;
-				}
+			try {
+				while (Date.now() < deadline) {
+					if (spawnError) {
+						throw spawnError;
+					}
 
-				if (exitCode !== null || exitSignal !== null) {
-					throw new Error(
-						`preview exited before readiness: ${output.join('\n')}`
-					);
-				}
+					if (exitCode !== null || exitSignal !== null) {
+						throw new Error(
+							`preview exited before readiness: ${output.join('\n')}`
+						);
+					}
 
-				try {
-					const response = await httpGet(`${baseUrl}/healthz`);
-					if (response.statusCode === 200 && response.data.trim() === 'ok') {
+					if (await probePreviewReady(baseUrl)) {
 						const homepage = await httpGet(baseUrl);
 						assert.strictEqual(homepage.statusCode, 200);
 						assert.match(homepage.data, /Kaivalo/i);
 						await assertPreviewAuthRoutes(baseUrl);
+						await assertAuthenticatedPreviewSession(baseUrl);
 						return;
 					}
-				} catch {
-					// Keep polling until startup completes.
+
+					await delay(STARTUP_DELAY_MS);
 				}
 
-				await delay(STARTUP_DELAY_MS);
+				throw new Error(
+					`preview did not become ready within ${STARTUP_TIMEOUT_MS}ms:\n${output.join('\n')}`
+				);
+			} finally {
+				const shutdown = await stopProcessGroup(preview);
+				assert.equal(
+					shutdown.forced,
+					false,
+					'expected preview shutdown to exit without requiring SIGKILL fallback'
+				);
 			}
-
-			throw new Error(
-				`preview did not become ready within ${STARTUP_TIMEOUT_MS}ms:\n${output.join('\n')}`
-			);
 		} finally {
-			const shutdown = await stopProcessGroup(preview);
-			assert.equal(
-				shutdown.forced,
-				false,
-				'expected preview shutdown to exit without requiring SIGKILL fallback'
-			);
+			restoreEnv();
 		}
 	});
 });
