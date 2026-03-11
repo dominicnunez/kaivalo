@@ -8,8 +8,17 @@ const LOCKFILE_PATH = resolve(REPO_ROOT, 'package-lock.json');
 const ISSUE_TITLE = 'Track upstream @sveltejs/kit updates for cookie advisory';
 const REGISTRY_LATEST_URL = 'https://registry.npmjs.org/@sveltejs%2fkit/latest';
 export const FETCH_TIMEOUT_MS = 10_000;
-const REGISTRY_METADATA_VALIDATION_ERROR_MESSAGE =
-	'Failed to parse latest @sveltejs/kit metadata: expected a valid semver version string';
+const REGISTRY_METADATA_PARSE_ERROR_PREFIX =
+	'Failed to parse latest @sveltejs/kit metadata';
+const REGISTRY_METADATA_VALIDATION_ERROR_MESSAGE = `${REGISTRY_METADATA_PARSE_ERROR_PREFIX}: expected a valid semver version string`;
+
+function createMetadataParseError(detail, cause) {
+	return cause === undefined
+		? new Error(`${REGISTRY_METADATA_PARSE_ERROR_PREFIX}: ${detail}`)
+		: new Error(`${REGISTRY_METADATA_PARSE_ERROR_PREFIX}: ${detail}`, {
+				cause
+			});
+}
 
 function parseArgs(argv) {
 	const options = {
@@ -215,7 +224,15 @@ export async function readLatestMetadata({ fetchImpl = fetch } = {}) {
 		);
 	}
 
-	const latestMetadata = await response.json();
+	let latestMetadata;
+	try {
+		latestMetadata = await response.json();
+	} catch (error) {
+		const message =
+			error instanceof Error && error.message ? error.message : String(error);
+		throw createMetadataParseError(message, error);
+	}
+
 	if (!isValidSemverVersion(latestMetadata?.version)) {
 		throw new Error(REGISTRY_METADATA_VALIDATION_ERROR_MESSAGE);
 	}

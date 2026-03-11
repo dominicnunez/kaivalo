@@ -143,6 +143,28 @@ describe('check-sveltekit-upstream', () => {
 		);
 	});
 
+	it('wraps registry json parse failures with script-specific context', async () => {
+		await assert.rejects(
+			() =>
+				readLatestMetadata({
+					fetchImpl: async () => ({
+						ok: true,
+						async json() {
+							throw new SyntaxError('Unexpected token < in JSON at position 0');
+						}
+					})
+				}),
+			(error) => {
+				assert.strictEqual(
+					error.message,
+					'Failed to parse latest @sveltejs/kit metadata: Unexpected token < in JSON at position 0'
+				);
+				assert.ok(error.cause instanceof SyntaxError);
+				return true;
+			}
+		);
+	});
+
 	it('reads the resolved version from the repository lockfile outside the cwd', async () => {
 		const originalCwd = process.cwd();
 		const tempCwd = mkdtempSync(join(tmpdir(), 'kaivalo-upstream-check-'));
