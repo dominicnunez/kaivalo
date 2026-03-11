@@ -22,6 +22,11 @@ const DAILY_FULL_SUITE_WORKFLOW_PATH = path.join(
 const DOCKERFILE_PATH = path.join(ROOT, 'Dockerfile');
 const PRE_PUSH_HOOK_PATH = path.join(ROOT, '.husky', 'pre-push');
 const PACKAGE_JSON_PATH = path.join(ROOT, 'package.json');
+const DEPLOY_HEALTH_SCRIPT_PATH = path.join(
+	ROOT,
+	'scripts',
+	'verify-deploy-health.sh'
+);
 const TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH = path.join(
 	ROOT,
 	'.github',
@@ -441,7 +446,10 @@ describe('deployment runtime guardrails', () => {
 		const verifyStep = findWorkflowStep(
 			workflow,
 			'deploy',
-			(step) => normalizeShellScript(step.run ?? '').includes('/healthz'),
+			(step) =>
+				step.name === 'Verify deployment health' &&
+				normalizeShellScript(step.run ?? '') ===
+					'./scripts/verify-deploy-health.sh',
 			'the deployment health verification step'
 		);
 		const deployCommand = normalizeShellScript(deployStep.run ?? '');
@@ -464,37 +472,13 @@ describe('deployment runtime guardrails', () => {
 			verifyStep.env.DEPLOY_ORIGIN,
 			'${{ vars.DEPLOY_ORIGIN }}'
 		);
-		assert.ok(verifyCommand.includes('expected_origin="$(node -e'));
-		assert.ok(verifyCommand.includes('request_url()'));
-		assert.ok(verifyCommand.includes('run_probe()'));
-		assert.ok(verifyCommand.includes('assert_no_redirect_probe()'));
-		assert.ok(verifyCommand.includes('root_url="$(request_url /)"'));
-		assert.ok(verifyCommand.includes('health_url="$(request_url /healthz)"'));
+		assert.strictEqual(verifyCommand, './scripts/verify-deploy-health.sh');
 		assert.ok(
-			verifyCommand.includes('callback_url="$(request_url /auth/callback)"')
+			readFileSync(DEPLOY_HEALTH_SCRIPT_PATH, 'utf8').startsWith(
+				'#!/usr/bin/env bash'
+			),
+			'deploy health verification should be implemented in the shared script'
 		);
-		assert.ok(
-			verifyCommand.includes('assert_no_redirect_probe "$root_url" "200"')
-		);
-		assert.ok(
-			verifyCommand.includes('assert_no_redirect_probe "$health_url" "200"')
-		);
-		assert.ok(verifyCommand.includes('run_probe "$callback_url" "text/html"'));
-		assert.ok(!verifyCommand.includes('--location'));
-		assert.match(verifyCommand, /--retry(?:=|\s+)\d+/);
-		assert.match(verifyCommand, /--retry-delay(?:=|\s+)\d+/);
-		assert.match(verifyCommand, /--connect-timeout(?:=|\s+)\d+/);
-		assert.match(verifyCommand, /--max-time(?:=|\s+)\d+/);
-		assert.match(verifyCommand, /--retry-connrefused\b/);
-		assert.ok(verifyCommand.includes('[ "$PROBE_BODY" != "ok" ]'));
-		assert.ok(verifyCommand.includes('[ "$PROBE_STATUS" != "303" ]'));
-		assert.ok(
-			verifyCommand.includes('[ "$PROBE_EFFECTIVE_URL" != "$callback_url" ]')
-		);
-		assert.ok(verifyCommand.includes('if [ -z "$PROBE_LOCATION" ]'));
-		assert.ok(verifyCommand.includes('parsed.origin !== expectedOrigin'));
-		assert.ok(verifyCommand.includes('parsed.pathname !== "/"'));
-		assert.ok(verifyCommand.includes('exit 1'));
 	});
 
 	it('runs the full verification lane on a daily schedule', () => {
