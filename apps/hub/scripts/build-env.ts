@@ -15,6 +15,19 @@ const LOCAL_PLACEHOLDER_ENV_DEFAULTS = {
 } as const;
 const BUILD_PLACEHOLDER_FLAG = 'HUB_BUILD_ALLOW_PLACEHOLDERS';
 
+function formatFailedBuildStep(
+	command: string,
+	args: readonly string[],
+	result: Pick<ReturnType<typeof spawnSync>, 'signal' | 'status'>
+): string {
+	const step = `${command} ${args.join(' ')}`;
+	if (typeof result.signal === 'string' && result.signal.length > 0) {
+		return `${step} terminated by ${result.signal}`;
+	}
+
+	return `${step} exited with code ${result.status ?? 'unknown'}`;
+}
+
 function getLocalPreviewOrigin(baseEnv: NodeJS.ProcessEnv): string {
 	const configuredOrigin = baseEnv.ORIGIN?.trim();
 	if (configuredOrigin) {
@@ -114,22 +127,34 @@ export function getHubPreviewEnv(
 	return previewEnv;
 }
 
-export function runHubBuildWithEnv(): void {
+type RunHubBuildDependencies = {
+	baseEnv?: NodeJS.ProcessEnv;
+	getBuildPaths?: typeof getHubBuildPaths;
+	removeSourceMaps?: typeof removeServerSourceMaps;
+	runStep?: typeof spawnSync;
+};
+
+export function runHubBuildWithEnv({
+	baseEnv = process.env,
+	getBuildPaths = getHubBuildPaths,
+	removeSourceMaps = removeServerSourceMaps,
+	runStep = spawnSync
+}: RunHubBuildDependencies = {}): void {
 	const steps = [
 		['vite', 'build'],
 		['node', 'scripts/prepare-runtime.ts']
 	] as const;
-	const { serverDir } = getHubBuildPaths();
+	const { serverDir } = getBuildPaths();
 
 	for (const [command, ...args] of steps) {
-		const result = spawnSync(command, args, {
+		const result = runStep(command, args, {
 			stdio: 'inherit',
-			env: getHubBuildEnv()
+			env: getHubBuildEnv(baseEnv)
 		});
 
 		if (result.status === 0) {
 			if (command === 'vite' && args[0] === 'build') {
-				removeServerSourceMaps(serverDir);
+				removeSourceMaps(serverDir);
 			}
 			continue;
 		}
@@ -138,9 +163,7 @@ export function runHubBuildWithEnv(): void {
 			throw result.error;
 		}
 
-		throw new Error(
-			`${command} ${args.join(' ')} exited with code ${result.status ?? 'unknown'}`
-		);
+		throw new Error(formatFailedBuildStep(command, args, result));
 	}
 }
 
