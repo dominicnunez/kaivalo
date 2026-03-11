@@ -42,10 +42,6 @@ function getOldestBucketTimestamp(bucket: SlidingWindowBucket): number | null {
 	return bucket.timestamps[bucket.headIndex] ?? null;
 }
 
-function getNewestBucketTimestamp(bucket: SlidingWindowBucket): number | null {
-	return bucket.timestamps[bucket.timestamps.length - 1] ?? null;
-}
-
 function compactBucket(bucket: SlidingWindowBucket): void {
 	if (bucket.headIndex === 0) {
 		return;
@@ -111,33 +107,24 @@ function deleteBuckets(
 	}
 }
 
-function getSaturatedBucketRetryAfterSeconds(
-	buckets: ReadonlyMap<string, SlidingWindowBucket>,
-	now: number,
-	windowMs: number
-): number {
-	let earliestBucketResetAt: number | null = null;
+function touchBucket(
+	buckets: Map<string, SlidingWindowBucket>,
+	key: string,
+	bucket: SlidingWindowBucket
+): void {
+	buckets.delete(key);
+	buckets.set(key, bucket);
+}
 
-	for (const bucket of buckets.values()) {
-		const newestTimestamp = getNewestBucketTimestamp(bucket);
-		if (newestTimestamp === null) {
-			continue;
-		}
-
-		const bucketResetAt = newestTimestamp + windowMs;
-		if (
-			earliestBucketResetAt === null ||
-			bucketResetAt < earliestBucketResetAt
-		) {
-			earliestBucketResetAt = bucketResetAt;
-		}
+function evictLeastRecentlyUsedBucket(
+	buckets: Map<string, SlidingWindowBucket>
+): void {
+	// Prefer dropping the coldest bucket over denying unrelated clients until
+	// the next full-window sweep when this in-memory table hits capacity.
+	const leastRecentlyUsedKey = buckets.keys().next().value;
+	if (leastRecentlyUsedKey !== undefined) {
+		buckets.delete(leastRecentlyUsedKey);
 	}
-
-	if (earliestBucketResetAt === null) {
-		return Math.max(1, Math.ceil(windowMs / 1000));
-	}
-
-	return Math.max(1, Math.ceil((earliestBucketResetAt - now) / 1000));
 }
 
 export function createSlidingWindowRateLimiter({
@@ -170,14 +157,7 @@ export function createSlidingWindowRateLimiter({
 				}
 
 				if (buckets.size >= maxEntries) {
-					return {
-						allowed: false,
-						retryAfterSeconds: getSaturatedBucketRetryAfterSeconds(
-							buckets,
-							nowMs,
-							windowMs
-						)
-					};
+					evictLeastRecentlyUsedBucket(buckets);
 				}
 
 				bucket = {
@@ -187,6 +167,7 @@ export function createSlidingWindowRateLimiter({
 				buckets.set(normalizedKey, bucket);
 			} else {
 				pruneBucket(bucket, nowMs, windowMs);
+				touchBucket(buckets, normalizedKey, bucket);
 			}
 
 			if (getBucketSize(bucket) >= limit) {
