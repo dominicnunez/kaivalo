@@ -219,6 +219,14 @@ When forwarded data is malformed, the code falls back to the shared empty-key bu
 `npm --prefix apps/hub run build` runs `vite build` before `node scripts/prepare-runtime.ts`, and the real build clears `apps/hub/build` before the runtime helper copy step.
 Seeding `apps/hub/build/runtime/server/__audit_stale_helper__.ts` and then running `HUB_BUILD_ALLOW_PLACEHOLDERS=true npm --prefix apps/hub run build` removed the stale file, so the obsolete helper does not persist into the artifact later copied by `Dockerfile`.
 
+### Avatar proxy double-buffers every successful image body
+
+**Location:** `apps/hub/src/routes/avatar/+server.ts:357` — avatar body buffering
+
+**Reason:** The audit missed the existing fast path in `joinAvatarChunks()`.
+`readAvatarBody()` always collects chunks into `chunks[]`, but `joinAvatarChunks()` returns the original chunk unchanged when the response arrives as a single chunk and only allocates a second `Uint8Array` when there are multiple chunks.
+That means the claimed "every successful image body" double-buffering behavior does not actually occur in the current implementation.
+
 ### Homepage link smoke test duplicates stronger coverage and checks no unique behavior
 
 **Location:** `tests/hub-links.test.ts:15`
