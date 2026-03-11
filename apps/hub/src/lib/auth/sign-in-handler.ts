@@ -4,6 +4,10 @@ import { randomUUID } from 'node:crypto';
 import { getErrorLogContext } from '../server/error-diagnostics.ts';
 import { normalizeRequestId } from '../server/request-id.ts';
 import { buildAuthErrorRedirectQuery } from './auth-error-query.ts';
+import {
+	isBrowserNavigationRequest,
+	normalizeConfiguredOrigin
+} from './request-policy.ts';
 import { normalizeTrustedRedirectLocation } from './safe-redirect.ts';
 
 type SignInLogContext = ReturnType<typeof getErrorLogContext> & {
@@ -23,38 +27,6 @@ type CreateSignInGetHandlerOptions = {
 	includeMessageInLogs?: boolean;
 	logError?: (message: string, context: SignInLogContext) => void;
 };
-
-function normalizeExpectedOrigin(value: string): string {
-	let parsed: URL;
-	try {
-		parsed = new URL(value);
-	} catch {
-		throw new Error('expectedOrigin must be a valid URL origin');
-	}
-
-	if (
-		parsed.username ||
-		parsed.password ||
-		parsed.pathname !== '/' ||
-		parsed.search ||
-		parsed.hash
-	) {
-		throw new Error('expectedOrigin must be a valid URL origin');
-	}
-
-	return parsed.origin;
-}
-
-function shouldUseUserRedirect(event: RequestEvent): boolean {
-	const mode = event.request.headers.get('sec-fetch-mode');
-	const destination = event.request.headers.get('sec-fetch-dest');
-	if (mode === 'navigate' || destination === 'document') {
-		return true;
-	}
-
-	const accept = event.request.headers.get('accept')?.toLowerCase() ?? '';
-	return accept.includes('text/html') && !accept.includes('application/json');
-}
 
 function isSelfReferentialRedirect(
 	location: string,
@@ -77,9 +49,9 @@ export function createSignInGetHandler({
 	includeMessageInLogs = false,
 	logError = console.error
 }: CreateSignInGetHandlerOptions): (event: RequestEvent) => Promise<Response> {
-	const trustedOrigin = normalizeExpectedOrigin(expectedOrigin);
+	const trustedOrigin = normalizeConfiguredOrigin(expectedOrigin);
 	const trustedRedirectOrigins = Array.from(allowedRedirectOrigins, (origin) =>
-		normalizeExpectedOrigin(origin)
+		normalizeConfiguredOrigin(origin)
 	);
 
 	return async (event: RequestEvent) => {
@@ -135,7 +107,7 @@ export function createSignInGetHandler({
 
 			logError('Sign-in failed', signInLogContext);
 
-			if (!shouldUseUserRedirect(event)) {
+			if (!isBrowserNavigationRequest(event.request)) {
 				throw error(503, `Sign-in failed. Reference: ${incidentId}`);
 			}
 

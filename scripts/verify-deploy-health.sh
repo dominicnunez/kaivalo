@@ -2,16 +2,32 @@
 
 set -euo pipefail
 
+readonly SCRIPT_DIR="$(
+	cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd
+)"
+readonly REPO_ROOT="$(
+	cd -- "$SCRIPT_DIR/.." && pwd
+)"
 readonly DEPLOY_ORIGIN_VALUE="${DEPLOY_ORIGIN:-}"
 readonly ROOT_PATH='/'
 readonly HEALTH_PATH='/healthz'
 readonly CALLBACK_PATH='/auth/callback'
-readonly CALLBACK_ACCEPT_HEADER='text/html'
 readonly EXPECTED_HEALTH_BODY='ok'
 readonly PROBE_RETRY_COUNT="${DEPLOY_HEALTH_RETRY_COUNT:-6}"
 readonly PROBE_RETRY_DELAY_SECONDS="${DEPLOY_HEALTH_RETRY_DELAY_SECONDS:-10}"
 readonly PROBE_CONNECT_TIMEOUT_SECONDS="${DEPLOY_HEALTH_CONNECT_TIMEOUT_SECONDS:-10}"
 readonly PROBE_MAX_TIME_SECONDS="${DEPLOY_HEALTH_MAX_TIME_SECONDS:-20}"
+
+cd "$REPO_ROOT"
+
+mapfile -t CALLBACK_BROWSER_PROBE_HEADERS < <(
+	node --input-type=module -e '
+		import { getBrowserNavigationProbeHeaders } from "./apps/hub/src/lib/auth/request-policy.ts";
+		for (const [name, value] of Object.entries(getBrowserNavigationProbeHeaders())) {
+			process.stdout.write(`${name}: ${value}\n`);
+		}
+	'
+)
 
 if [[ -z "$DEPLOY_ORIGIN_VALUE" ]]; then
 	echo "DEPLOY_ORIGIN must be set for production health verification" >&2
@@ -21,37 +37,21 @@ fi
 canonicalize_origin() {
 	local origin="$1"
 
-	node -e '
-		const { isIP } = require("node:net");
-		const candidate = process.argv[1];
+	node --input-type=module -e '
+		import { normalizeConfiguredOrigin } from "./apps/hub/src/lib/auth/request-policy.ts";
+		import { isLoopbackHostname } from "./apps/hub/src/lib/server/ip-address.ts";
+
+		const candidate = normalizeConfiguredOrigin(process.argv[1], "DEPLOY_ORIGIN");
 		const parsed = new URL(candidate);
-		const hostname = parsed.hostname.toLowerCase();
-		const normalizedHostname =
-			hostname.startsWith("[") && hostname.endsWith("]")
-				? hostname.slice(1, -1)
-				: hostname;
-		const isLoopbackHostname =
-			normalizedHostname === "localhost" ||
-			normalizedHostname === "::1" ||
-			(isIP(normalizedHostname) === 4 && normalizedHostname.startsWith("127."));
-		if (
-			parsed.username ||
-			parsed.password ||
-			parsed.pathname !== "/" ||
-			parsed.search ||
-			parsed.hash
-		) {
-			throw new Error("DEPLOY_ORIGIN must be a bare origin");
-		}
 		if (
 			parsed.protocol !== "https:" &&
-			!(parsed.protocol === "http:" && isLoopbackHostname)
+			!(parsed.protocol === "http:" && isLoopbackHostname(parsed.hostname))
 		) {
 			throw new Error(
 				"DEPLOY_ORIGIN must use https unless it targets a loopback host"
 			);
 		}
-		process.stdout.write(parsed.origin);
+		process.stdout.write(candidate);
 	' "$origin"
 }
 
@@ -88,7 +88,7 @@ request_url() {
 
 run_probe() {
 	local url="$1"
-	local accept_header="${2:-}"
+	shift
 	local body_file
 	local header_file
 	local probe_output
@@ -110,9 +110,9 @@ run_probe() {
 
 	curl_args+=("$header_file" --output "$body_file" --write-out '%{http_code}\n%{url_effective}\n')
 
-	if [[ -n "$accept_header" ]]; then
-		curl_args+=(--header "accept: $accept_header")
-	fi
+	for header_line in "$@"; do
+		curl_args+=(--header "$header_line")
+	done
 
 	probe_output="$("${curl_args[@]}" "$url")"
 
@@ -160,7 +160,7 @@ if [[ "$PROBE_BODY" != "$EXPECTED_HEALTH_BODY" ]]; then
 fi
 
 callback_url="$(request_url "$expected_origin" "$CALLBACK_PATH")"
-run_probe "$callback_url" "$CALLBACK_ACCEPT_HEADER"
+run_probe "$callback_url" "${CALLBACK_BROWSER_PROBE_HEADERS[@]}"
 
 if [[ "$PROBE_STATUS" != "303" ]]; then
 	echo "Expected $CALLBACK_PATH to return a same-origin browser redirect, received $PROBE_STATUS" >&2

@@ -10,6 +10,10 @@ import {
 	REDIRECT_RESPONSE_STATUSES,
 	type RedirectLikeObject
 } from './safe-redirect.ts';
+import {
+	isBrowserNavigationRequest,
+	normalizeConfiguredOrigin
+} from './request-policy.ts';
 
 type CallbackLogContext = ReturnType<typeof getErrorLogContext> & {
 	requestId: string;
@@ -157,33 +161,7 @@ export function createAuthCallbackGetHandler({
 }: CreateAuthCallbackGetHandlerOptions): (
 	event: RequestEvent
 ) => Promise<Response> {
-	let trustedOrigin: string;
-	try {
-		const parsed = new URL(expectedOrigin);
-		if (
-			parsed.username ||
-			parsed.password ||
-			parsed.pathname !== '/' ||
-			parsed.search ||
-			parsed.hash
-		) {
-			throw new Error();
-		}
-		trustedOrigin = parsed.origin;
-	} catch {
-		throw new Error('expectedOrigin must be a valid URL origin');
-	}
-
-	function shouldUseUserRedirect(event: RequestEvent): boolean {
-		const mode = event.request.headers.get('sec-fetch-mode');
-		const destination = event.request.headers.get('sec-fetch-dest');
-		if (mode === 'navigate' || destination === 'document') {
-			return true;
-		}
-
-		const accept = event.request.headers.get('accept')?.toLowerCase() ?? '';
-		return accept.includes('text/html') && !accept.includes('application/json');
-	}
+	const trustedOrigin = normalizeConfiguredOrigin(expectedOrigin);
 
 	return async (event: RequestEvent) => {
 		const requestOrigin = event.url.origin;
@@ -254,7 +232,7 @@ export function createAuthCallbackGetHandler({
 
 			logError('Auth callback failed', callbackLogContext);
 
-			if (!shouldUseUserRedirect(event)) {
+			if (!isBrowserNavigationRequest(event.request)) {
 				throw error(503, `Auth callback failed. Reference: ${incidentId}`);
 			}
 

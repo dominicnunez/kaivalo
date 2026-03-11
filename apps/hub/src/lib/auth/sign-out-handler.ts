@@ -3,6 +3,7 @@ import type { RequestEvent } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import { getErrorLogContext } from '../server/error-diagnostics.ts';
 import { normalizeRequestId } from '../server/request-id.ts';
+import { normalizeConfiguredOrigin } from './request-policy.ts';
 import {
 	isRedirectLikeObject,
 	normalizeTrustedRedirectLocation,
@@ -87,27 +88,6 @@ function assertPostMethod(event: RequestEvent): void {
 	}
 }
 
-function normalizeExpectedOrigin(value: string): string {
-	let parsed: URL;
-	try {
-		parsed = new URL(value);
-	} catch {
-		throw new Error('expectedOrigin must be a valid URL origin');
-	}
-
-	if (
-		parsed.username ||
-		parsed.password ||
-		parsed.pathname !== '/' ||
-		parsed.search ||
-		parsed.hash
-	) {
-		throw new Error('expectedOrigin must be a valid URL origin');
-	}
-
-	return parsed.origin;
-}
-
 function isRedirectLike(value: unknown): value is RedirectLikeObject {
 	if (isRedirect(value)) {
 		return true;
@@ -164,9 +144,9 @@ export function createSignOutPostHandler({
 }: CreateSignOutPostHandlerOptions): (
 	event: RequestEvent
 ) => Promise<Response> {
-	const trustedOrigin = normalizeExpectedOrigin(expectedOrigin);
+	const trustedOrigin = normalizeConfiguredOrigin(expectedOrigin);
 	const trustedRedirectOrigins = Array.from(allowedRedirectOrigins, (origin) =>
-		normalizeExpectedOrigin(origin)
+		normalizeConfiguredOrigin(origin)
 	);
 
 	return async (event: RequestEvent) => {
