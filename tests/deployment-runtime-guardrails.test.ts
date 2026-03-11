@@ -464,16 +464,36 @@ describe('deployment runtime guardrails', () => {
 			verifyStep.env.DEPLOY_ORIGIN,
 			'${{ vars.DEPLOY_ORIGIN }}'
 		);
-		assert.ok(verifyCommand.includes('"$deploy_origin/"'));
-		assert.ok(verifyCommand.includes('"$deploy_origin/healthz"'));
-		assert.ok((verifyCommand.match(/\bcurl\b/g) ?? []).length >= 2);
+		assert.ok(verifyCommand.includes('expected_origin="$(node -e'));
+		assert.ok(verifyCommand.includes('request_url()'));
+		assert.ok(verifyCommand.includes('run_probe()'));
+		assert.ok(verifyCommand.includes('assert_no_redirect_probe()'));
+		assert.ok(verifyCommand.includes('root_url="$(request_url /)"'));
+		assert.ok(verifyCommand.includes('health_url="$(request_url /healthz)"'));
+		assert.ok(
+			verifyCommand.includes('callback_url="$(request_url /auth/callback)"')
+		);
+		assert.ok(
+			verifyCommand.includes('assert_no_redirect_probe "$root_url" "200"')
+		);
+		assert.ok(
+			verifyCommand.includes('assert_no_redirect_probe "$health_url" "200"')
+		);
+		assert.ok(verifyCommand.includes('run_probe "$callback_url" "text/html"'));
+		assert.ok(!verifyCommand.includes('--location'));
 		assert.match(verifyCommand, /--retry(?:=|\s+)\d+/);
 		assert.match(verifyCommand, /--retry-delay(?:=|\s+)\d+/);
 		assert.match(verifyCommand, /--connect-timeout(?:=|\s+)\d+/);
 		assert.match(verifyCommand, /--max-time(?:=|\s+)\d+/);
 		assert.match(verifyCommand, /--retry-connrefused\b/);
-		assert.ok(verifyCommand.includes('health_body="$('));
-		assert.ok(verifyCommand.includes('[ "$health_body" != "ok" ]'));
+		assert.ok(verifyCommand.includes('[ "$PROBE_BODY" != "ok" ]'));
+		assert.ok(verifyCommand.includes('[ "$PROBE_STATUS" != "303" ]'));
+		assert.ok(
+			verifyCommand.includes('[ "$PROBE_EFFECTIVE_URL" != "$callback_url" ]')
+		);
+		assert.ok(verifyCommand.includes('if [ -z "$PROBE_LOCATION" ]'));
+		assert.ok(verifyCommand.includes('parsed.origin !== expectedOrigin'));
+		assert.ok(verifyCommand.includes('parsed.pathname !== "/"'));
 		assert.ok(verifyCommand.includes('exit 1'));
 	});
 

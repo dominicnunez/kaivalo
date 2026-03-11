@@ -131,34 +131,115 @@ jobs:
             exit 1
           fi
 
-          curl \
-            --fail \
-            --silent \
-            --show-error \
-            --location \
-            --retry 6 \
-            --retry-delay 10 \
-            --retry-connrefused \
-            --connect-timeout 10 \
-            --max-time 20 \
-            --output /dev/null \
-            "$deploy_origin/"
+          expected_origin="$(node -e 'const candidate = process.argv[1]; const parsed = new URL(candidate); if (parsed.username || parsed.password || parsed.pathname !== "/" || parsed.search || parsed.hash) { throw new Error("DEPLOY_ORIGIN must be a bare origin"); } process.stdout.write(parsed.origin);' "$deploy_origin")"
 
-          health_body="$(
-            curl \
-              --fail \
-              --silent \
-              --show-error \
-              --location \
-              --retry 6 \
-              --retry-delay 10 \
-              --retry-connrefused \
-              --connect-timeout 10 \
-              --max-time 20 \
-              "$deploy_origin/healthz"
-          )"
+          request_url() {
+            local pathname="$1"
+            printf '%s/%s' "$expected_origin" "${pathname#/}"
+          }
 
-          if [ "$health_body" != "ok" ]; then
+          run_probe() {
+            local url="$1"
+            local accept_header="${2:-}"
+            local body_file
+            local header_file
+            local probe_output
+
+            body_file="$(mktemp)"
+            header_file="$(mktemp)"
+
+            if [ -n "$accept_header" ]; then
+              probe_output="$(
+                curl \
+                  --silent \
+                  --show-error \
+                  --retry 6 \
+                  --retry-delay 10 \
+                  --retry-connrefused \
+                  --connect-timeout 10 \
+                  --max-time 20 \
+                  --header "accept: $accept_header" \
+                  --dump-header "$header_file" \
+                  --output "$body_file" \
+                  --write-out '%{http_code}\n%{url_effective}\n' \
+                  "$url"
+              )"
+            else
+              probe_output="$(
+                curl \
+                  --silent \
+                  --show-error \
+                  --retry 6 \
+                  --retry-delay 10 \
+                  --retry-connrefused \
+                  --connect-timeout 10 \
+                  --max-time 20 \
+                  --dump-header "$header_file" \
+                  --output "$body_file" \
+                  --write-out '%{http_code}\n%{url_effective}\n' \
+                  "$url"
+              )"
+            fi
+
+            mapfile -t probe_meta <<< "$probe_output"
+            PROBE_STATUS="${probe_meta[0]}"
+            PROBE_EFFECTIVE_URL="${probe_meta[1]}"
+            PROBE_BODY="$(cat "$body_file")"
+            PROBE_LOCATION="$(
+              awk 'BEGIN { IGNORECASE = 1 } /^location:/ { sub(/^[^:]+:[[:space:]]*/, "", $0); sub(/\r$/, "", $0); print; exit }' "$header_file"
+            )"
+
+            rm -f "$body_file" "$header_file"
+          }
+
+          assert_no_redirect_probe() {
+            local url="$1"
+            local expected_status="$2"
+
+            run_probe "$url"
+
+            if [ "$PROBE_STATUS" != "$expected_status" ]; then
+              echo "Expected $url to return $expected_status, received $PROBE_STATUS" >&2
+              exit 1
+            fi
+
+            if [ "$PROBE_EFFECTIVE_URL" != "$url" ]; then
+              echo "Expected $url to stay on the canonical origin, received $PROBE_EFFECTIVE_URL" >&2
+              exit 1
+            fi
+
+            if [ -n "$PROBE_LOCATION" ]; then
+              echo "Expected $url not to redirect, received location $PROBE_LOCATION" >&2
+              exit 1
+            fi
+          }
+
+          root_url="$(request_url /)"
+          assert_no_redirect_probe "$root_url" "200"
+
+          health_url="$(request_url /healthz)"
+          assert_no_redirect_probe "$health_url" "200"
+          if [ "$PROBE_BODY" != "ok" ]; then
             echo "Expected /healthz to return plain-text ok" >&2
             exit 1
           fi
+
+          callback_url="$(request_url /auth/callback)"
+          run_probe "$callback_url" "text/html"
+
+          if [ "$PROBE_STATUS" != "303" ]; then
+            echo "Expected /auth/callback to return a same-origin browser redirect, received $PROBE_STATUS" >&2
+            exit 1
+          fi
+
+          if [ "$PROBE_EFFECTIVE_URL" != "$callback_url" ]; then
+            echo "Expected /auth/callback probe to stay on the canonical callback URL, received $PROBE_EFFECTIVE_URL" >&2
+            exit 1
+          fi
+
+          if [ -z "$PROBE_LOCATION" ]; then
+            echo "Expected /auth/callback to include a redirect location" >&2
+            exit 1
+          fi
+
+          node -e 'const expectedOrigin = process.argv[1]; const location = process.argv[2]; const parsed = new URL(location, expectedOrigin); if (parsed.origin !== expectedOrigin) { throw new Error(`Expected callback redirect to stay on ${expectedOrigin}, received ${parsed.origin}`); } if (parsed.pathname !== "/") { throw new Error(`Expected callback redirect to land on /, received ${parsed.pathname}`); } if (!parsed.search) { throw new Error("Expected callback redirect to include query parameters"); }' "$expected_origin" "$PROBE_LOCATION"
