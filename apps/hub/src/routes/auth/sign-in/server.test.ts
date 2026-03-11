@@ -6,7 +6,6 @@ import {
 	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
 	readVerifiedAuthError
 } from '$lib/auth/auth-error-query.ts';
-import { SPLIT_WORKOS_HOSTNAME_ERROR_MESSAGE } from '$lib/server/workos-security.ts';
 
 const { mockEnv, mockGetSignInUrl } = vi.hoisted(() => ({
 	mockEnv: {
@@ -51,7 +50,6 @@ describe('auth sign-in route', () => {
 		vi.resetModules();
 		mockGetSignInUrl.mockReset();
 		mockEnv.WORKOS_API_HOSTNAME = 'auth.kaivalo-login.com';
-		delete mockEnv.WORKOS_AUTHKIT_HOSTNAME;
 		errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 	});
 
@@ -72,18 +70,6 @@ describe('auth sign-in route', () => {
 				'https://auth.kaivalo-login.com/user_management/authorize?screen_hint=sign-up'
 		});
 		expect(mockGetSignInUrl).toHaveBeenCalledWith({ returnTo: '/services' });
-	});
-
-	it('rejects split WorkOS api and AuthKit hostnames before sign-in starts', async () => {
-		mockEnv.WORKOS_API_HOSTNAME = 'api-auth.kaivalo-login.com';
-		mockEnv.WORKOS_AUTHKIT_HOSTNAME = 'login.kaivalo-login.com';
-
-		const { GET } = await import('./+server');
-
-		expect(() => GET(createEvent())).toThrow(
-			SPLIT_WORKOS_HOSTNAME_ERROR_MESSAGE
-		);
-		expect(mockGetSignInUrl).not.toHaveBeenCalled();
 	});
 
 	it('normalizes trusted same-origin destinations that do not point back to the sign-in route', async () => {

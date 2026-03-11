@@ -15,9 +15,6 @@ const REQUIRED_ENV_VARS = [
 const HEX_64_PATTERN = /^[a-f0-9]{64}$/i;
 const DEFAULT_WORKOS_API_HOSTNAME = 'api.workos.com';
 const WORKOS_REDIRECT_PATHNAME = '/auth/callback';
-export const SPLIT_WORKOS_HOSTNAME_ERROR_MESSAGE =
-	'WORKOS_AUTHKIT_HOSTNAME must match WORKOS_API_HOSTNAME because the current AuthKit SDK uses WORKOS_API_HOSTNAME for hosted sign-in and sign-out URLs.';
-
 export const PROXY_HSTS_CONFIGURATION_ERROR_MESSAGE =
 	'Production HTTPS origin requires trusted proxy proto forwarding for reliable HSTS. Set TRUST_X_FORWARDED_PROTO=true and TRUSTED_PROXY_IPS to trusted proxy addresses for proxied HTTPS deployments.';
 export const LOOPBACK_PROXY_TRUST_ERROR_MESSAGE =
@@ -219,14 +216,6 @@ export function getValidatedWorkosEnv(env: Env): WorkosEnv {
 		'WORKOS_API_HOSTNAME',
 		DEFAULT_WORKOS_API_HOSTNAME
 	);
-	const authkitHostname = parseWorkosHostname(
-		env.WORKOS_AUTHKIT_HOSTNAME,
-		'WORKOS_AUTHKIT_HOSTNAME',
-		apiHostname
-	);
-	if (authkitHostname !== apiHostname) {
-		throw new Error(SPLIT_WORKOS_HOSTNAME_ERROR_MESSAGE);
-	}
 
 	if (!HEX_64_PATTERN.test(cookiePassword)) {
 		throw new Error(

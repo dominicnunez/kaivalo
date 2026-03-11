@@ -4,7 +4,6 @@ import {
 	createSecurityHeadersHandle,
 	getStaticAssetCacheControl,
 	getStaticAssetCacheControlForResponse,
-	SPLIT_WORKOS_HOSTNAME_ERROR_MESSAGE,
 	getTrustedForwardedProto,
 	getValidatedWorkosEnv,
 	shouldApplyStaticAssetHeaders
@@ -168,26 +167,6 @@ describe('workos environment protocols', () => {
 		).toBe('auth.kaivalo-login.test');
 	});
 
-	it('accepts a redundant WorkOS AuthKit hostname when it matches the api host', () => {
-		const parsed = getValidatedWorkosEnv({
-			...validLocalEnv,
-			WORKOS_API_HOSTNAME: 'auth.kaivalo-login.test',
-			WORKOS_AUTHKIT_HOSTNAME: 'auth.kaivalo-login.test'
-		});
-
-		expect(parsed.apiHostname).toBe('auth.kaivalo-login.test');
-	});
-
-	it('rejects split WorkOS api and AuthKit hostnames', () => {
-		expect(() =>
-			getValidatedWorkosEnv({
-				...validLocalEnv,
-				WORKOS_API_HOSTNAME: 'api-auth.kaivalo-login.test',
-				WORKOS_AUTHKIT_HOSTNAME: 'login.kaivalo-login.test'
-			})
-		).toThrow(SPLIT_WORKOS_HOSTNAME_ERROR_MESSAGE);
-	});
-
 	it('requires a dedicated auth error signing secret', () => {
 		expect(() =>
 			getValidatedWorkosEnv({
@@ -228,17 +207,6 @@ describe('workos environment protocols', () => {
 				/WORKOS_API_HOSTNAME must be a hostname without protocol, path, credentials, or port/
 			);
 		}
-	});
-
-	it('rejects malformed WorkOS AuthKit hostnames', () => {
-		expect(() =>
-			getValidatedWorkosEnv({
-				...validLocalEnv,
-				WORKOS_AUTHKIT_HOSTNAME: 'https://login.kaivalo-login.test/login'
-			})
-		).toThrow(
-			/WORKOS_AUTHKIT_HOSTNAME must be a hostname without protocol, path, credentials, or port/
-		);
 	});
 });
 

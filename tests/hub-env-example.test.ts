@@ -173,7 +173,6 @@ describe('apps/hub/.env.example behavior', () => {
 			WORKOS_REDIRECT_URI: 'https://hub.kaivalo.com/auth/callback',
 			ORIGIN: 'https://hub.kaivalo.com',
 			WORKOS_API_HOSTNAME: 'auth.kaivalo.com',
-			WORKOS_AUTHKIT_HOSTNAME: 'auth.kaivalo.com',
 			TRUSTED_PROXY_IPS: '203.0.113.10,2001:db8::10',
 			ADDRESS_HEADER: 'x-forwarded-for',
 			XFF_DEPTH: '1'
@@ -191,6 +190,8 @@ describe('apps/hub/.env.example behavior', () => {
 			XFF_DEPTH: '1',
 			SHUTDOWN_TIMEOUT_MS: '30000'
 		});
+		assert.strictEqual(commentedEnvValues.WORKOS_AUTHKIT_HOSTNAME, undefined);
+		assert.strictEqual(runtimeEnvExample.WORKOS_AUTHKIT_HOSTNAME, undefined);
 		assert.match(runtimeEnvExample.WORKOS_COOKIE_PASSWORD, /^[a-f0-9]{64}$/i);
 		assert.match(
 			runtimeEnvExample.AUTH_ERROR_SIGNING_SECRET,

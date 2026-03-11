@@ -28,12 +28,6 @@ server process or container, not to the build step.
   Use this only when the current SDK should call a custom hostname instead of
   the default `api.workos.com`.
 
-- `WORKOS_AUTHKIT_HOSTNAME`
-  Optional compatibility check for legacy configs.
-  If set, it must exactly match `WORKOS_API_HOSTNAME`.
-  The current AuthKit SDK still builds hosted sign-in/sign-out URLs from
-  `WORKOS_API_HOSTNAME`, so split API/AuthKit hostnames are unsupported here.
-
 - `WORKOS_REDIRECT_URI`
   Absolute callback URL for WorkOS.
   Must end at `/auth/callback`.
@@ -115,7 +109,6 @@ WORKOS_REDIRECT_URI=https://hub.kaivalo.com/auth/callback
 WORKOS_CLIENT_ID=client_...
 WORKOS_API_KEY=sk_...
 # WORKOS_API_HOSTNAME=auth.kaivalo.com
-# WORKOS_AUTHKIT_HOSTNAME=auth.kaivalo.com
 WORKOS_COOKIE_PASSWORD=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 AUTH_ERROR_SIGNING_SECRET=fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
 TRUST_X_FORWARDED_PROTO=true

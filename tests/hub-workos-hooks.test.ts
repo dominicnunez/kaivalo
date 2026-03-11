@@ -7,8 +7,7 @@ import {
 	getProxyTrustConfiguration,
 	getValidatedWorkosEnv,
 	LOOPBACK_PROXY_TRUST_ERROR_MESSAGE,
-	PROXY_HSTS_CONFIGURATION_ERROR_MESSAGE,
-	SPLIT_WORKOS_HOSTNAME_ERROR_MESSAGE
+	PROXY_HSTS_CONFIGURATION_ERROR_MESSAGE
 } from '../apps/hub/src/lib/server/workos-security.ts';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 
@@ -230,24 +229,6 @@ describe('WorkOS env validation', () => {
 			WORKOS_API_HOSTNAME: 'auth.kaivalo-login.com'
 		});
 		assert.strictEqual(parsed.apiHostname, 'auth.kaivalo-login.com');
-	});
-
-	it('rejects split WorkOS api and AuthKit hostnames', () => {
-		assert.throws(
-			() =>
-				getValidatedWorkosEnv({
-					...validEnv,
-					WORKOS_API_HOSTNAME: 'api-auth.kaivalo-login.com',
-					WORKOS_AUTHKIT_HOSTNAME: 'login.kaivalo-login.com'
-				}),
-			(error) => {
-				assert.strictEqual(
-					error instanceof Error ? error.message : String(error),
-					SPLIT_WORKOS_HOSTNAME_ERROR_MESSAGE
-				);
-				return true;
-			}
-		);
 	});
 
 	it('rejects malformed WorkOS api hostnames', () => {
