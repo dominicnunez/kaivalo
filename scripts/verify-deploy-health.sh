@@ -22,8 +22,18 @@ canonicalize_origin() {
 	local origin="$1"
 
 	node -e '
+		const { isIP } = require("node:net");
 		const candidate = process.argv[1];
 		const parsed = new URL(candidate);
+		const hostname = parsed.hostname.toLowerCase();
+		const normalizedHostname =
+			hostname.startsWith("[") && hostname.endsWith("]")
+				? hostname.slice(1, -1)
+				: hostname;
+		const isLoopbackHostname =
+			normalizedHostname === "localhost" ||
+			normalizedHostname === "::1" ||
+			(isIP(normalizedHostname) === 4 && normalizedHostname.startsWith("127."));
 		if (
 			parsed.username ||
 			parsed.password ||
@@ -32,6 +42,14 @@ canonicalize_origin() {
 			parsed.hash
 		) {
 			throw new Error("DEPLOY_ORIGIN must be a bare origin");
+		}
+		if (
+			parsed.protocol !== "https:" &&
+			!(parsed.protocol === "http:" && isLoopbackHostname)
+		) {
+			throw new Error(
+				"DEPLOY_ORIGIN must use https unless it targets a loopback host"
+			);
 		}
 		process.stdout.write(parsed.origin);
 	' "$origin"

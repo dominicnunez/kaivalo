@@ -119,7 +119,10 @@ function createHealthyHandler(
 	};
 }
 
-function runDeployHealthScript(origin: string): Promise<ScriptResult> {
+function runDeployHealthScript(
+	origin: string,
+	envOverrides: Record<string, string> = {}
+): Promise<ScriptResult> {
 	return new Promise((resolve, reject) => {
 		const child = spawn('bash', [DEPLOY_HEALTH_SCRIPT_PATH], {
 			cwd: ROOT,
@@ -129,7 +132,8 @@ function runDeployHealthScript(origin: string): Promise<ScriptResult> {
 				DEPLOY_HEALTH_RETRY_COUNT: '1',
 				DEPLOY_HEALTH_RETRY_DELAY_SECONDS: '0',
 				DEPLOY_HEALTH_CONNECT_TIMEOUT_SECONDS: '2',
-				DEPLOY_HEALTH_MAX_TIME_SECONDS: '2'
+				DEPLOY_HEALTH_MAX_TIME_SECONDS: '2',
+				...envOverrides
 			},
 			stdio: ['ignore', 'pipe', 'pipe']
 		});
@@ -163,6 +167,19 @@ describe('deploy health probe script', () => {
 
 		assert.strictEqual(result.exitCode, 0, result.stderr || result.stdout);
 		assert.strictEqual(result.signal, null);
+	});
+
+	it('rejects insecure non-loopback deploy origins before probing', async () => {
+		const result = await runDeployHealthScript('http://not-loopback.invalid', {
+			DEPLOY_HEALTH_CONNECT_TIMEOUT_SECONDS: '1',
+			DEPLOY_HEALTH_MAX_TIME_SECONDS: '1'
+		});
+
+		assert.notStrictEqual(result.exitCode, 0);
+		assert.match(
+			result.stderr,
+			/DEPLOY_ORIGIN must use https unless it targets a loopback host/
+		);
 	});
 
 	it('fails when a no-redirect probe returns a redirect response', async () => {

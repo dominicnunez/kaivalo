@@ -51,7 +51,8 @@ These values are only for the CI-to-host deployment path.
 `DEPLOY_ORIGIN` should be the canonical public app origin, for example
 `https://hub.kaivalo.com`, with no path, query, or fragment so the workflow can
 verify `/`, `/healthz`, and the same-origin auth callback route after the host
-deploy command returns.
+deploy command returns. Deployment health verification rejects non-HTTPS origins
+unless they target a loopback host for local test fixtures.
 
 Recommended:
 
