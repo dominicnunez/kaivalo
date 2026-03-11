@@ -15,6 +15,7 @@ const STARTUP_RETRY_COUNT = 40;
 const STARTUP_DELAY_MS = 250;
 const STARTUP_TIMEOUT_MS = STARTUP_RETRY_COUNT * STARTUP_DELAY_MS;
 const PROCESS_EXIT_TIMEOUT_MS = 5000;
+const STARTUP_FAILURE_TIMEOUT_MS = 10000;
 const MAX_STARTUP_OUTPUT_LINES = 120;
 const STARTUP_READY_PATTERN = /\bListening on\b/;
 const STARTUP_PROBE_TIMEOUT_MS = 500;
@@ -32,41 +33,56 @@ function createFixtureEnv(port, overrides = {}) {
 	});
 }
 
+function createStartupOutputTracker() {
+	const startupOutput = [];
+	let sawReadyLog = false;
+
+	return {
+		appendOutput(chunk) {
+			if (!chunk) {
+				return;
+			}
+
+			const text = chunk.toString();
+			if (STARTUP_READY_PATTERN.test(text)) {
+				sawReadyLog = true;
+			}
+			for (const line of text.split(/\r?\n/)) {
+				if (!line) {
+					continue;
+				}
+				startupOutput.push(line);
+				if (startupOutput.length > MAX_STARTUP_OUTPUT_LINES) {
+					startupOutput.shift();
+				}
+			}
+		},
+		get sawReadyLog() {
+			return sawReadyLog;
+		},
+		get summary() {
+			return startupOutput.length
+				? startupOutput.join('\n')
+				: '(no startup output captured)';
+		}
+	};
+}
+
 async function startBuiltServer(envOverrides = {}) {
 	ensureHubBuild();
 
 	const reservation = await reserveLocalPort();
 	const port = reservation.port;
 	const baseUrl = `http://127.0.0.1:${port}`;
-	const startupOutput = [];
-	let sawReadyLog = false;
-	const appendOutput = (chunk) => {
-		if (!chunk) {
-			return;
-		}
-
-		const text = chunk.toString();
-		if (STARTUP_READY_PATTERN.test(text)) {
-			sawReadyLog = true;
-		}
-		for (const line of text.split(/\r?\n/)) {
-			if (!line) {
-				continue;
-			}
-			startupOutput.push(line);
-			if (startupOutput.length > MAX_STARTUP_OUTPUT_LINES) {
-				startupOutput.shift();
-			}
-		}
-	};
+	const startupOutput = createStartupOutputTracker();
 	const server = spawn('node', [BUILD_ENTRY], {
 		cwd: HUB_DIR,
 		stdio: ['ignore', 'pipe', 'pipe'],
 		detached: true,
 		env: createFixtureEnv(port, envOverrides)
 	});
-	server.stdout?.on('data', appendOutput);
-	server.stderr?.on('data', appendOutput);
+	server.stdout?.on('data', startupOutput.appendOutput);
+	server.stderr?.on('data', startupOutput.appendOutput);
 	await reservation.release();
 
 	let exitCode = null;
@@ -90,7 +106,10 @@ async function startBuiltServer(envOverrides = {}) {
 			break;
 		}
 
-		if ((sawReadyLog || i % 2 === 0) && (await probeServerReady(baseUrl))) {
+		if (
+			(startupOutput.sawReadyLog || i % 2 === 0) &&
+			(await probeServerReady(baseUrl))
+		) {
 			return { server, baseUrl };
 		}
 		await delay(STARTUP_DELAY_MS);
@@ -102,15 +121,12 @@ async function startBuiltServer(envOverrides = {}) {
 		// Ignore if already down.
 	}
 
-	const startupSummary = startupOutput.length
-		? startupOutput.join('\n')
-		: '(no startup output captured)';
 	const failureReason = spawnError
 		? `spawn failed: ${spawnError.message}`
 		: didExit
 			? `process exited before readiness (code ${exitCode ?? 'null'}, signal ${exitSignal ?? 'null'})`
 			: `server did not become ready within ${STARTUP_TIMEOUT_MS}ms`;
-	const readinessSummary = sawReadyLog
+	const readinessSummary = startupOutput.sawReadyLog
 		? 'saw readiness log but health checks never succeeded'
 		: 'never observed readiness log output';
 
@@ -118,9 +134,68 @@ async function startBuiltServer(envOverrides = {}) {
 		[
 			`expected built server to become ready: ${failureReason}`,
 			readinessSummary,
-			`startup output:\n${startupSummary}`
+			`startup output:\n${startupOutput.summary}`
 		].join('\n')
 	);
+}
+
+async function runBuiltServerToExit(
+	envOverrides = {},
+	{ keepPortReserved = false } = {}
+) {
+	ensureHubBuild();
+
+	const reservation = await reserveLocalPort();
+	const port = reservation.port;
+	if (!keepPortReserved) {
+		await reservation.release();
+	}
+
+	const startupOutput = createStartupOutputTracker();
+	const server = spawn('node', [BUILD_ENTRY], {
+		cwd: HUB_DIR,
+		stdio: ['ignore', 'pipe', 'pipe'],
+		env: createFixtureEnv(port, envOverrides)
+	});
+	server.stdout?.on('data', startupOutput.appendOutput);
+	server.stderr?.on('data', startupOutput.appendOutput);
+
+	try {
+		const outcome = await new Promise((resolve, reject) => {
+			const timeout = setTimeout(() => {
+				server.kill('SIGKILL');
+				reject(
+					new Error(
+						`expected built server entrypoint to exit within ${STARTUP_FAILURE_TIMEOUT_MS}ms`
+					)
+				);
+			}, STARTUP_FAILURE_TIMEOUT_MS);
+			timeout.unref();
+
+			server.once('error', (error) => {
+				clearTimeout(timeout);
+				reject(error);
+			});
+
+			server.once('exit', (exitCode, signal) => {
+				clearTimeout(timeout);
+				resolve({
+					exitCode,
+					signal
+				});
+			});
+		});
+
+		return {
+			...outcome,
+			output: startupOutput.summary,
+			port
+		};
+	} finally {
+		if (keepPortReserved) {
+			await reservation.release();
+		}
+	}
 }
 
 function stopProcessGroup(server, signal = 'SIGTERM') {
@@ -369,6 +444,40 @@ describe('hub production adapter runtime', () => {
 					'expected graceful shutdown to exit without requiring SIGKILL fallback'
 				);
 			}
+		}
+	);
+
+	it(
+		'exits non-zero when the shipped node entrypoint starts without required auth env',
+		{ timeout: 30000 },
+		async () => {
+			const result = await runBuiltServerToExit({
+				WORKOS_CLIENT_ID: ''
+			});
+
+			assert.strictEqual(result.exitCode, 1);
+			assert.strictEqual(result.signal, null);
+			assert.match(result.output, /Failed to start hub server/);
+			assert.match(
+				result.output,
+				/Missing required environment variable: WORKOS_CLIENT_ID/
+			);
+			assert.doesNotMatch(result.output, STARTUP_READY_PATTERN);
+		}
+	);
+
+	it(
+		'exits non-zero when the shipped node entrypoint cannot bind its configured port',
+		{ timeout: 30000 },
+		async () => {
+			const result = await runBuiltServerToExit({}, { keepPortReserved: true });
+
+			assert.strictEqual(result.exitCode, 1);
+			assert.strictEqual(result.signal, null);
+			assert.match(result.output, /Failed to start hub server/);
+			assert.match(result.output, /\bEADDRINUSE\b|address already in use/i);
+			assert.match(result.output, new RegExp(`\\b${result.port}\\b`));
+			assert.doesNotMatch(result.output, STARTUP_READY_PATTERN);
 		}
 	);
 });

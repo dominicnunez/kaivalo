@@ -3,6 +3,14 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
+import {
+	AUTH_ERROR_INCIDENT_QUERY_NAME,
+	AUTH_ERROR_MESSAGE,
+	AUTH_ERROR_QUERY_NAME,
+	AUTH_ERROR_QUERY_VALUE,
+	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
+	readVerifiedAuthError
+} from '../apps/hub/src/lib/auth/auth-error-query.ts';
 import { httpGet } from './helpers/hub-preview.ts';
 import { assertHubBuildAvailable } from './helpers/hub-build.ts';
 import { reserveLocalPort } from './helpers/network.ts';
@@ -18,12 +26,21 @@ const PREVIEW_FIXTURE_IMPORT = new URL(
 	import.meta.url
 ).href;
 const AUTHKIT_COOKIE_NAME = '__Host-wos_session';
+const PREVIEW_AUTH_ERROR_SIGNING_SECRET = 'cd'.repeat(32);
 const PREVIEW_POLLUTION_ENV = {
 	TRUST_X_FORWARDED_PROTO: 'true',
 	WORKOS_API_HOSTNAME: 'accounts.example.test'
 } as const;
 type ProcessShutdownResult = {
 	forced: boolean;
+};
+type PreviewScriptOptions = {
+	envOverrides?: Record<string, string | undefined>;
+	imports?: readonly string[];
+};
+type StartedPreviewScript = {
+	baseUrl: string;
+	stop: () => Promise<ProcessShutdownResult>;
 };
 
 function delay(ms: number): Promise<void> {
@@ -216,95 +233,220 @@ function stopProcessGroup(
 	});
 }
 
+async function startPreviewScript({
+	envOverrides = {},
+	imports = [PREVIEW_FIXTURE_IMPORT]
+}: PreviewScriptOptions = {}): Promise<StartedPreviewScript> {
+	assertHubBuildAvailable();
+	const reservation = await reserveLocalPort();
+	const port = reservation.port;
+	const baseUrl = `http://127.0.0.1:${port}`;
+	const output: string[] = [];
+	const appendOutput = (chunk: Buffer | string) => {
+		const text = chunk.toString();
+		for (const line of text.split(/\r?\n/)) {
+			if (!line) {
+				continue;
+			}
+
+			output.push(line);
+			if (output.length > MAX_STARTUP_OUTPUT_LINES) {
+				output.shift();
+			}
+		}
+	};
+
+	const preview = spawn('npm', ['--prefix', 'apps/hub', 'run', 'preview'], {
+		cwd: ROOT,
+		stdio: ['ignore', 'pipe', 'pipe'],
+		detached: true,
+		env: createHubPreviewScriptEnv({
+			port,
+			envOverrides,
+			imports
+		})
+	});
+	preview.stdout?.on('data', appendOutput);
+	preview.stderr?.on('data', appendOutput);
+
+	await reservation.release();
+
+	let exitCode: number | null = null;
+	let exitSignal: NodeJS.Signals | null = null;
+	let spawnError: Error | null = null;
+	preview.once('error', (error) => {
+		spawnError = error;
+	});
+	preview.once('exit', (code, signal) => {
+		exitCode = code;
+		exitSignal = signal;
+	});
+
+	const deadline = Date.now() + STARTUP_TIMEOUT_MS;
+	while (Date.now() < deadline) {
+		if (spawnError) {
+			throw spawnError;
+		}
+
+		if (exitCode !== null || exitSignal !== null) {
+			throw new Error(`preview exited before readiness: ${output.join('\n')}`);
+		}
+
+		if (await probePreviewReady(baseUrl)) {
+			return {
+				baseUrl,
+				stop: () => stopProcessGroup(preview)
+			};
+		}
+
+		await delay(STARTUP_DELAY_MS);
+	}
+
+	const shutdown = await stopProcessGroup(preview);
+	assert.equal(
+		shutdown.forced,
+		false,
+		'expected preview shutdown to exit without requiring SIGKILL fallback'
+	);
+	throw new Error(
+		`preview did not become ready within ${STARTUP_TIMEOUT_MS}ms:\n${output.join('\n')}`
+	);
+}
+
+async function assertCleanPreviewShutdown(
+	preview: StartedPreviewScript
+): Promise<void> {
+	const shutdown = await preview.stop();
+	assert.equal(
+		shutdown.forced,
+		false,
+		'expected preview shutdown to exit without requiring SIGKILL fallback'
+	);
+}
+
 describe('hub preview script', () => {
 	it('starts the built node runtime with hermetic envs and an authenticated callback flow', async () => {
-		assertHubBuildAvailable();
 		const restoreEnv = setProcessEnv(PREVIEW_POLLUTION_ENV);
+		let preview: StartedPreviewScript | null = null;
 		try {
-			const reservation = await reserveLocalPort();
-			const port = reservation.port;
-			const baseUrl = `http://127.0.0.1:${port}`;
-			const output: string[] = [];
-			const appendOutput = (chunk: Buffer | string) => {
-				const text = chunk.toString();
-				for (const line of text.split(/\r?\n/)) {
-					if (!line) {
-						continue;
-					}
-
-					output.push(line);
-					if (output.length > MAX_STARTUP_OUTPUT_LINES) {
-						output.shift();
-					}
+			preview = await startPreviewScript({
+				envOverrides: {
+					HUB_PREVIEW_CALLBACK_FIXTURE_MODE: 'signed-in'
 				}
-			};
-
-			const preview = spawn('npm', ['--prefix', 'apps/hub', 'run', 'preview'], {
-				cwd: ROOT,
-				stdio: ['ignore', 'pipe', 'pipe'],
-				detached: true,
-				env: createHubPreviewScriptEnv({
-					port,
-					envOverrides: {
-						HUB_PREVIEW_CALLBACK_FIXTURE_MODE: 'signed-in'
-					},
-					imports: [PREVIEW_FIXTURE_IMPORT]
-				})
-			});
-			preview.stdout?.on('data', appendOutput);
-			preview.stderr?.on('data', appendOutput);
-
-			await reservation.release();
-
-			let exitCode: number | null = null;
-			let exitSignal: NodeJS.Signals | null = null;
-			let spawnError: Error | null = null;
-			preview.once('error', (error) => {
-				spawnError = error;
-			});
-			preview.once('exit', (code, signal) => {
-				exitCode = code;
-				exitSignal = signal;
 			});
 
-			const deadline = Date.now() + STARTUP_TIMEOUT_MS;
-			try {
-				while (Date.now() < deadline) {
-					if (spawnError) {
-						throw spawnError;
-					}
-
-					if (exitCode !== null || exitSignal !== null) {
-						throw new Error(
-							`preview exited before readiness: ${output.join('\n')}`
-						);
-					}
-
-					if (await probePreviewReady(baseUrl)) {
-						const homepage = await httpGet(baseUrl);
-						assert.strictEqual(homepage.statusCode, 200);
-						assert.match(homepage.data, /Kaivalo/i);
-						await assertPreviewAuthRoutes(baseUrl);
-						await assertAuthenticatedPreviewSession(baseUrl);
-						return;
-					}
-
-					await delay(STARTUP_DELAY_MS);
-				}
-
-				throw new Error(
-					`preview did not become ready within ${STARTUP_TIMEOUT_MS}ms:\n${output.join('\n')}`
-				);
-			} finally {
-				const shutdown = await stopProcessGroup(preview);
-				assert.equal(
-					shutdown.forced,
-					false,
-					'expected preview shutdown to exit without requiring SIGKILL fallback'
-				);
-			}
+			const homepage = await httpGet(preview.baseUrl);
+			assert.strictEqual(homepage.statusCode, 200);
+			assert.match(homepage.data, /Kaivalo/i);
+			await assertPreviewAuthRoutes(preview.baseUrl);
+			await assertAuthenticatedPreviewSession(preview.baseUrl);
 		} finally {
+			if (preview) {
+				await assertCleanPreviewShutdown(preview);
+			}
 			restoreEnv();
+		}
+	});
+
+	it('returns signed landing-page fallback redirects and sanitized API failures for callback redirect errors', async () => {
+		const preview = await startPreviewScript({
+			envOverrides: {
+				HUB_PREVIEW_CALLBACK_FIXTURE_MODE: 'auth-error-redirect'
+			}
+		});
+
+		try {
+			const browserResponse = await httpGet(
+				`${preview.baseUrl}/auth/callback?code=test-code&state=test-state`,
+				{
+					accept: 'text/html',
+					'sec-fetch-mode': 'navigate'
+				}
+			);
+			const apiResponse = await httpGet(
+				`${preview.baseUrl}/auth/callback?code=test-code&state=test-state`,
+				{
+					accept: 'application/json'
+				}
+			);
+
+			assert.strictEqual(browserResponse.statusCode, 303);
+			const browserLocation = new URL(
+				String(browserResponse.headers.location),
+				preview.baseUrl
+			);
+			assert.strictEqual(browserLocation.pathname, '/');
+			assert.strictEqual(
+				browserLocation.searchParams.get(AUTH_ERROR_QUERY_NAME),
+				AUTH_ERROR_QUERY_VALUE
+			);
+			assert.deepStrictEqual(
+				readVerifiedAuthError(browserLocation.searchParams, {
+					secret: PREVIEW_AUTH_ERROR_SIGNING_SECRET,
+					now:
+						Number(
+							browserLocation.searchParams.get(AUTH_ERROR_TIMESTAMP_QUERY_NAME)
+						) + 1
+				}),
+				{
+					message: AUTH_ERROR_MESSAGE,
+					incidentId: browserLocation.searchParams.get(
+						AUTH_ERROR_INCIDENT_QUERY_NAME
+					)
+				}
+			);
+			assert.strictEqual(
+				browserResponse.headers['cache-control'],
+				'private, no-store'
+			);
+			assert.deepStrictEqual(getSetCookieHeaders(browserResponse.headers), []);
+
+			const apiFailure = JSON.parse(apiResponse.data) as { message: string };
+			assert.strictEqual(apiResponse.statusCode, 503);
+			assert.match(
+				apiFailure.message,
+				/^Auth callback failed\. Reference: authcb_[0-9a-f-]+$/
+			);
+			assert.ok(
+				!apiFailure.message.includes('AUTH_FAILED'),
+				'callback failure responses should not leak upstream auth codes'
+			);
+		} finally {
+			await assertCleanPreviewShutdown(preview);
+		}
+	});
+
+	it('returns sanitized 503 responses when preview sign-out fails unexpectedly', async () => {
+		const preview = await startPreviewScript({
+			envOverrides: {
+				HUB_PREVIEW_SIGN_OUT_FIXTURE_MODE: 'throw'
+			}
+		});
+
+		try {
+			const response = await post(`${preview.baseUrl}/auth/sign-out`, {
+				origin: preview.baseUrl,
+				accept: 'application/json',
+				'sec-fetch-site': 'same-origin'
+			});
+
+			const failure = JSON.parse(response.data) as { message: string };
+			assert.strictEqual(response.statusCode, 503);
+			assert.strictEqual(
+				response.headers['cache-control'],
+				'private, no-store'
+			);
+			assert.match(
+				failure.message,
+				/^Sign-out failed\. Reference: authso_[0-9a-f-]+$/
+			);
+			assert.ok(
+				!failure.message.includes('preview secret'),
+				'sign-out failures should not leak upstream error details'
+			);
+			assert.deepStrictEqual(getSetCookieHeaders(response.headers), []);
+		} finally {
+			await assertCleanPreviewShutdown(preview);
 		}
 	});
 });

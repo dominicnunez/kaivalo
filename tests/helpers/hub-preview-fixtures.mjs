@@ -1,9 +1,11 @@
 import http from 'node:http';
+import { AVATAR_MAX_RESPONSE_BYTES } from '../../apps/hub/src/lib/server/avatar-proxy.ts';
 
 const PEER_ADDRESS_OVERRIDE_HEADER = 'x-kaivalo-preview-peer-address';
 const PREVIEW_SESSION_COOKIE_NAME = '__Host-wos_session';
 const PREVIEW_SESSION_COOKIE_VALUE = 'preview-session';
 const PREVIEW_SESSION_COOKIE_PAIR = `${PREVIEW_SESSION_COOKIE_NAME}=${PREVIEW_SESSION_COOKIE_VALUE}`;
+const OVERSIZED_AVATAR_CONTENT_LENGTH = String(AVATAR_MAX_RESPONSE_BYTES + 1);
 const PREVIEW_USER = Object.freeze({
 	object: 'user',
 	id: 'user_preview_fixture',
@@ -108,6 +110,13 @@ if (callbackFixtureMode) {
 					headers
 				});
 			}
+			case 'auth-error-redirect':
+				return Response.redirect(
+					`${process.env.ORIGIN}/auth/error?code=AUTH_FAILED`,
+					302
+				);
+			case 'throw':
+				throw new Error('fixture callback failure: preview secret');
 			default:
 				throw new Error(
 					`Unsupported HUB_PREVIEW_CALLBACK_FIXTURE_MODE: ${callbackFixtureMode}`
@@ -122,6 +131,21 @@ if (callbackFixtureMode) {
 		}
 
 		return originalGetUser(event);
+	};
+}
+
+const signOutFixtureMode = process.env.HUB_PREVIEW_SIGN_OUT_FIXTURE_MODE;
+if (signOutFixtureMode) {
+	const { authKit } = await import('@workos/authkit-sveltekit');
+	authKit.signOut = async () => {
+		switch (signOutFixtureMode) {
+			case 'throw':
+				throw new Error('fixture sign-out failure: preview secret');
+			default:
+				throw new Error(
+					`Unsupported HUB_PREVIEW_SIGN_OUT_FIXTURE_MODE: ${signOutFixtureMode}`
+				);
+		}
 	};
 }
 
@@ -150,6 +174,35 @@ if (avatarFixtureMode) {
 						'content-type': 'image/png',
 						'content-length': '11',
 						etag: '"avatar-1"'
+					}
+				});
+			case 'timeout':
+				throw new DOMException(
+					'fixture avatar fetch timed out',
+					'TimeoutError'
+				);
+			case 'non-image':
+				return new Response('<html>not image</html>', {
+					status: 200,
+					headers: {
+						'content-type': 'text/html; charset=utf-8',
+						'content-length': '22'
+					}
+				});
+			case 'upstream-error':
+				return new Response('upstream failure', {
+					status: 503,
+					headers: {
+						'content-type': 'text/plain; charset=utf-8'
+					}
+				});
+			case 'oversized':
+				return new Response('image-bytes', {
+					status: 200,
+					headers: {
+						'content-type': 'image/png',
+						'content-length': OVERSIZED_AVATAR_CONTENT_LENGTH,
+						etag: '"avatar-oversized"'
 					}
 				});
 			default:

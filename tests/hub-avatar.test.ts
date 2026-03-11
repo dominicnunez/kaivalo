@@ -9,6 +9,7 @@ const PREVIEW_FIXTURE_IMPORT = new URL(
 const AVATAR_SOURCE =
 	'https://avatars.githubusercontent.com/u/1?token=signed#tracker';
 const PEER_ADDRESS_OVERRIDE_HEADER = 'x-kaivalo-preview-peer-address';
+const PRIVATE_NO_STORE_CACHE_CONTROL = 'private, no-store';
 
 function getAvatarUrl(baseUrl) {
 	return `${baseUrl}/avatar?source=${encodeURIComponent(AVATAR_SOURCE)}`;
@@ -29,15 +30,41 @@ async function consumeAvatarQuota(preview, requestCount, headers = {}) {
 	}
 }
 
+function startAvatarPreview(avatarFixtureMode, env = {}) {
+	return startHubPreview({
+		shared: false,
+		env: {
+			HUB_PREVIEW_AVATAR_FIXTURE_MODE: avatarFixtureMode,
+			...env
+		},
+		imports: [PREVIEW_FIXTURE_IMPORT]
+	});
+}
+
+async function assertAvatarFailureResponse(
+	avatarFixtureMode,
+	expectedStatus,
+	expectedBody
+) {
+	const preview = await startAvatarPreview(avatarFixtureMode);
+
+	try {
+		const response = await hitAvatar(preview);
+
+		assert.strictEqual(response.statusCode, expectedStatus);
+		assert.strictEqual(response.data, expectedBody);
+		assert.strictEqual(
+			response.headers['cache-control'],
+			PRIVATE_NO_STORE_CACHE_CONTROL
+		);
+	} finally {
+		await preview.stop();
+	}
+}
+
 describe('avatar proxy preview behavior', () => {
 	it('serves proxied avatar responses over HTTP with hardened headers', async () => {
-		const preview = await startHubPreview({
-			shared: false,
-			env: {
-				HUB_PREVIEW_AVATAR_FIXTURE_MODE: 'success'
-			},
-			imports: [PREVIEW_FIXTURE_IMPORT]
-		});
+		const preview = await startAvatarPreview('success');
 
 		try {
 			const response = await hitAvatar(preview);
@@ -57,13 +84,7 @@ describe('avatar proxy preview behavior', () => {
 	});
 
 	it('returns 429 after repeated avatar requests from the same client', async () => {
-		const preview = await startHubPreview({
-			shared: false,
-			env: {
-				HUB_PREVIEW_AVATAR_FIXTURE_MODE: 'success'
-			},
-			imports: [PREVIEW_FIXTURE_IMPORT]
-		});
+		const preview = await startAvatarPreview('success');
 
 		try {
 			await consumeAvatarQuota(preview, 30);
@@ -79,14 +100,9 @@ describe('avatar proxy preview behavior', () => {
 	});
 
 	it('rate limits trusted proxy traffic by the forwarded client address', async () => {
-		const preview = await startHubPreview({
-			shared: false,
-			env: {
-				HUB_PREVIEW_AVATAR_FIXTURE_MODE: 'success',
-				TRUST_X_FORWARDED_PROTO: 'true',
-				TRUSTED_PROXY_IPS: '203.0.113.2'
-			},
-			imports: [PREVIEW_FIXTURE_IMPORT]
+		const preview = await startAvatarPreview('success', {
+			TRUST_X_FORWARDED_PROTO: 'true',
+			TRUSTED_PROXY_IPS: '203.0.113.2'
 		});
 		const proxyHeaders = {
 			'x-forwarded-for': '198.51.100.10',
@@ -106,14 +122,9 @@ describe('avatar proxy preview behavior', () => {
 	});
 
 	it('falls back to the direct proxy address when forwarded headers are malformed', async () => {
-		const preview = await startHubPreview({
-			shared: false,
-			env: {
-				HUB_PREVIEW_AVATAR_FIXTURE_MODE: 'success',
-				TRUST_X_FORWARDED_PROTO: 'true',
-				TRUSTED_PROXY_IPS: '203.0.113.1,203.0.113.2'
-			},
-			imports: [PREVIEW_FIXTURE_IMPORT]
+		const preview = await startAvatarPreview('success', {
+			TRUST_X_FORWARDED_PROTO: 'true',
+			TRUSTED_PROXY_IPS: '203.0.113.1,203.0.113.2'
 		});
 		const malformedHeaders = {
 			'x-forwarded-for': '198.51.100.10, garbage',
@@ -138,14 +149,9 @@ describe('avatar proxy preview behavior', () => {
 	});
 
 	it('returns 503 when the runtime cannot determine a client address', async () => {
-		const preview = await startHubPreview({
-			shared: false,
-			env: {
-				HUB_PREVIEW_AVATAR_FIXTURE_MODE: 'success',
-				ADDRESS_HEADER: 'x-forwarded-for',
-				XFF_DEPTH: '1'
-			},
-			imports: [PREVIEW_FIXTURE_IMPORT]
+		const preview = await startAvatarPreview('success', {
+			ADDRESS_HEADER: 'x-forwarded-for',
+			XFF_DEPTH: '1'
 		});
 
 		try {
@@ -160,4 +166,39 @@ describe('avatar proxy preview behavior', () => {
 			await preview.stop();
 		}
 	});
+
+	for (const [name, fixtureMode, expectedStatus, expectedBody] of [
+		[
+			'returns 504 when the upstream avatar fetch times out',
+			'timeout',
+			504,
+			'Gateway timeout'
+		],
+		[
+			'returns 502 when the upstream avatar response is not an image',
+			'non-image',
+			502,
+			'Bad gateway'
+		],
+		[
+			'returns 502 when the upstream avatar service returns an error status',
+			'upstream-error',
+			502,
+			'Bad gateway'
+		],
+		[
+			'returns 502 when the upstream avatar exceeds the size limit',
+			'oversized',
+			502,
+			'Bad gateway'
+		]
+	]) {
+		it(name, async () => {
+			await assertAvatarFailureResponse(
+				fixtureMode,
+				expectedStatus,
+				expectedBody
+			);
+		});
+	}
 });
