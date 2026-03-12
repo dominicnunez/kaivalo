@@ -73,4 +73,17 @@ describe('hub auth and footer controls', () => {
 		assert.ok(footer, 'Expected the shared footer to render');
 		assert.match(footer.textContent ?? '', /Kaivalo/);
 	});
+
+	it('renders an svg icon in every visible service card', () => {
+		const servicesSection = document.getElementById('services');
+		assert.ok(servicesSection, 'Expected a services section');
+
+		const serviceCards = [...servicesSection.querySelectorAll('.service-card')];
+		assert.ok(serviceCards.length > 0, 'Expected at least one service card');
+
+		for (const serviceCard of serviceCards) {
+			const icon = serviceCard.querySelector('.icon-shell-soon svg');
+			assert.ok(icon, 'Expected each service card to render an SVG icon');
+		}
+	});
 });

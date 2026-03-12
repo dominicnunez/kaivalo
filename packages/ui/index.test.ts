@@ -58,9 +58,31 @@ describe('@kaivalo/ui public api', () => {
 			href: 'javascript:alert(1)',
 			children: snippet
 		});
+		const protocolRelativeRender = render(Card, {
+			variant: 'link',
+			href: '//evil.example/path',
+			children: snippet
+		});
+		const dataUrlRender = render(Card, {
+			variant: 'link',
+			href: 'data:text/html,<script>alert(1)</script>',
+			children: snippet
+		});
+		const mixedCaseJavascriptRender = render(Card, {
+			variant: 'link',
+			href: 'JaVaScRiPt:alert(1)',
+			children: snippet
+		});
 		const insecureAbsoluteRender = render(Card, {
 			variant: 'link',
 			href: 'http://kaivalo.com/services',
+			allowExternal: true,
+			allowedExternalHosts: ['kaivalo.com'],
+			children: snippet
+		});
+		const mixedCaseInsecureAbsoluteRender = render(Card, {
+			variant: 'link',
+			href: 'HtTp://kaivalo.com/services',
 			allowExternal: true,
 			allowedExternalHosts: ['kaivalo.com'],
 			children: snippet
@@ -93,8 +115,15 @@ describe('@kaivalo/ui public api', () => {
 		const allowedAbsoluteLink =
 			allowedAbsoluteRender.container.querySelector('a');
 		const unsafeLink = unsafeRender.container.querySelector('a');
+		const protocolRelativeLink =
+			protocolRelativeRender.container.querySelector('a');
+		const dataUrlLink = dataUrlRender.container.querySelector('a');
+		const mixedCaseJavascriptLink =
+			mixedCaseJavascriptRender.container.querySelector('a');
 		const insecureAbsoluteLink =
 			insecureAbsoluteRender.container.querySelector('a');
+		const mixedCaseInsecureAbsoluteLink =
+			mixedCaseInsecureAbsoluteRender.container.querySelector('a');
 		const credentialedAbsoluteLink =
 			credentialedAbsoluteRender.container.querySelector('a');
 		const nonDefaultPortLink =
@@ -110,7 +139,11 @@ describe('@kaivalo/ui public api', () => {
 		);
 		expect(safeRender.container.textContent).toContain('Header');
 		expect(unsafeLink).toBeNull();
+		expect(protocolRelativeLink).toBeNull();
+		expect(dataUrlLink).toBeNull();
+		expect(mixedCaseJavascriptLink).toBeNull();
 		expect(insecureAbsoluteLink).toBeNull();
+		expect(mixedCaseInsecureAbsoluteLink).toBeNull();
 		expect(credentialedAbsoluteLink).toBeNull();
 		expect(nonDefaultPortLink).toBeNull();
 		expect(normalizedAllowlistLink?.getAttribute('href')).toBe(
