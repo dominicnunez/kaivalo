@@ -4,6 +4,8 @@ import assert from 'node:assert';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+	AUDIT_MAX_ATTEMPTS,
+	AUDIT_RETRY_DELAY_MS,
 	AUDIT_TIMEOUT_MS,
 	collectAuditAdvisories,
 	findUnallowlistedAdvisories,
@@ -177,16 +179,90 @@ describe('npm audit gate', () => {
 		}
 	});
 
-	it('fails fast when npm audit exceeds the configured timeout', () => {
+	it('retries transient npm audit timeouts before succeeding', () => {
+		const retryDelays: number[] = [];
+		let attemptCount = 0;
+
+		const report = runAudit({
+			spawnSyncImpl: () => {
+				attemptCount += 1;
+				if (attemptCount === 1) {
+					return {
+						error: Object.assign(new Error('timed out'), {
+							code: 'ETIMEDOUT'
+						})
+					};
+				}
+
+				return {
+					status: 0,
+					stdout: '{"vulnerabilities":{}}',
+					stderr: ''
+				};
+			},
+			sleepImpl: (delayMs) => {
+				retryDelays.push(delayMs);
+			}
+		});
+
+		assert.deepStrictEqual(report, { vulnerabilities: {} });
+		assert.strictEqual(attemptCount, 2);
+		assert.deepStrictEqual(retryDelays, [AUDIT_RETRY_DELAY_MS]);
+	});
+
+	it('fails after exhausting retry attempts for repeated timeouts', () => {
+		const retryDelays: number[] = [];
+		let attemptCount = 0;
+
 		assert.throws(
 			() =>
 				runAudit({
-					spawnSyncImpl: () => ({
-						error: Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' })
-					})
+					spawnSyncImpl: () => {
+						attemptCount += 1;
+						return {
+							error: Object.assign(new Error('timed out'), {
+								code: 'ETIMEDOUT'
+							})
+						};
+					},
+					sleepImpl: (delayMs) => {
+						retryDelays.push(delayMs);
+					}
 				}),
-			new Error(`npm audit exceeded ${AUDIT_TIMEOUT_MS}ms timeout`)
+			new Error(
+				`npm audit exceeded ${AUDIT_TIMEOUT_MS}ms timeout after ${AUDIT_MAX_ATTEMPTS} attempts`
+			)
 		);
+
+		assert.strictEqual(attemptCount, AUDIT_MAX_ATTEMPTS);
+		assert.deepStrictEqual(retryDelays, [
+			AUDIT_RETRY_DELAY_MS,
+			AUDIT_RETRY_DELAY_MS * 2
+		]);
+	});
+
+	it('fails immediately on non-timeout npm audit errors', () => {
+		let attemptCount = 0;
+
+		assert.throws(
+			() =>
+				runAudit({
+					spawnSyncImpl: () => {
+						attemptCount += 1;
+						return {
+							error: Object.assign(new Error('spawn ENOENT'), {
+								code: 'ENOENT'
+							})
+						};
+					},
+					sleepImpl: () => {
+						throw new Error('non-timeout failures should not sleep');
+					}
+				}),
+			new Error('npm audit failed: spawn ENOENT')
+		);
+
+		assert.strictEqual(attemptCount, 1);
 	});
 
 	it('audits the full dependency tree instead of omitting dev dependencies', () => {

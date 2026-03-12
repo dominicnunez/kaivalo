@@ -3,7 +3,10 @@ import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
-export const AUDIT_TIMEOUT_MS = 30_000;
+const AUDIT_SLEEP_BUFFER = new Int32Array(new SharedArrayBuffer(4));
+export const AUDIT_TIMEOUT_MS = 90_000;
+export const AUDIT_MAX_ATTEMPTS = 3;
+export const AUDIT_RETRY_DELAY_MS = 5_000;
 const AUDIT_COMMAND_ARGS = ['audit', '--json'];
 const ALLOWLIST_PATH = resolve(
 	ROOT,
@@ -282,40 +285,68 @@ function parseAuditReport(output) {
 	}
 }
 
+function sleepSync(delayMs) {
+	if (delayMs <= 0) {
+		return;
+	}
+
+	Atomics.wait(AUDIT_SLEEP_BUFFER, 0, 0, delayMs);
+}
+
 export function runAudit({
 	spawnSyncImpl = spawnSync,
-	timeoutMs = AUDIT_TIMEOUT_MS
+	timeoutMs = AUDIT_TIMEOUT_MS,
+	maxAttempts = AUDIT_MAX_ATTEMPTS,
+	retryDelayMs = AUDIT_RETRY_DELAY_MS,
+	sleepImpl = sleepSync
 } = {}) {
-	const auditResult = spawnSyncImpl('npm', AUDIT_COMMAND_ARGS, {
-		cwd: ROOT,
-		encoding: 'utf8',
-		timeout: timeoutMs
-	});
+	if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
+		throw new Error('npm audit maxAttempts must be a positive integer');
+	}
 
-	if (auditResult.error) {
-		if (auditResult.error.code === 'ETIMEDOUT') {
-			throw new Error(`npm audit exceeded ${timeoutMs}ms timeout`);
+	for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+		const auditResult = spawnSyncImpl('npm', AUDIT_COMMAND_ARGS, {
+			cwd: ROOT,
+			encoding: 'utf8',
+			timeout: timeoutMs
+		});
+
+		if (auditResult.error) {
+			if (auditResult.error.code === 'ETIMEDOUT') {
+				if (attempt === maxAttempts) {
+					throw new Error(
+						`npm audit exceeded ${timeoutMs}ms timeout after ${maxAttempts} attempts`
+					);
+				}
+
+				sleepImpl(retryDelayMs * attempt);
+				continue;
+			}
+
+			throw new Error(`npm audit failed: ${auditResult.error.message}`, {
+				cause: auditResult.error
+			});
 		}
 
-		throw new Error(`npm audit failed: ${auditResult.error.message}`, {
-			cause: auditResult.error
-		});
+		const stdout = auditResult.stdout ?? '';
+		if (
+			auditResult.status !== 0 &&
+			auditResult.status !== 1 &&
+			stdout.trim() === ''
+		) {
+			throw new Error(buildAuditFailureMessage(auditResult));
+		}
+
+		if (stdout.trim() === '') {
+			throw new Error('npm audit did not return JSON output');
+		}
+
+		return parseAuditReport(stdout);
 	}
 
-	const stdout = auditResult.stdout ?? '';
-	if (
-		auditResult.status !== 0 &&
-		auditResult.status !== 1 &&
-		stdout.trim() === ''
-	) {
-		throw new Error(buildAuditFailureMessage(auditResult));
-	}
-
-	if (stdout.trim() === '') {
-		throw new Error('npm audit did not return JSON output');
-	}
-
-	return parseAuditReport(stdout);
+	throw new Error(
+		`npm audit exceeded ${timeoutMs}ms timeout after ${maxAttempts} attempts`
+	);
 }
 
 export function main() {
