@@ -520,7 +520,21 @@ describe('deployment runtime guardrails', () => {
 
 	it('bounds deployment hangs and verifies application health after rollout', () => {
 		const workflow = readWorkflow(DEPLOY_WORKFLOW_PATH);
+		const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
+		const pinnedNodeVersion = getPinnedNodeVersionFromDockerfile(dockerfile);
 		const deployJob = getWorkflowJob(workflow, 'deploy');
+		const deploySteps = getWorkflowSteps(workflow, 'deploy');
+		const checkoutIndex = deploySteps.findIndex((step) =>
+			step.uses?.startsWith('actions/checkout@')
+		);
+		const setupNodeIndex = deploySteps.findIndex((step) =>
+			step.uses?.startsWith('actions/setup-node@')
+		);
+		const verifyIndex = deploySteps.findIndex(
+			(step) => step.name === 'Verify deployment health'
+		);
+		const setupNodeStep =
+			setupNodeIndex === -1 ? undefined : deploySteps[setupNodeIndex];
 		const deployStep = findWorkflowStep(
 			workflow,
 			'deploy',
@@ -555,6 +569,15 @@ describe('deployment runtime guardrails', () => {
 		assert.strictEqual(sshOptions.get('ConnectTimeout'), '10');
 		assert.strictEqual(sshOptions.get('ServerAliveInterval'), '15');
 		assert.strictEqual(sshOptions.get('ServerAliveCountMax'), '3');
+		assert.ok(
+			checkoutIndex >= 0 && checkoutIndex < verifyIndex,
+			'deploy job should check out the repository before verifying deployment health'
+		);
+		assert.ok(
+			setupNodeIndex >= 0 && setupNodeIndex < verifyIndex,
+			'deploy job should configure Node.js before verifying deployment health'
+		);
+		assert.strictEqual(setupNodeStep?.with['node-version'], pinnedNodeVersion);
 		assert.strictEqual(
 			verifyStep.env.DEPLOY_ORIGIN,
 			'${{ vars.DEPLOY_ORIGIN }}'
