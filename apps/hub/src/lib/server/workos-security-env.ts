@@ -3,7 +3,7 @@ import {
 	isLoopbackHostname,
 	isLoopbackIpAddress
 } from './ip-address.ts';
-import { parseCanonicalHostname } from './hostname.ts';
+import { parseCanonicalHostname } from '../hostname.ts';
 
 const REQUIRED_ENV_VARS = [
 	'WORKOS_CLIENT_ID',

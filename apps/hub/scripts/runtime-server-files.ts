@@ -2,7 +2,6 @@ export const RUNTIME_SERVER_FILES = [
 	'authkit-config.ts',
 	'auth-cookie-names.ts',
 	'error-diagnostics.ts',
-	'hostname.ts',
 	'ip-address.ts',
 	'node-server.ts',
 	'node-server-request.ts',
@@ -13,3 +12,5 @@ export const RUNTIME_SERVER_FILES = [
 	'workos-security-cache.ts',
 	'workos-security-env.ts'
 ] as const;
+
+export const RUNTIME_SHARED_FILES = ['hostname.ts'] as const;

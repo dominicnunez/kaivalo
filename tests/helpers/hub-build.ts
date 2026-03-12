@@ -1,7 +1,10 @@
 import { execSync } from 'node:child_process';
 import { existsSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { RUNTIME_SERVER_FILES } from '../../apps/hub/scripts/runtime-server-files.ts';
+import {
+	RUNTIME_SERVER_FILES,
+	RUNTIME_SHARED_FILES
+} from '../../apps/hub/scripts/runtime-server-files.ts';
 import { getHubBuildEnv } from '../../apps/hub/scripts/build-env.ts';
 import { clearNewestMtimeCache, getNewestMtimeMs } from './build-freshness.ts';
 import { sanitizeHubRuntimeEnv } from './hub-runtime-env.ts';
@@ -37,9 +40,14 @@ export function getHubBuildInputPaths() {
 }
 
 export function getHubRuntimeServerBuildPaths() {
-	return RUNTIME_SERVER_FILES.map((fileName) =>
-		join(HUB_DIR, 'build', 'runtime', 'server', fileName)
-	);
+	return [
+		...RUNTIME_SERVER_FILES.map((fileName) =>
+			join(HUB_DIR, 'build', 'runtime', 'server', fileName)
+		),
+		...RUNTIME_SHARED_FILES.map((fileName) =>
+			join(HUB_DIR, 'build', 'runtime', fileName)
+		)
+	];
 }
 
 export function shouldBuildBeRegenerated({

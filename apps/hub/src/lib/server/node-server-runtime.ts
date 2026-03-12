@@ -4,7 +4,7 @@ import {
 	getErrorDiagnostics,
 	type ErrorDiagnostics
 } from './error-diagnostics.ts';
-import { isValidHostname } from './hostname.ts';
+import { isValidHostname } from '../hostname.ts';
 import {
 	applyBaselineSecurityHeaders,
 	applyStaticAssetHeaders,

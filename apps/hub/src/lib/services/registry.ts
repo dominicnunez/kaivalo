@@ -1,4 +1,4 @@
-import { isValidHostname } from '../server/hostname.ts';
+import { isValidHostname } from '../hostname.ts';
 
 export type ServiceIconKey = 'calendar' | 'mic';
 

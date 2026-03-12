@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isValidHostname, parseCanonicalHostname } from './hostname.ts';
+import { isValidHostname, parseCanonicalHostname } from '../hostname.ts';
 
 describe('hostname validation', () => {
 	it.each(['api.workos.com', 'auth.kaivalo-login.test', 'sweep.kaivalo.com'])(
