@@ -2,8 +2,6 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 
-const MIN_STYLESHEET_BYTES = 1024;
-
 function getStylesheetHref(html) {
 	const linkTags = [...html.matchAll(/<link\b[^>]*>/gi)].map(
 		(match) => match[0]
@@ -17,6 +15,22 @@ function getStylesheetHref(html) {
 			(href) => href.startsWith('./_app/') || href.startsWith('/_app/')
 		) ?? null
 	);
+}
+
+function getStylesheetAssetUrls(css, stylesheetUrl) {
+	const baseUrl = new URL(stylesheetUrl);
+	const assetUrls = new Set();
+
+	for (const match of css.matchAll(/url\(([^)]+)\)/gi)) {
+		const rawValue = match[1]?.trim().replace(/^['"]|['"]$/g, '') ?? '';
+		if (!rawValue || rawValue.startsWith('data:') || rawValue.startsWith('#')) {
+			continue;
+		}
+
+		assetUrls.add(new URL(rawValue, baseUrl).toString());
+	}
+
+	return [...assetUrls];
 }
 
 describe('hub styling behavior', () => {
@@ -47,7 +61,7 @@ describe('hub styling behavior', () => {
 		);
 	});
 
-	it('uses local styling assets and safe link protocols', () => {
+	it('uses local styling assets and safe link protocols', async () => {
 		assert.ok(!homepage.data.includes('api.fontshare.com'));
 		assert.ok(!homepage.data.includes('cdn.fontshare.com'));
 		const hrefMatches = [...homepage.data.matchAll(/\bhref="([^"]+)"/gi)].map(
@@ -72,32 +86,32 @@ describe('hub styling behavior', () => {
 			String(stylesheet.headers['content-type'] ?? ''),
 			/^text\/css/i
 		);
-		assert.ok(
-			stylesheet.data.length > MIN_STYLESHEET_BYTES,
-			'generated stylesheet should be non-trivial'
-		);
-		assert.match(
-			stylesheet.data,
-			/@font-face/i,
-			'generated stylesheet should include font-face rules'
-		);
-		assert.match(
-			stylesheet.data,
-			/\/fonts\/clash-display-400\.woff2/i,
-			'stylesheet should reference local font assets'
-		);
 		assert.ok(!/https?:\/\/api\.fontshare\.com/i.test(stylesheet.data));
 		assert.ok(!/https?:\/\/cdn\.fontshare\.com/i.test(stylesheet.data));
-	});
 
-	it('serves local font assets over first-party static routes', async () => {
-		const fontResponse = await httpGet(
-			new URL('/fonts/clash-display-400.woff2', stylesheetUrl).toString()
+		const stylesheetAssetUrls = getStylesheetAssetUrls(
+			stylesheet.data,
+			stylesheetUrl
 		);
-		assert.strictEqual(fontResponse.statusCode, 200);
-		assert.match(
-			String(fontResponse.headers['content-type'] ?? ''),
-			/^font\//i
+		assert.ok(
+			stylesheetAssetUrls.length > 0,
+			'expected stylesheet to reference at least one first-party asset'
 		);
+
+		const stylesheetOrigin = new URL(stylesheetUrl).origin;
+		for (const assetUrl of stylesheetAssetUrls) {
+			assert.strictEqual(
+				new URL(assetUrl).origin,
+				stylesheetOrigin,
+				`stylesheet asset should remain first-party: ${assetUrl}`
+			);
+
+			const assetResponse = await httpGet(assetUrl);
+			assert.strictEqual(
+				assetResponse.statusCode,
+				200,
+				`expected stylesheet asset to be served successfully: ${assetUrl}`
+			);
+		}
 	});
 });

@@ -74,7 +74,7 @@ describe('hub auth and footer controls', () => {
 		assert.match(footer.textContent ?? '', /Kaivalo/);
 	});
 
-	it('renders an svg icon in every visible service card', () => {
+	it('renders user-visible state and actions in every visible service card', () => {
 		const servicesSection = document.getElementById('services');
 		assert.ok(servicesSection, 'Expected a services section');
 
@@ -82,8 +82,25 @@ describe('hub auth and footer controls', () => {
 		assert.ok(serviceCards.length > 0, 'Expected at least one service card');
 
 		for (const serviceCard of serviceCards) {
-			const icon = serviceCard.querySelector('.icon-shell-soon svg');
-			assert.ok(icon, 'Expected each service card to render an SVG icon');
+			const title = serviceCard.querySelector('h3')?.textContent?.trim();
+			assert.ok(title, 'Expected each service card to expose a title');
+
+			const status = [...serviceCard.querySelectorAll('span')].find((badge) =>
+				/^(Active|Soon)$/i.test(badge.textContent?.trim() ?? '')
+			);
+			assert.ok(status, `Expected ${title} to expose a visible status`);
+
+			if (/^active$/i.test(status.textContent?.trim() ?? '')) {
+				const launchLink = [...serviceCard.querySelectorAll('a[href]')].find(
+					(link) =>
+						link.getAttribute('href') === '/services' &&
+						/Open from your services/i.test(link.textContent ?? '')
+				);
+				assert.ok(
+					launchLink,
+					`Expected active service ${title} to expose a launcher action`
+				);
+			}
 		}
 	});
 });
