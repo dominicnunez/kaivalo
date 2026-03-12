@@ -38,6 +38,7 @@ type PreviewScriptOptions = {
 	envOverrides?: Record<string, string | undefined>;
 	imports?: readonly string[];
 	nodeEnv?: string;
+	sanitizeInheritedRuntimeEnv?: boolean;
 };
 type StartedPreviewScript = {
 	baseUrl: string;
@@ -237,7 +238,8 @@ function stopProcessGroup(
 async function startPreviewScript({
 	envOverrides = {},
 	imports = [PREVIEW_FIXTURE_IMPORT],
-	nodeEnv = 'production'
+	nodeEnv = 'production',
+	sanitizeInheritedRuntimeEnv = true
 }: PreviewScriptOptions = {}): Promise<StartedPreviewScript> {
 	assertHubBuildAvailable();
 	const reservation = await reserveLocalPort();
@@ -266,7 +268,8 @@ async function startPreviewScript({
 			port,
 			envOverrides,
 			imports,
-			nodeEnv
+			nodeEnv,
+			sanitizeInheritedRuntimeEnv
 		})
 	});
 	preview.stdout?.on('data', appendOutput);
@@ -328,14 +331,15 @@ async function assertCleanPreviewShutdown(
 }
 
 describe('hub preview script', () => {
-	it('starts the built node runtime with hermetic envs and an authenticated callback flow', async () => {
+	it('starts the built node runtime with hermetic envs even when inherited runtime envs are polluted', async () => {
 		const restoreEnv = setProcessEnv(PREVIEW_POLLUTION_ENV);
 		let preview: StartedPreviewScript | null = null;
 		try {
 			preview = await startPreviewScript({
 				envOverrides: {
 					HUB_PREVIEW_CALLBACK_FIXTURE_MODE: 'signed-in'
-				}
+				},
+				sanitizeInheritedRuntimeEnv: false
 			});
 
 			const homepage = await httpGet(preview.baseUrl);

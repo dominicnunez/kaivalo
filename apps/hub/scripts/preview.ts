@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { getHubPreviewEnv } from './build-env.ts';
+import { applyHubRuntimeEnv, getHubPreviewBaseEnv } from './runtime-env.ts';
 
 const HUB_ROOT = path.resolve(import.meta.dirname, '..');
 const REQUIRED_PREVIEW_ARTIFACTS = [
@@ -18,6 +19,9 @@ for (const artifactPath of REQUIRED_PREVIEW_ARTIFACTS) {
 	);
 }
 
-Object.assign(process.env, getHubPreviewEnv(process.env));
+applyHubRuntimeEnv(
+	process.env,
+	getHubPreviewEnv(getHubPreviewBaseEnv(process.env))
+);
 
 await import('../server.ts');
