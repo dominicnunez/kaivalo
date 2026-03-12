@@ -66,7 +66,11 @@ export async function readAvatarBody(upstream: Response): Promise<Uint8Array> {
 
 			totalBytes += value.byteLength;
 			if (totalBytes > AVATAR_MAX_RESPONSE_BYTES) {
-				await reader.cancel(AVATAR_RESPONSE_TOO_LARGE_MESSAGE);
+				try {
+					await reader.cancel(AVATAR_RESPONSE_TOO_LARGE_MESSAGE);
+				} catch {
+					// Ignore cleanup failures so callers consistently receive the size-limit error.
+				}
 				throw new AvatarResponseSizeError(AVATAR_RESPONSE_TOO_LARGE_MESSAGE);
 			}
 

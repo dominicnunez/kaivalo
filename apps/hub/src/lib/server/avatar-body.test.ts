@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readAvatarBody } from './avatar-body.ts';
+import { AvatarResponseSizeError, readAvatarBody } from './avatar-body.ts';
 import { AVATAR_MAX_RESPONSE_BYTES } from './avatar-proxy.ts';
 
 describe('readAvatarBody', () => {
@@ -62,5 +62,29 @@ describe('readAvatarBody', () => {
 				})
 			)
 		).rejects.toThrow('Avatar response exceeds maximum allowed size');
+	});
+
+	it('keeps oversize streamed bodies classified as size-limit failures when cancel rejects', async () => {
+		const chunk = new Uint8Array(AVATAR_MAX_RESPONSE_BYTES / 2 + 1);
+		const stream = new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(chunk);
+				controller.enqueue(chunk);
+				controller.close();
+			},
+			cancel() {
+				return Promise.reject(new Error('cancel failed'));
+			}
+		});
+
+		await expect(
+			readAvatarBody(
+				new Response(stream, {
+					headers: {
+						'content-type': 'image/png'
+					}
+				})
+			)
+		).rejects.toBeInstanceOf(AvatarResponseSizeError);
 	});
 });
