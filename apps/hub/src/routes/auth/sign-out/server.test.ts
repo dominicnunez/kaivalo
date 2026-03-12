@@ -37,7 +37,13 @@ vi.mock('$lib/server/error-diagnostics.ts', async (importOriginal) => {
 describe('auth sign-out route', () => {
 	beforeEach(() => {
 		vi.resetModules();
+		mockEnv.WORKOS_CLIENT_ID = 'client_123';
+		mockEnv.WORKOS_API_KEY = 'sk_test_123';
+		mockEnv.WORKOS_REDIRECT_URI = 'https://kaivalo.test/auth/callback';
+		mockEnv.WORKOS_COOKIE_PASSWORD = 'ab'.repeat(32);
+		mockEnv.AUTH_ERROR_SIGNING_SECRET = 'cd'.repeat(32);
 		mockEnv.WORKOS_API_HOSTNAME = 'auth.kaivalo-login.com';
+		mockEnv.ORIGIN = 'https://kaivalo.test';
 		mockAuthKit.signOut.mockReset();
 	});
 
@@ -65,5 +71,24 @@ describe('auth sign-out route', () => {
 		expect(response.headers.get('location')).toBe(
 			'https://auth.kaivalo-login.com/user_management/sessions/logout?session_id=session_123&return_to=https%3A%2F%2Fkaivalo.test'
 		);
+	});
+
+	it('fails fast when the sign-out route is initialized without required auth env', async () => {
+		delete mockEnv.WORKOS_CLIENT_ID;
+
+		const { POST } = await import('./+server');
+
+		expect(() =>
+			POST({
+				request: new Request('https://kaivalo.test/auth/sign-out', {
+					method: 'POST',
+					headers: {
+						origin: 'https://kaivalo.test'
+					}
+				}),
+				url: new URL('https://kaivalo.test/auth/sign-out')
+			} as never)
+		).toThrow(/Missing required environment variable: WORKOS_CLIENT_ID/);
+		expect(mockAuthKit.signOut).not.toHaveBeenCalled();
 	});
 });

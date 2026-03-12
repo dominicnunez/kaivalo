@@ -49,7 +49,14 @@ describe('auth sign-in route', () => {
 	beforeEach(() => {
 		vi.resetModules();
 		mockGetSignInUrl.mockReset();
+		mockEnv.WORKOS_CLIENT_ID = 'client_123';
+		mockEnv.WORKOS_API_KEY = 'sk_test_123';
+		mockEnv.WORKOS_REDIRECT_URI = 'https://kaivalo.test/auth/callback';
+		mockEnv.WORKOS_COOKIE_PASSWORD = 'ab'.repeat(32);
+		mockEnv.AUTH_ERROR_SIGNING_SECRET = 'cd'.repeat(32);
 		mockEnv.WORKOS_API_HOSTNAME = 'auth.kaivalo-login.com';
+		mockEnv.ORIGIN = 'https://kaivalo.test';
+		mockEnv.NODE_ENV = 'production';
 		errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 	});
 
@@ -70,6 +77,17 @@ describe('auth sign-in route', () => {
 				'https://auth.kaivalo-login.com/user_management/authorize?screen_hint=sign-up'
 		});
 		expect(mockGetSignInUrl).toHaveBeenCalledWith({ returnTo: '/services' });
+	});
+
+	it('fails fast when the sign-in route is initialized without required auth env', async () => {
+		delete mockEnv.WORKOS_CLIENT_ID;
+
+		const { GET } = await import('./+server');
+
+		expect(() => GET(createEvent())).toThrow(
+			/Missing required environment variable: WORKOS_CLIENT_ID/
+		);
+		expect(mockGetSignInUrl).not.toHaveBeenCalled();
 	});
 
 	it('normalizes trusted same-origin destinations that do not point back to the sign-in route', async () => {
