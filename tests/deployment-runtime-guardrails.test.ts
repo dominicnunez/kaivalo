@@ -737,6 +737,30 @@ describe('deployment runtime guardrails', () => {
 		}
 	});
 
+	it('materializes workspace runtime packages after pruning production dependencies', () => {
+		const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
+		const materializeCopyIndex = dockerfile.indexOf(
+			'COPY scripts/materialize-runtime-workspace-deps.ts scripts/materialize-runtime-workspace-deps.ts'
+		);
+		const pruneIndex = dockerfile.indexOf('RUN npm prune --omit=dev');
+		const materializeRunIndex = dockerfile.indexOf(
+			'RUN node scripts/materialize-runtime-workspace-deps.ts'
+		);
+
+		assert.ok(
+			materializeCopyIndex >= 0,
+			'build stage should copy the runtime workspace materialization script'
+		);
+		assert.ok(
+			pruneIndex >= 0,
+			'build stage should prune development dependencies before runtime packaging'
+		);
+		assert.ok(
+			materializeRunIndex > pruneIndex,
+			'build stage should materialize runtime workspace packages after pruning'
+		);
+	});
+
 	it('pins both Docker stages to the same immutable node base image digest', () => {
 		const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
 		const fromImages = getDockerfileFromImages(dockerfile);
