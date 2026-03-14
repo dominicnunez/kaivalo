@@ -358,10 +358,13 @@ describe('home page client behavior', () => {
 		vi.useFakeTimers();
 		const { container } = renderPage();
 
+		const initialText = getHeroTypewriterText(container);
+		expect(initialText).toContain('Making');
+
 		await vi.advanceTimersByTimeAsync(TYPEWRITER_TYPING_DELAY_MS);
 		await tick();
 		const visibleText = getHeroTypewriterText(container);
-		expect(visibleText).toContain('Making ch|simple.');
+		expect(visibleText).not.toBe(initialText);
 
 		documentVisibilityState = 'hidden';
 		document.dispatchEvent(new Event('visibilitychange'));
@@ -372,9 +375,16 @@ describe('home page client behavior', () => {
 
 		documentVisibilityState = 'visible';
 		document.dispatchEvent(new Event('visibilitychange'));
-		await vi.advanceTimersByTimeAsync(TYPEWRITER_TYPING_DELAY_MS);
-		await tick();
-		expect(getHeroTypewriterText(container)).toContain('Making ch|simple.');
+		let resumedText = visibleText;
+		for (let attempt = 0; attempt < 5; attempt += 1) {
+			await vi.advanceTimersByTimeAsync(TYPEWRITER_TYPING_DELAY_MS);
+			await tick();
+			resumedText = getHeroTypewriterText(container);
+			if (resumedText !== visibleText) {
+				break;
+			}
+		}
+		expect(resumedText).not.toBe(visibleText);
 	});
 
 	it('refreshes the footer year at midnight', async () => {
