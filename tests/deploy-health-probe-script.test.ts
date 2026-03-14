@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
-import { buildAuthErrorLandingRedirectLocation } from '../apps/hub/src/lib/auth/auth-error-query.ts';
+import {
+	AUTH_ERROR_MESSAGE,
+	buildAuthErrorLandingRedirectLocation,
+	readVerifiedAuthError
+} from '../apps/hub/src/lib/auth/auth-error-query.ts';
 import { getTrustedWorkosAuthOrigin } from '../apps/hub/src/lib/server/auth-origin-policy.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -92,21 +96,28 @@ function createHealthyHandler(
 ): RouteHandler {
 	return (request) => {
 		const requestOrigin = `http://${request.headers.host ?? '127.0.0.1'}`;
-		const pathname = new URL(request.url ?? '/', requestOrigin).pathname;
+		const requestUrl = new URL(request.url ?? '/', requestOrigin);
+		const pathname = requestUrl.pathname;
 		const override = overrides[pathname];
 		if (override) {
 			return override(request);
 		}
 
 		switch (pathname) {
-			case '/':
+			case '/': {
+				const authError = readVerifiedAuthError(requestUrl.searchParams, {
+					secret: AUTH_ERROR_SIGNING_SECRET
+				});
 				return {
 					statusCode: 200,
 					headers: {
 						'content-type': 'text/html; charset=utf-8'
 					},
-					body: '<!doctype html><title>ok</title>'
+					body: authError
+						? `<!doctype html><title>ok</title><div>${AUTH_ERROR_MESSAGE}</div><div>${authError.incidentId}</div>`
+						: '<!doctype html><title>ok</title>'
 				};
+			}
 			case '/healthz':
 				return {
 					statusCode: 200,
@@ -336,6 +347,38 @@ describe('deploy health probe script', () => {
 		assert.match(
 			result.stderr,
 			/Expected callback redirect to include the auth error redirect contract/
+		);
+	});
+
+	it('fails when the callback redirect uses a forged auth error signature', async () => {
+		const server = await startFixtureServer(
+			createHealthyHandler({
+				'/auth/callback': (request) => {
+					const requestOrigin = `http://${request.headers.host ?? '127.0.0.1'}`;
+					const location = new URL(
+						buildAuthErrorLandingRedirectLocation({
+							incidentId: AUTH_ERROR_INCIDENT_ID,
+							secret: AUTH_ERROR_SIGNING_SECRET,
+							origin: requestOrigin,
+							now: Date.now()
+						})
+					);
+					location.searchParams.set('sig', 'forgedsig');
+					return {
+						statusCode: 303,
+						headers: {
+							location: location.toString()
+						}
+					};
+				}
+			})
+		);
+		const result = await runDeployHealthScript(server.origin);
+
+		assert.notStrictEqual(result.exitCode, 0);
+		assert.match(
+			result.stderr,
+			/Expected callback landing page to render the verified auth error banner/
 		);
 	});
 });

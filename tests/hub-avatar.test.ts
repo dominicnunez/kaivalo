@@ -15,6 +15,19 @@ function getAvatarUrl(baseUrl) {
 	return `${baseUrl}/avatar?source=${encodeURIComponent(AVATAR_SOURCE)}`;
 }
 
+function assertAvatarSecurityHeaders(response) {
+	assert.strictEqual(response.headers['x-frame-options'], 'DENY');
+	assert.strictEqual(response.headers['x-content-type-options'], 'nosniff');
+	assert.strictEqual(
+		response.headers['referrer-policy'],
+		'strict-origin-when-cross-origin'
+	);
+	assert.strictEqual(
+		response.headers['permissions-policy'],
+		'camera=(), microphone=(), geolocation=()'
+	);
+}
+
 async function hitAvatar(preview, headers = {}) {
 	return httpGet(getAvatarUrl(preview.baseUrl), headers);
 }
@@ -57,6 +70,7 @@ async function assertAvatarFailureResponse(
 			response.headers['cache-control'],
 			PRIVATE_NO_STORE_CACHE_CONTROL
 		);
+		assertAvatarSecurityHeaders(response);
 	} finally {
 		await preview.stop();
 	}
@@ -75,7 +89,7 @@ describe('avatar proxy preview behavior', () => {
 				response.headers['cache-control'],
 				'public, max-age=300, stale-while-revalidate=86400'
 			);
-			assert.strictEqual(response.headers['x-content-type-options'], 'nosniff');
+			assertAvatarSecurityHeaders(response);
 			assert.strictEqual(response.headers.etag, '"avatar-1"');
 			assert.deepStrictEqual(response.body, Buffer.from('image-bytes'));
 		} finally {

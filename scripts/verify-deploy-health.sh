@@ -33,6 +33,12 @@ mapfile -t BROWSER_NAVIGATION_PROBE_HEADERS < <(
 		}
 	'
 )
+readonly EXPECTED_AUTH_ERROR_MESSAGE="$(
+	"$NODE_BIN" --input-type=module -e '
+		import { AUTH_ERROR_MESSAGE } from "./apps/hub/src/lib/auth/auth-error-query.ts";
+		process.stdout.write(AUTH_ERROR_MESSAGE);
+	'
+)"
 
 if [[ -z "$DEPLOY_ORIGIN_VALUE" ]]; then
 	echo "DEPLOY_ORIGIN must be set for production health verification" >&2
@@ -99,6 +105,35 @@ validate_callback_redirect() {
 				"Expected callback redirect to include the auth error redirect contract"
 			);
 		}
+	' "$expected_origin" "$location"
+}
+
+resolve_absolute_url() {
+	local expected_origin="$1"
+	local location="$2"
+
+	"$NODE_BIN" --input-type=module -e '
+		process.stdout.write(new URL(process.argv[2], process.argv[1]).toString());
+	' "$expected_origin" "$location"
+}
+
+read_callback_incident_id() {
+	local expected_origin="$1"
+	local location="$2"
+
+	"$NODE_BIN" --input-type=module -e '
+		import { readAuthErrorRedirectShape } from "./apps/hub/src/lib/auth/auth-error-query.ts";
+
+		const expectedOrigin = process.argv[1];
+		const location = process.argv[2];
+		const parsed = new URL(location, expectedOrigin);
+		const shape = readAuthErrorRedirectShape(parsed.searchParams);
+		if (!shape) {
+			throw new Error(
+				"Expected callback redirect to include the auth error redirect contract"
+			);
+		}
+		process.stdout.write(shape.incidentId);
 	' "$expected_origin" "$location"
 }
 
@@ -228,6 +263,38 @@ assert_browser_navigation_redirect_probe() {
 	fi
 }
 
+assert_callback_landing_probe() {
+	local expected_origin="$1"
+	local location="$2"
+	local landing_url
+	local incident_id
+
+	landing_url="$(resolve_absolute_url "$expected_origin" "$location")"
+	incident_id="$(read_callback_incident_id "$expected_origin" "$location")"
+
+	run_probe "$landing_url" "${BROWSER_NAVIGATION_PROBE_HEADERS[@]}"
+
+	if [[ "$PROBE_STATUS" != "200" ]]; then
+		echo "Expected callback landing page $landing_url to return 200, received $PROBE_STATUS" >&2
+		exit 1
+	fi
+
+	if [[ "$PROBE_EFFECTIVE_URL" != "$landing_url" ]]; then
+		echo "Expected callback landing page to stay on $landing_url, received $PROBE_EFFECTIVE_URL" >&2
+		exit 1
+	fi
+
+	if [[ -n "$PROBE_LOCATION" ]]; then
+		echo "Expected callback landing page not to redirect, received location $PROBE_LOCATION" >&2
+		exit 1
+	fi
+
+	if [[ "$PROBE_BODY" != *"$EXPECTED_AUTH_ERROR_MESSAGE"* || "$PROBE_BODY" != *"$incident_id"* ]]; then
+		echo "Expected callback landing page to render the verified auth error banner" >&2
+		exit 1
+	fi
+}
+
 assert_no_redirect_probe() {
 	local url="$1"
 	local expected_status="$2"
@@ -280,5 +347,8 @@ validate_sign_in_redirect \
 callback_url="$(request_url "$expected_origin" "$CALLBACK_PATH")"
 assert_browser_navigation_redirect_probe "$callback_url" "$CALLBACK_PATH"
 validate_callback_redirect \
+	"$expected_origin" \
+	"$PROBE_LOCATION"
+assert_callback_landing_probe \
 	"$expected_origin" \
 	"$PROBE_LOCATION"
