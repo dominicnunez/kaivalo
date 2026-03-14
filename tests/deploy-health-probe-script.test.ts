@@ -10,6 +10,7 @@ const DEPLOY_HEALTH_SCRIPT_PATH = path.join(
 	'scripts',
 	'verify-deploy-health.sh'
 );
+const LOCAL_SIGN_IN_PATH = '/auth/sign-in';
 
 type RouteHandler = (request: http.IncomingMessage) => {
 	statusCode: number;
@@ -102,6 +103,13 @@ function createHealthyHandler(
 						'content-type': 'text/plain; charset=utf-8'
 					},
 					body: 'ok'
+				};
+			case '/services':
+				return {
+					statusCode: 303,
+					headers: {
+						location: LOCAL_SIGN_IN_PATH
+					}
 				};
 			case '/auth/callback':
 				return {
@@ -199,6 +207,44 @@ describe('deploy health probe script', () => {
 		assert.match(
 			result.stderr,
 			/Expected http:\/\/127\.0\.0\.1:\d+\/healthz to return 200, received 303/
+		);
+	});
+
+	it('fails when the protected route does not redirect unauthenticated users', async () => {
+		const server = await startFixtureServer(
+			createHealthyHandler({
+				'/services': () => ({
+					statusCode: 503,
+					body: 'auth unavailable'
+				})
+			})
+		);
+		const result = await runDeployHealthScript(server.origin);
+
+		assert.notStrictEqual(result.exitCode, 0);
+		assert.match(
+			result.stderr,
+			/Expected http:\/\/127\.0\.0\.1:\d+\/services to return 303, received 503/
+		);
+	});
+
+	it('fails when the protected route redirects away from the local sign-in path', async () => {
+		const server = await startFixtureServer(
+			createHealthyHandler({
+				'/services': () => ({
+					statusCode: 303,
+					headers: {
+						location: 'https://evil.example.test/login'
+					}
+				})
+			})
+		);
+		const result = await runDeployHealthScript(server.origin);
+
+		assert.notStrictEqual(result.exitCode, 0);
+		assert.match(
+			result.stderr,
+			/Expected services redirect to stay on http:\/\/127\.0\.0\.1:\d+, received https:\/\/evil\.example\.test/
 		);
 	});
 

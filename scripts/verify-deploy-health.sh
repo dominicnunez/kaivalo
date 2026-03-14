@@ -11,7 +11,9 @@ readonly REPO_ROOT="$(
 readonly DEPLOY_ORIGIN_VALUE="${DEPLOY_ORIGIN:-}"
 readonly ROOT_PATH='/'
 readonly HEALTH_PATH='/healthz'
+readonly SERVICES_PATH='/services'
 readonly CALLBACK_PATH='/auth/callback'
+readonly SIGN_IN_PATH='/auth/sign-in'
 readonly EXPECTED_HEALTH_BODY='ok'
 readonly PROBE_RETRY_COUNT="${DEPLOY_HEALTH_RETRY_COUNT:-6}"
 readonly PROBE_RETRY_DELAY_SECONDS="${DEPLOY_HEALTH_RETRY_DELAY_SECONDS:-10}"
@@ -20,7 +22,7 @@ readonly PROBE_MAX_TIME_SECONDS="${DEPLOY_HEALTH_MAX_TIME_SECONDS:-20}"
 
 cd "$REPO_ROOT"
 
-mapfile -t CALLBACK_BROWSER_PROBE_HEADERS < <(
+mapfile -t BROWSER_NAVIGATION_PROBE_HEADERS < <(
 	node --input-type=module -e '
 		import { getBrowserNavigationProbeHeaders } from "./apps/hub/src/lib/auth/request-policy.ts";
 		for (const [name, value] of Object.entries(getBrowserNavigationProbeHeaders())) {
@@ -77,6 +79,29 @@ validate_callback_redirect() {
 			throw new Error("Expected callback redirect to include query parameters");
 		}
 	' "$expected_origin" "$location"
+}
+
+validate_services_redirect() {
+	local expected_origin="$1"
+	local location="$2"
+	local sign_in_path="$3"
+
+	node -e '
+		const expectedOrigin = process.argv[1];
+		const location = process.argv[2];
+		const signInPath = process.argv[3];
+		const parsed = new URL(location, expectedOrigin);
+		if (parsed.origin !== expectedOrigin) {
+			throw new Error(
+				`Expected services redirect to stay on ${expectedOrigin}, received ${parsed.origin}`
+			);
+		}
+		if (parsed.pathname !== signInPath) {
+			throw new Error(
+				`Expected services redirect to land on ${signInPath}, received ${parsed.pathname}`
+			);
+		}
+	' "$expected_origin" "$location" "$sign_in_path"
 }
 
 request_url() {
@@ -159,8 +184,28 @@ if [[ "$PROBE_BODY" != "$EXPECTED_HEALTH_BODY" ]]; then
 	exit 1
 fi
 
+services_url="$(request_url "$expected_origin" "$SERVICES_PATH")"
+run_probe "$services_url" "${BROWSER_NAVIGATION_PROBE_HEADERS[@]}"
+
+if [[ "$PROBE_STATUS" != "303" ]]; then
+	echo "Expected $services_url to return 303, received $PROBE_STATUS" >&2
+	exit 1
+fi
+
+if [[ "$PROBE_EFFECTIVE_URL" != "$services_url" ]]; then
+	echo "Expected $services_url probe to stay on the canonical origin, received $PROBE_EFFECTIVE_URL" >&2
+	exit 1
+fi
+
+if [[ -z "$PROBE_LOCATION" ]]; then
+	echo "Expected $SERVICES_PATH to include a redirect location" >&2
+	exit 1
+fi
+
+validate_services_redirect "$expected_origin" "$PROBE_LOCATION" "$SIGN_IN_PATH"
+
 callback_url="$(request_url "$expected_origin" "$CALLBACK_PATH")"
-run_probe "$callback_url" "${CALLBACK_BROWSER_PROBE_HEADERS[@]}"
+run_probe "$callback_url" "${BROWSER_NAVIGATION_PROBE_HEADERS[@]}"
 
 if [[ "$PROBE_STATUS" != "303" ]]; then
 	echo "Expected $CALLBACK_PATH to return a same-origin browser redirect, received $PROBE_STATUS" >&2
