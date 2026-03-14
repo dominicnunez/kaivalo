@@ -385,7 +385,7 @@ describe('node server proxy trust handling', () => {
 		const logger = {
 			log: () => {},
 			warn: () => {},
-			error: /** @param {string} message */ (message) => errors.push(message)
+			error: (message, context) => errors.push([message, context])
 		};
 		const { server } = createHubServer({
 			handler: async () => {
@@ -402,7 +402,14 @@ describe('node server proxy trust handling', () => {
 		const response = await httpGet(port);
 
 		assert.strictEqual(response.statusCode, 500);
-		assert.strictEqual(response.body, 'Internal Server Error');
+		assert.match(
+			response.body,
+			/^Internal Server Error\. Reference: [0-9a-f-]{36}$/i
+		);
+		assert.match(
+			String(response.headers['x-incident-id'] ?? ''),
+			/^[0-9a-f-]{36}$/i
+		);
 		assert.strictEqual(response.headers['cache-control'], 'private, no-store');
 		assert.strictEqual(response.headers['x-frame-options'], 'DENY');
 		assert.strictEqual(response.headers['x-content-type-options'], 'nosniff');
@@ -414,7 +421,13 @@ describe('node server proxy trust handling', () => {
 			response.headers['permissions-policy'],
 			'camera=(), microphone=(), geolocation=()'
 		);
-		assert.deepStrictEqual(errors, ['Request handler failed']);
+		assert.strictEqual(errors.length, 1);
+		assert.strictEqual(errors[0][0], 'Request handler failed');
+		assert.strictEqual(
+			response.headers['x-incident-id'],
+			errors[0][1].incidentId
+		);
+		assert.ok(response.body.endsWith(errors[0][1].incidentId));
 	});
 
 	it('aborts partially-written responses without appending an error body', async () => {

@@ -393,13 +393,17 @@ export function createHubServer(options: HubServerOptions): {
 		res.once('close', finalizeRequest);
 
 		const handleRequestFailure = (error: unknown): void => {
+			const requestFailureLog = buildRequestFailureLog(req, error, options.env);
 			if (!res.headersSent) {
 				res.statusCode = 500;
 				res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+				res.setHeader('X-Incident-Id', requestFailureLog.incidentId);
 				applyBaselineSecurityHeaders(res, secureRequest.isSecure);
 				res.setHeader('Cache-Control', PRIVATE_NO_STORE_CACHE_CONTROL);
 				if (!res.writableEnded) {
-					res.end('Internal Server Error');
+					res.end(
+						`Internal Server Error. Reference: ${requestFailureLog.incidentId}`
+					);
 				}
 			} else if (!res.writableEnded && !res.destroyed) {
 				res.destroy(
@@ -408,10 +412,7 @@ export function createHubServer(options: HubServerOptions): {
 						: new Error('Request handler failed after response started')
 				);
 			}
-			logger.error(
-				'Request handler failed',
-				buildRequestFailureLog(req, error, options.env)
-			);
+			logger.error('Request handler failed', requestFailureLog);
 		};
 
 		try {
