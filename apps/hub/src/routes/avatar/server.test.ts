@@ -77,7 +77,7 @@ describe('avatar proxy route', () => {
 		expect(fetch).not.toHaveBeenCalled();
 	});
 
-	it('fetches trusted avatars through the first-party proxy', async () => {
+	it('strips trusted avatar query strings before fetching through the proxy', async () => {
 		const fetch = vi.fn(
 			async () =>
 				new Response('image-bytes', {
@@ -102,7 +102,7 @@ describe('avatar proxy route', () => {
 		);
 
 		expect(fetch).toHaveBeenCalledWith(
-			'https://avatars.githubusercontent.com/u/1?token=signed&size=96',
+			'https://avatars.githubusercontent.com/u/1',
 			expect.objectContaining({
 				headers: {
 					accept: 'image/*'

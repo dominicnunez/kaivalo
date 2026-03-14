@@ -325,7 +325,7 @@ describe('layout server load', () => {
 		});
 	});
 
-	it('preserves query strings for trusted avatar urls', async () => {
+	it('strips query strings from trusted avatar urls', async () => {
 		mockGetUser.mockResolvedValue({
 			firstName: 'Kai',
 			email: 'kai@example.com',
@@ -340,7 +340,7 @@ describe('layout server load', () => {
 				firstName: 'Kai',
 				email: 'kai@example.com',
 				profilePictureUrl:
-					'/avatar?source=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F1%3Ftoken%3Dsigned%26size%3D96'
+					'/avatar?source=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F1'
 			},
 			signInUrl: null,
 			authError: null
