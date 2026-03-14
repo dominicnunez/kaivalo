@@ -17,9 +17,12 @@ import {
 	isLoopbackIpAddress
 } from '$lib/server/ip-address.ts';
 import {
+	getProxyTrustConfiguration,
 	markPrivateNoStoreDocument,
 	isDevAuthBypassEnabled
 } from '$lib/server/workos-security.ts';
+import { getRequestPeerAddress } from '$lib/server/request-peer-address.ts';
+import { getTrustedClientAddress } from '$lib/server/trusted-client-address.ts';
 import { authKit } from '@workos/authkit-sveltekit';
 
 const LOCAL_SIGN_IN_PATH = '/auth/sign-in';
@@ -27,6 +30,7 @@ const DEV_AUTH_BYPASS_REQUEST_ERROR_MESSAGE =
 	'DEV_AUTH_BYPASS only serves requests from loopback hosts and loopback clients.';
 const DEV_AUTH_BYPASS_EMAIL = 'dev@kaivalo.local';
 const DEV_AUTH_BYPASS_FIRST_NAME = 'Dev';
+const FORWARDED_FOR_HEADER = 'x-forwarded-for';
 
 type LayoutUser = {
 	firstName: string | null;
@@ -86,6 +90,44 @@ function isLoopbackHostname(hostname: string): boolean {
 	return isLoopbackHost(hostname);
 }
 
+function getDevelopmentAuthBypassClientAddress(
+	event: Parameters<LayoutServerLoad>[0]
+): string {
+	const directPeerAddress = getRequestPeerAddress(event);
+	if (!directPeerAddress) {
+		return '';
+	}
+
+	const workosEnv = getValidatedWorkosEnv(env);
+	const { trustedProxyIps } = getProxyTrustConfiguration(env, workosEnv.origin);
+	const trustedProxyIpSet = new Set(trustedProxyIps);
+	const directPeerIsTrustedProxy = trustedProxyIpSet.has(directPeerAddress);
+	const configuredAddressHeader =
+		env.ADDRESS_HEADER?.trim().toLowerCase() ?? '';
+	if (
+		configuredAddressHeader &&
+		configuredAddressHeader !== FORWARDED_FOR_HEADER &&
+		event.request.headers.has(configuredAddressHeader)
+	) {
+		return '';
+	}
+
+	const forwardedForHeader = event.request.headers.get(FORWARDED_FOR_HEADER);
+	if (forwardedForHeader !== null) {
+		if (!directPeerIsTrustedProxy) {
+			return '';
+		}
+
+		return getTrustedClientAddress({
+			directClientAddress: directPeerAddress,
+			forwardedForHeader,
+			trustedProxyIps
+		});
+	}
+
+	return directPeerIsTrustedProxy ? '' : directPeerAddress;
+}
+
 function hasValidLocalDevelopmentAuthBypassRequest(
 	event: Parameters<LayoutServerLoad>[0]
 ): boolean {
@@ -93,12 +135,8 @@ function hasValidLocalDevelopmentAuthBypassRequest(
 		return false;
 	}
 
-	if (typeof event.getClientAddress !== 'function') {
-		return false;
-	}
-
 	try {
-		return isLoopbackIpAddress(event.getClientAddress());
+		return isLoopbackIpAddress(getDevelopmentAuthBypassClientAddress(event));
 	} catch {
 		return false;
 	}

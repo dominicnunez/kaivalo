@@ -44,18 +44,21 @@ type MockLayoutEvent = {
 	url: URL;
 	request: Request;
 	getClientAddress: () => string;
+	platform?: unknown;
 	setHeaders?: ReturnType<typeof vi.fn>;
 };
 
 function createEvent(
 	origin: string,
 	headers: HeadersInit = {},
-	clientAddress = '127.0.0.1'
+	clientAddress = '127.0.0.1',
+	platform?: unknown
 ) {
 	return {
 		url: new URL(origin),
 		request: new Request(origin, { headers }),
-		getClientAddress: () => clientAddress
+		getClientAddress: () => clientAddress,
+		platform
 	} satisfies MockLayoutEvent;
 }
 
@@ -158,6 +161,108 @@ describe('layout server load', () => {
 
 		const result = await load(
 			createEvent('http://localhost:4173/', {}, '203.0.113.25') as never
+		);
+
+		expect(mockGetUser).not.toHaveBeenCalled();
+		expect(result).toMatchObject({
+			user: null,
+			signInUrl: null,
+			authError: {
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
+				incidentId: expect.stringMatching(/^authlayout_/)
+			}
+		});
+		expectAuthLayoutFailureLogged(errorSpy);
+	});
+
+	it('allows development auth bypass only when a trusted proxy resolves to a loopback client', async () => {
+		mockEnv.NODE_ENV = 'development';
+		mockEnv.DEV_AUTH_BYPASS = 'true';
+		mockEnv.ORIGIN = 'http://localhost:4173';
+		mockEnv.WORKOS_REDIRECT_URI = 'http://127.0.0.1:4173/auth/callback';
+		mockEnv.TRUST_X_FORWARDED_PROTO = 'true';
+		mockEnv.TRUSTED_PROXY_IPS = '::1';
+
+		const result = await load(
+			createEvent(
+				'http://localhost:4173/',
+				{ 'x-forwarded-for': '127.0.0.1' },
+				'203.0.113.25',
+				{
+					req: {
+						socket: {
+							remoteAddress: '::1'
+						}
+					}
+				}
+			) as never
+		);
+
+		expect(mockGetUser).not.toHaveBeenCalled();
+		expect(result).toEqual({
+			user: {
+				firstName: 'Dev',
+				email: 'dev@kaivalo.local',
+				profilePictureUrl: null
+			},
+			signInUrl: null,
+			authError: null
+		});
+	});
+
+	it('rejects development auth bypass when a trusted proxy resolves to a public client', async () => {
+		mockEnv.NODE_ENV = 'development';
+		mockEnv.DEV_AUTH_BYPASS = 'true';
+		mockEnv.ORIGIN = 'http://localhost:4173';
+		mockEnv.WORKOS_REDIRECT_URI = 'http://127.0.0.1:4173/auth/callback';
+		mockEnv.TRUST_X_FORWARDED_PROTO = 'true';
+		mockEnv.TRUSTED_PROXY_IPS = '127.0.0.1';
+
+		const result = await load(
+			createEvent(
+				'http://localhost:4173/',
+				{ 'x-forwarded-for': '203.0.113.25' },
+				'127.0.0.1',
+				{
+					req: {
+						socket: {
+							remoteAddress: '127.0.0.1'
+						}
+					}
+				}
+			) as never
+		);
+
+		expect(mockGetUser).not.toHaveBeenCalled();
+		expect(result).toMatchObject({
+			user: null,
+			signInUrl: null,
+			authError: {
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
+				incidentId: expect.stringMatching(/^authlayout_/)
+			}
+		});
+		expectAuthLayoutFailureLogged(errorSpy);
+	});
+
+	it('rejects development auth bypass when a trusted proxy omits the forwarded client chain', async () => {
+		mockEnv.NODE_ENV = 'development';
+		mockEnv.DEV_AUTH_BYPASS = 'true';
+		mockEnv.ORIGIN = 'http://localhost:4173';
+		mockEnv.WORKOS_REDIRECT_URI = 'http://127.0.0.1:4173/auth/callback';
+		mockEnv.TRUST_X_FORWARDED_PROTO = 'true';
+		mockEnv.TRUSTED_PROXY_IPS = '127.0.0.1';
+
+		const result = await load(
+			createEvent('http://localhost:4173/', {}, '127.0.0.1', {
+				req: {
+					socket: {
+						remoteAddress: '127.0.0.1'
+					}
+				}
+			}) as never
 		);
 
 		expect(mockGetUser).not.toHaveBeenCalled();

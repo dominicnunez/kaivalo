@@ -26,11 +26,13 @@ function delay(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function createFixtureEnv(port, overrides = {}) {
-	return createHubBuiltRuntimeEnv({
+function createFixtureEnv(port, overrides = {}, nodeEnv = 'production') {
+	const env = createHubBuiltRuntimeEnv({
 		port,
 		envOverrides: overrides
 	});
+	env.NODE_ENV = nodeEnv;
+	return env;
 }
 
 function createStartupOutputTracker() {
@@ -68,7 +70,7 @@ function createStartupOutputTracker() {
 	};
 }
 
-async function startBuiltServer(envOverrides = {}) {
+async function startBuiltServer(envOverrides = {}, nodeEnv = 'production') {
 	ensureHubBuild();
 
 	const reservation = await reserveLocalPort();
@@ -79,7 +81,7 @@ async function startBuiltServer(envOverrides = {}) {
 		cwd: HUB_DIR,
 		stdio: ['ignore', 'pipe', 'pipe'],
 		detached: true,
-		env: createFixtureEnv(port, envOverrides)
+		env: createFixtureEnv(port, envOverrides, nodeEnv)
 	});
 	server.stdout?.on('data', startupOutput.appendOutput);
 	server.stderr?.on('data', startupOutput.appendOutput);
@@ -397,6 +399,54 @@ describe('hub production adapter runtime', () => {
 				assert.strictEqual(
 					homepage.headers['cache-control'],
 					'public, max-age=300, stale-while-revalidate=60'
+				);
+			} finally {
+				await stopProcessGroup(server);
+			}
+		}
+	);
+
+	it(
+		'uses the trusted forwarded client chain before enabling DEV_AUTH_BYPASS',
+		{ timeout: 30000 },
+		async () => {
+			const { server, baseUrl } = await startBuiltServer(
+				{
+					DEV_AUTH_BYPASS: 'true',
+					DEV_AUTH_BYPASS_EMAIL: 'local-dev@kaivalo.test',
+					DEV_AUTH_BYPASS_FIRST_NAME: 'Local',
+					TRUST_X_FORWARDED_PROTO: 'true',
+					TRUSTED_PROXY_IPS: '127.0.0.1'
+				},
+				'development'
+			);
+
+			try {
+				const rejectedDirectResponse = await httpGet(`${baseUrl}/services`, {
+					accept: 'text/html'
+				});
+				assert.strictEqual(rejectedDirectResponse.statusCode, 503);
+				assert.doesNotMatch(
+					rejectedDirectResponse.data,
+					/local-dev@kaivalo\.test/i
+				);
+
+				const allowedProxyResponse = await httpGet(`${baseUrl}/services`, {
+					accept: 'text/html',
+					'x-forwarded-for': '::1'
+				});
+				assert.strictEqual(allowedProxyResponse.statusCode, 200);
+				assert.match(allowedProxyResponse.data, /Local/);
+				assert.match(allowedProxyResponse.data, /local-dev@kaivalo\.test/i);
+
+				const rejectedProxyResponse = await httpGet(`${baseUrl}/services`, {
+					accept: 'text/html',
+					'x-forwarded-for': '203.0.113.25'
+				});
+				assert.strictEqual(rejectedProxyResponse.statusCode, 503);
+				assert.doesNotMatch(
+					rejectedProxyResponse.data,
+					/local-dev@kaivalo\.test/i
 				);
 			} finally {
 				await stopProcessGroup(server);
