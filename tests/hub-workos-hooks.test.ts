@@ -19,6 +19,10 @@ const validEnv = {
 	AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
 	ORIGIN: 'https://kaivalo.test'
 };
+const PREVIEW_FIXTURE_IMPORT = new URL(
+	'./helpers/hub-preview-fixtures.mjs',
+	import.meta.url
+).href;
 
 /**
  * @param {string | null} varyHeader
@@ -57,6 +61,19 @@ function assertVaryOmits(varyHeader, unexpectedTokens) {
 			`Expected Vary to omit ${token}`
 		);
 	}
+}
+
+/**
+ * @param {import('node:http').IncomingHttpHeaders} headers
+ * @returns {string[]}
+ */
+function getSetCookieHeaders(headers) {
+	const values = headers['set-cookie'];
+	if (!values) {
+		return [];
+	}
+
+	return Array.isArray(values) ? values : [values];
 }
 
 describe('WorkOS env validation', () => {
@@ -1034,12 +1051,62 @@ describe('Security headers on preview responses', () => {
 			homepage.headers['cache-control'],
 			'public, max-age=300, stale-while-revalidate=60'
 		);
-		assert.ok(
-			(homepage.headers['vary'] ?? '').toLowerCase().includes('cookie')
+		assertVaryOmits(homepage.headers['vary'] ?? null, ['Cookie']);
+		assertVaryOmits(homepage.headers['vary'] ?? null, ['Authorization']);
+	});
+
+	it('keeps unrelated-cookie homepage responses publicly cacheable', async () => {
+		const homepage = await httpGet(preview.baseUrl, {
+			cookie: 'consent=true; analytics_id=abc123'
+		});
+
+		assert.strictEqual(homepage.statusCode, 200);
+		assert.strictEqual(
+			homepage.headers['cache-control'],
+			'public, max-age=300, stale-while-revalidate=60'
 		);
-		assert.ok(
-			!(homepage.headers['vary'] ?? '').toLowerCase().includes('authorization')
-		);
+		assertVaryOmits(homepage.headers['vary'] ?? null, ['Cookie']);
+		assertVaryOmits(homepage.headers['vary'] ?? null, ['Authorization']);
+	});
+
+	it('keeps authenticated homepage responses private and cookie-varying', async () => {
+		const fixturePreview = await startHubPreview({
+			env: {
+				HUB_PREVIEW_CALLBACK_FIXTURE_MODE: 'signed-in'
+			},
+			imports: [PREVIEW_FIXTURE_IMPORT]
+		});
+
+		try {
+			const callbackResponse = await httpGet(
+				`${fixturePreview.baseUrl}/auth/callback?code=test-code&state=test-state`,
+				{
+					accept: 'text/html',
+					'sec-fetch-mode': 'navigate'
+				}
+			);
+			const sessionCookie = getSetCookieHeaders(
+				callbackResponse.headers
+			)[0]?.split(';', 1)[0];
+
+			assert.strictEqual(callbackResponse.statusCode, 302);
+			assert.ok(sessionCookie, 'Expected a session cookie from callback');
+
+			const homepage = await httpGet(fixturePreview.baseUrl, {
+				accept: 'text/html',
+				cookie: sessionCookie
+			});
+
+			assert.strictEqual(homepage.statusCode, 200);
+			assert.strictEqual(
+				homepage.headers['cache-control'],
+				'private, no-store'
+			);
+			assertVaryIncludes(homepage.headers['vary'] ?? null, ['Cookie']);
+			assertVaryOmits(homepage.headers['vary'] ?? null, ['Authorization']);
+		} finally {
+			await fixturePreview.stop();
+		}
 	});
 
 	it('serves framework-managed content security policy on real responses', async () => {
@@ -1074,9 +1141,7 @@ describe('Security headers on preview responses', () => {
 		assert.strictEqual(response.statusCode, 303);
 		assert.strictEqual(response.headers.location, '/auth/sign-in');
 		assert.strictEqual(response.headers['cache-control'], 'private, no-store');
-		assert.ok(
-			(response.headers['vary'] ?? '').toLowerCase().includes('cookie')
-		);
+		assertVaryOmits(response.headers['vary'] ?? null, ['Authorization']);
 	});
 
 	it('keeps security and no-store headers on framework-generated 500 pages', async () => {

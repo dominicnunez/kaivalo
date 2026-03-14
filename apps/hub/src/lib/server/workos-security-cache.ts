@@ -78,12 +78,6 @@ function setEventHeaders(
 	event.setHeaders(headers);
 }
 
-export function markSessionAwareDocument(event: HeaderSettingEvent): void {
-	setEventHeaders(event, {
-		vary: CACHE_VARY_COOKIE_HEADER
-	});
-}
-
 export function markPrivateNoStoreDocument(
 	event: HeaderSettingEvent,
 	varyHeaders: readonly string[] = [CACHE_VARY_COOKIE_HEADER]

@@ -124,9 +124,7 @@ describe('layout server load', () => {
 			signInUrl: null,
 			authError: null
 		});
-		expect(setHeaders).toHaveBeenCalledWith({
-			vary: 'Cookie'
-		});
+		expect(setHeaders).not.toHaveBeenCalled();
 	});
 
 	it('rejects development auth bypass when the live request hostname is not loopback', async () => {
@@ -198,9 +196,7 @@ describe('layout server load', () => {
 			signInUrl: null,
 			authError: null
 		});
-		expect(setHeaders).toHaveBeenCalledWith({
-			vary: 'Cookie'
-		});
+		expect(setHeaders).not.toHaveBeenCalled();
 	});
 
 	it('trims authenticated user fields before exposing them to the app shell', async () => {
@@ -292,9 +288,7 @@ describe('layout server load', () => {
 			signInUrl: '/auth/sign-in',
 			authError: null
 		});
-		expect(setHeaders).toHaveBeenCalledWith({
-			vary: 'Cookie'
-		});
+		expect(setHeaders).not.toHaveBeenCalled();
 	});
 
 	it('returns explicit auth-unavailable state when auth entry configuration is invalid', async () => {
@@ -542,9 +536,7 @@ describe('layout server load', () => {
 			signInUrl: null,
 			authError: null
 		});
-		expect(setHeaders).toHaveBeenCalledWith({
-			vary: 'Cookie'
-		});
+		expect(setHeaders).not.toHaveBeenCalled();
 	});
 
 	it('ignores tampered auth callback query errors', async () => {
@@ -563,8 +555,6 @@ describe('layout server load', () => {
 			signInUrl: '/auth/sign-in',
 			authError: null
 		});
-		expect(setHeaders).toHaveBeenCalledWith({
-			vary: 'Cookie'
-		});
+		expect(setHeaders).not.toHaveBeenCalled();
 	});
 });

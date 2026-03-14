@@ -18,7 +18,6 @@ import {
 } from '$lib/server/ip-address.ts';
 import {
 	markPrivateNoStoreDocument,
-	markSessionAwareDocument,
 	isDevAuthBypassEnabled
 } from '$lib/server/workos-security.ts';
 import { authKit } from '@workos/authkit-sveltekit';
@@ -205,8 +204,6 @@ export const load: LayoutServerLoad = async (event) => {
 						}));
 		if (authError) {
 			markAuthFailureNoStore(event);
-		} else {
-			markSessionAwareDocument(event);
 		}
 
 		return {
