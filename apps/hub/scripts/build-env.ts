@@ -28,10 +28,29 @@ function formatFailedBuildStep(
 	return `${step} exited with code ${result.status ?? 'unknown'}`;
 }
 
+function normalizeOriginForReuse(origin: string): string {
+	try {
+		const parsedOrigin = new URL(origin);
+		if (
+			parsedOrigin.username ||
+			parsedOrigin.password ||
+			parsedOrigin.pathname !== '/' ||
+			parsedOrigin.search ||
+			parsedOrigin.hash
+		) {
+			return origin;
+		}
+
+		return parsedOrigin.origin;
+	} catch {
+		return origin;
+	}
+}
+
 function getLocalPreviewOrigin(baseEnv: NodeJS.ProcessEnv): string {
 	const configuredOrigin = baseEnv.ORIGIN?.trim();
 	if (configuredOrigin) {
-		return configuredOrigin;
+		return normalizeOriginForReuse(configuredOrigin);
 	}
 
 	const port = baseEnv.PORT?.trim() || DEFAULT_LOCAL_PREVIEW_PORT;
@@ -73,6 +92,18 @@ export function getHubLocalPlaceholderEnv(
 	};
 }
 
+function mergePlaceholderEnv(
+	baseEnv: NodeJS.ProcessEnv,
+	placeholderEnv: NodeJS.ProcessEnv
+): NodeJS.ProcessEnv {
+	return Object.fromEntries(
+		Object.entries(placeholderEnv).map(([name, value]) => [
+			name,
+			name === 'ORIGIN' ? value : (baseEnv[name] ?? value)
+		])
+	);
+}
+
 function shouldAllowBuildPlaceholders(baseEnv: NodeJS.ProcessEnv): boolean {
 	const nodeEnv = baseEnv.NODE_ENV?.trim();
 	const placeholderFlag = baseEnv[BUILD_PLACEHOLDER_FLAG]?.trim().toLowerCase();
@@ -91,11 +122,7 @@ export function getHubBuildEnv(
 	const buildEnv = shouldAllowBuildPlaceholders(baseEnv)
 		? {
 				...baseEnv,
-				...Object.fromEntries(
-					Object.entries(getHubLocalPlaceholderEnv(baseEnv)).map(
-						([name, value]) => [name, baseEnv[name] ?? value]
-					)
-				)
+				...mergePlaceholderEnv(baseEnv, getHubLocalPlaceholderEnv(baseEnv))
 			}
 		: { ...baseEnv };
 
@@ -115,11 +142,7 @@ export function getHubPreviewEnv(
 ): NodeJS.ProcessEnv {
 	const previewEnv = {
 		...baseEnv,
-		...Object.fromEntries(
-			Object.entries(getHubLocalPlaceholderEnv(baseEnv)).map(
-				([name, value]) => [name, baseEnv[name] ?? value]
-			)
-		),
+		...mergePlaceholderEnv(baseEnv, getHubLocalPlaceholderEnv(baseEnv)),
 		NODE_ENV: baseEnv.NODE_ENV?.trim() || 'production'
 	};
 

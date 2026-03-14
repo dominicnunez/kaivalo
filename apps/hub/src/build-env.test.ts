@@ -67,9 +67,21 @@ describe('hub build environment', () => {
 		);
 	});
 
+	it('normalizes explicit preview origins before deriving placeholder callbacks', () => {
+		const previewEnv = getHubPreviewEnv({
+			ORIGIN: 'https://hub.kaivalo.com/'
+		});
+
+		expect(previewEnv.WORKOS_REDIRECT_URI).toBe(
+			'https://hub.kaivalo.com/auth/callback'
+		);
+		expect(previewEnv.ORIGIN).toBe('https://hub.kaivalo.com');
+	});
+
 	it('preserves explicit preview auth env values', () => {
 		const previewEnv = getHubPreviewEnv({
 			NODE_ENV: 'staging',
+			WORKOS_API_HOSTNAME: 'auth.kaivalo-login.com',
 			WORKOS_CLIENT_ID: 'client_live',
 			WORKOS_API_KEY: 'sk_live',
 			WORKOS_REDIRECT_URI: 'https://hub.kaivalo.com/auth/callback',
@@ -79,6 +91,7 @@ describe('hub build environment', () => {
 		});
 
 		expect(previewEnv.NODE_ENV).toBe('staging');
+		expect(previewEnv.WORKOS_API_HOSTNAME).toBe('auth.kaivalo-login.com');
 		expect(previewEnv.WORKOS_CLIENT_ID).toBe('client_live');
 		expect(previewEnv.WORKOS_REDIRECT_URI).toBe(
 			'https://hub.kaivalo.com/auth/callback'

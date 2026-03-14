@@ -28,8 +28,7 @@ const PREVIEW_FIXTURE_IMPORT = new URL(
 const AUTHKIT_COOKIE_NAME = '__Host-wos_session';
 const PREVIEW_AUTH_ERROR_SIGNING_SECRET = 'cd'.repeat(32);
 const PREVIEW_POLLUTION_ENV = {
-	TRUST_X_FORWARDED_PROTO: 'true',
-	WORKOS_API_HOSTNAME: 'accounts.example.test'
+	TRUST_X_FORWARDED_PROTO: 'true'
 } as const;
 type ProcessShutdownResult = {
 	forced: boolean;
@@ -138,7 +137,10 @@ async function probePreviewReady(baseUrl: string): Promise<boolean> {
 	}
 }
 
-async function assertPreviewAuthRoutes(baseUrl: string): Promise<void> {
+async function assertPreviewAuthRoutes(
+	baseUrl: string,
+	expectedAuthOrigin = 'https://api.workos.com'
+): Promise<void> {
 	const signOutResponse = await post(`${baseUrl}/auth/sign-out`, {
 		origin: baseUrl,
 		'sec-fetch-site': 'same-origin'
@@ -157,7 +159,7 @@ async function assertPreviewAuthRoutes(baseUrl: string): Promise<void> {
 		String(signInResponse.headers.location),
 		baseUrl
 	);
-	assert.strictEqual(redirectLocation.origin, 'https://api.workos.com');
+	assert.strictEqual(redirectLocation.origin, expectedAuthOrigin);
 	assert.ok(
 		redirectLocation.pathname === '/user_management/authorize' ||
 			redirectLocation.pathname.startsWith('/user_management/authorize/'),
@@ -364,6 +366,23 @@ describe('hub preview script', () => {
 				await assertCleanPreviewShutdown(preview);
 			}
 			restoreEnv();
+		}
+	});
+
+	it('preserves explicit WorkOS hostname overrides in preview startup', async () => {
+		const preview = await startPreviewScript({
+			envOverrides: {
+				WORKOS_API_HOSTNAME: 'accounts.example.test'
+			}
+		});
+
+		try {
+			await assertPreviewAuthRoutes(
+				preview.baseUrl,
+				'https://accounts.example.test'
+			);
+		} finally {
+			await assertCleanPreviewShutdown(preview);
 		}
 	});
 
