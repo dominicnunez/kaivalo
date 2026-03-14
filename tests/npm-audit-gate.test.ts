@@ -213,6 +213,72 @@ describe('npm audit gate', () => {
 		assert.deepStrictEqual(retryDelays, [AUDIT_RETRY_DELAY_MS]);
 	});
 
+	it('retries transient npm audit network errors before succeeding', () => {
+		const retryDelays: number[] = [];
+		let attemptCount = 0;
+
+		const report = runAudit({
+			spawnSyncImpl: () => {
+				attemptCount += 1;
+				if (attemptCount === 1) {
+					return {
+						error: Object.assign(
+							new Error('getaddrinfo EAI_AGAIN registry.npmjs.org'),
+							{
+								code: 'EAI_AGAIN'
+							}
+						)
+					};
+				}
+
+				return {
+					status: 0,
+					stdout: '{"vulnerabilities":{}}',
+					stderr: ''
+				};
+			},
+			sleepImpl: (delayMs) => {
+				retryDelays.push(delayMs);
+			}
+		});
+
+		assert.deepStrictEqual(report, { vulnerabilities: {} });
+		assert.strictEqual(attemptCount, 2);
+		assert.deepStrictEqual(retryDelays, [AUDIT_RETRY_DELAY_MS]);
+	});
+
+	it('retries transient registry failures that do not return a report', () => {
+		const retryDelays: number[] = [];
+		let attemptCount = 0;
+
+		const report = runAudit({
+			spawnSyncImpl: () => {
+				attemptCount += 1;
+				if (attemptCount === 1) {
+					return {
+						status: 1,
+						stdout: '',
+						stderr:
+							'npm ERR! code E503\nnpm ERR! 503 Service Unavailable - POST https://registry.npmjs.org/-/npm/v1/security/audits/quick'
+					};
+				}
+
+				return {
+					status: 0,
+					stdout: '{"vulnerabilities":{}}',
+					stderr: ''
+				};
+			},
+			sleepImpl: (delayMs) => {
+				retryDelays.push(delayMs);
+			}
+		});
+
+		assert.deepStrictEqual(report, { vulnerabilities: {} });
+		assert.strictEqual(attemptCount, 2);
+		assert.deepStrictEqual(retryDelays, [AUDIT_RETRY_DELAY_MS]);
+	});
+
 	it('fails after exhausting retry attempts for repeated timeouts', () => {
 		const retryDelays: number[] = [];
 		let attemptCount = 0;

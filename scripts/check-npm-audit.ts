@@ -8,6 +8,32 @@ export const AUDIT_TIMEOUT_MS = 90_000;
 export const AUDIT_MAX_ATTEMPTS = 3;
 export const AUDIT_RETRY_DELAY_MS = 5_000;
 const AUDIT_COMMAND_ARGS = ['audit', '--json'];
+const AUDIT_RETRYABLE_ERROR_CODES = new Set([
+	'ETIMEDOUT',
+	'EAI_AGAIN',
+	'ENOTFOUND',
+	'ECONNRESET',
+	'ECONNREFUSED',
+	'EHOSTUNREACH',
+	'ENETUNREACH',
+	'ERR_SOCKET_TIMEOUT'
+]);
+const AUDIT_RETRYABLE_STDERR_PATTERNS = [
+	/\bEAI_AGAIN\b/i,
+	/\bENOTFOUND\b/i,
+	/\bECONNRESET\b/i,
+	/\bECONNREFUSED\b/i,
+	/\bEHOSTUNREACH\b/i,
+	/\bENETUNREACH\b/i,
+	/\bERR_SOCKET_TIMEOUT\b/i,
+	/\bE(?:408|429|500|502|503|504)\b/i,
+	/\b(?:408|429|500|502|503|504)\b/,
+	/\bservice unavailable\b/i,
+	/\bbad gateway\b/i,
+	/\bgateway timeout\b/i,
+	/\brequest timeout\b/i,
+	/\btoo many requests\b/i
+];
 const ALLOWLIST_PATH = resolve(
 	ROOT,
 	'audit',
@@ -293,6 +319,60 @@ function sleepSync(delayMs) {
 	Atomics.wait(AUDIT_SLEEP_BUFFER, 0, 0, delayMs);
 }
 
+function readAuditErrorCode(value) {
+	if (typeof value !== 'string') {
+		return null;
+	}
+
+	const normalized = value.trim().toUpperCase();
+	return normalized === '' ? null : normalized;
+}
+
+function isRetryableAuditError(error) {
+	const code = readAuditErrorCode(error.code);
+	if (code && AUDIT_RETRYABLE_ERROR_CODES.has(code)) {
+		return true;
+	}
+
+	return (
+		typeof error.message === 'string' &&
+		AUDIT_RETRYABLE_STDERR_PATTERNS.some((pattern) =>
+			pattern.test(error.message)
+		)
+	);
+}
+
+function isTimeoutAuditError(error) {
+	return readAuditErrorCode(error.code) === 'ETIMEDOUT';
+}
+
+function readRetryableAuditFailureMessage(auditResult) {
+	const stderr = auditResult.stderr?.trim();
+	if (
+		stderr &&
+		AUDIT_RETRYABLE_STDERR_PATTERNS.some((pattern) => pattern.test(stderr))
+	) {
+		return stderr;
+	}
+
+	return null;
+}
+
+function throwRetryableAuditFailure(
+	message,
+	maxAttempts,
+	timeoutMs,
+	isTimeout
+) {
+	if (isTimeout) {
+		throw new Error(
+			`npm audit exceeded ${timeoutMs}ms timeout after ${maxAttempts} attempts`
+		);
+	}
+
+	throw new Error(`npm audit failed after ${maxAttempts} attempts: ${message}`);
+}
+
 export function runAudit({
 	spawnSyncImpl = spawnSync,
 	timeoutMs = AUDIT_TIMEOUT_MS,
@@ -312,10 +392,13 @@ export function runAudit({
 		});
 
 		if (auditResult.error) {
-			if (auditResult.error.code === 'ETIMEDOUT') {
+			if (isRetryableAuditError(auditResult.error)) {
 				if (attempt === maxAttempts) {
-					throw new Error(
-						`npm audit exceeded ${timeoutMs}ms timeout after ${maxAttempts} attempts`
+					throwRetryableAuditFailure(
+						auditResult.error.message,
+						maxAttempts,
+						timeoutMs,
+						isTimeoutAuditError(auditResult.error)
 					);
 				}
 
@@ -329,15 +412,27 @@ export function runAudit({
 		}
 
 		const stdout = auditResult.stdout ?? '';
-		if (
-			auditResult.status !== 0 &&
-			auditResult.status !== 1 &&
-			stdout.trim() === ''
-		) {
-			throw new Error(buildAuditFailureMessage(auditResult));
-		}
-
 		if (stdout.trim() === '') {
+			const retryableFailureMessage =
+				readRetryableAuditFailureMessage(auditResult);
+			if (retryableFailureMessage) {
+				if (attempt === maxAttempts) {
+					throwRetryableAuditFailure(
+						retryableFailureMessage,
+						maxAttempts,
+						timeoutMs,
+						false
+					);
+				}
+
+				sleepImpl(retryDelayMs * attempt);
+				continue;
+			}
+
+			if (auditResult.status !== 0 && auditResult.status !== 1) {
+				throw new Error(buildAuditFailureMessage(auditResult));
+			}
+
 			throw new Error('npm audit did not return JSON output');
 		}
 
