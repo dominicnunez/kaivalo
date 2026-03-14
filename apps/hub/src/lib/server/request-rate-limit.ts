@@ -107,24 +107,37 @@ function deleteBuckets(
 	}
 }
 
-function touchBucket(
-	buckets: Map<string, SlidingWindowBucket>,
-	key: string,
-	bucket: SlidingWindowBucket
-): void {
-	buckets.delete(key);
-	buckets.set(key, bucket);
+function getRetryAfterSeconds(
+	oldestTimestamp: number,
+	now: number,
+	windowMs: number
+): number {
+	return Math.max(1, Math.ceil((oldestTimestamp + windowMs - now) / 1000));
 }
 
-function evictLeastRecentlyUsedBucket(
-	buckets: Map<string, SlidingWindowBucket>
-): void {
-	// Prefer dropping the coldest bucket over denying unrelated clients until
-	// the next full-window sweep when this in-memory table hits capacity.
-	const leastRecentlyUsedKey = buckets.keys().next().value;
-	if (leastRecentlyUsedKey !== undefined) {
-		buckets.delete(leastRecentlyUsedKey);
+function getOverflowRetryAfterSeconds(
+	buckets: ReadonlyMap<string, SlidingWindowBucket>,
+	now: number,
+	windowMs: number
+): number {
+	let oldestActiveTimestamp: number | null = null;
+
+	for (const bucket of buckets.values()) {
+		const bucketOldestTimestamp = getOldestBucketTimestamp(bucket);
+		if (bucketOldestTimestamp === null) {
+			continue;
+		}
+		if (
+			oldestActiveTimestamp === null ||
+			bucketOldestTimestamp < oldestActiveTimestamp
+		) {
+			oldestActiveTimestamp = bucketOldestTimestamp;
+		}
 	}
+
+	return oldestActiveTimestamp === null
+		? 1
+		: getRetryAfterSeconds(oldestActiveTimestamp, now, windowMs);
 }
 
 export function createSlidingWindowRateLimiter({
@@ -157,7 +170,14 @@ export function createSlidingWindowRateLimiter({
 				}
 
 				if (buckets.size >= maxEntries) {
-					evictLeastRecentlyUsedBucket(buckets);
+					return {
+						allowed: false,
+						retryAfterSeconds: getOverflowRetryAfterSeconds(
+							buckets,
+							nowMs,
+							windowMs
+						)
+					};
 				}
 
 				bucket = {
@@ -167,16 +187,16 @@ export function createSlidingWindowRateLimiter({
 				buckets.set(normalizedKey, bucket);
 			} else {
 				pruneBucket(bucket, nowMs, windowMs);
-				touchBucket(buckets, normalizedKey, bucket);
 			}
 
 			if (getBucketSize(bucket) >= limit) {
 				const oldestTimestamp = getOldestBucketTimestamp(bucket) ?? nowMs;
 				return {
 					allowed: false,
-					retryAfterSeconds: Math.max(
-						1,
-						Math.ceil((oldestTimestamp + windowMs - nowMs) / 1000)
+					retryAfterSeconds: getRetryAfterSeconds(
+						oldestTimestamp,
+						nowMs,
+						windowMs
 					)
 				};
 			}

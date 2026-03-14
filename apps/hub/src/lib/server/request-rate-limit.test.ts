@@ -75,7 +75,7 @@ describe('sliding window rate limiter', () => {
 		});
 	});
 
-	it('evicts the least recently used bucket when new keys arrive after capacity is full', () => {
+	it('rejects unseen keys when capacity is full and preserves active buckets', () => {
 		let now = 1_000;
 		const limiter = createSlidingWindowRateLimiter({
 			limit: 2,
@@ -91,8 +91,8 @@ describe('sliding window rate limiter', () => {
 		expect(limiter.check('203.0.113.10').allowed).toBe(true);
 		now += 1;
 		expect(limiter.check('203.0.113.12')).toMatchObject({
-			allowed: true,
-			retryAfterSeconds: 0
+			allowed: false,
+			retryAfterSeconds: 60
 		});
 		now += 1;
 
@@ -106,7 +106,7 @@ describe('sliding window rate limiter', () => {
 		});
 	});
 
-	it('drops stale buckets before evicting active buckets on overflow', () => {
+	it('drops stale buckets before rejecting new keys on overflow', () => {
 		let now = 1_000;
 		const limiter = createSlidingWindowRateLimiter({
 			limit: 1,
@@ -124,31 +124,6 @@ describe('sliding window rate limiter', () => {
 		expect(limiter.check('203.0.113.11')).toMatchObject({
 			allowed: false,
 			retryAfterSeconds: 1
-		});
-	});
-
-	it('admits new keys immediately after evicting the least recently used active bucket', () => {
-		let now = 1_000;
-		const limiter = createSlidingWindowRateLimiter({
-			limit: 1,
-			windowMs: 60_000,
-			maxEntries: 2,
-			now: () => now
-		});
-
-		expect(limiter.check('203.0.113.10').allowed).toBe(true);
-		now += 1;
-		expect(limiter.check('203.0.113.11').allowed).toBe(true);
-		now += 1;
-		expect(limiter.check('203.0.113.12')).toMatchObject({
-			allowed: true,
-			retryAfterSeconds: 0
-		});
-		now += 1;
-
-		expect(limiter.check('203.0.113.10')).toMatchObject({
-			allowed: true,
-			retryAfterSeconds: 0
 		});
 	});
 });

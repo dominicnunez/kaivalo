@@ -609,6 +609,50 @@ describe('avatar proxy route', () => {
 		await expect(limited.text()).resolves.toBe('Too many requests');
 	});
 
+	it('rejects new client addresses when the avatar limiter table is full', async () => {
+		const GET = _createAvatarGetHandler({
+			rateLimiter: createSlidingWindowRateLimiter({
+				limit: 2,
+				windowMs: 60_000,
+				maxEntries: 1,
+				now: () => 1_000
+			})
+		});
+		const fetch = vi.fn(
+			async () =>
+				new Response('image-bytes', {
+					status: 200,
+					headers: {
+						'cache-control': 'public, max-age=60',
+						'content-type': 'image/png',
+						'content-length': '11'
+					}
+				})
+		);
+
+		const createEvent = (clientAddress: string) =>
+			({
+				request: new Request(
+					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+				),
+				url: new URL(
+					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+				),
+				fetch,
+				getClientAddress: () => clientAddress
+			}) as never;
+
+		expect((await GET(createEvent('203.0.113.10'))).status).toBe(200);
+
+		const overflowed = await GET(createEvent('203.0.113.11'));
+
+		expect(overflowed.status).toBe(429);
+		expect(overflowed.headers.get('retry-after')).toBe('60');
+		expect(fetch).toHaveBeenCalledTimes(1);
+		expect((await GET(createEvent('203.0.113.10'))).status).toBe(200);
+		expect(fetch).toHaveBeenCalledTimes(2);
+	});
+
 	it('shares quotas across equivalent normalized client addresses', async () => {
 		let now = 1_000;
 		const GET = _createAvatarGetHandler({
