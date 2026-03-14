@@ -3,6 +3,11 @@ import https from 'node:https';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { ensureHubBuild } from './hub-build.ts';
+import {
+	getHubHealthResponseViolations,
+	getHubHealthUrl,
+	isHubHealthResponse
+} from './hub-health.ts';
 import { reserveLocalPort } from './network.ts';
 import { createHubPreviewEnv } from './hub-runtime-env.ts';
 
@@ -132,9 +137,10 @@ async function acquireSharedHubPreview(retryOnStale = true) {
 	}
 
 	try {
-		const health = await httpGet(preview.baseUrl);
-		if (health.statusCode !== 200) {
-			throw new Error(`unexpected status ${health.statusCode}`);
+		const health = await httpGet(getHubHealthUrl(preview.baseUrl));
+		const healthViolations = getHubHealthResponseViolations(health);
+		if (healthViolations.length > 0) {
+			throw new Error(healthViolations.join('; '));
 		}
 	} catch (error) {
 		activeLeases = Math.max(0, activeLeases - 1);
@@ -291,8 +297,13 @@ async function startPreviewProcess(
 			return;
 		}
 
+		const processGroupId = server.pid;
+		if (typeof processGroupId !== 'number') {
+			return;
+		}
+
 		try {
-			process.kill(-server.pid, 'SIGTERM');
+			process.kill(-processGroupId, 'SIGTERM');
 		} catch (error) {
 			if (error.code !== 'ESRCH') {
 				throw error;
@@ -305,7 +316,7 @@ async function startPreviewProcess(
 		}
 
 		try {
-			process.kill(-server.pid, 'SIGKILL');
+			process.kill(-processGroupId, 'SIGKILL');
 		} catch (error) {
 			if (error.code !== 'ESRCH') {
 				throw error;
@@ -336,8 +347,8 @@ async function startPreviewProcess(
 		}
 
 		try {
-			const response = await httpGet(baseUrl);
-			if (response.statusCode === 200) {
+			const response = await httpGet(getHubHealthUrl(baseUrl));
+			if (isHubHealthResponse(response)) {
 				return {
 					baseUrl,
 					stop: stopServer
