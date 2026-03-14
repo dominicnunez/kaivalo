@@ -1,13 +1,16 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import {
 	isIgnoredByDockerIgnore,
 	readDockerIgnore
 } from './helpers/dockerignore.ts';
+import { getLocalBuildContextCopySources } from './helpers/dockerfile.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DOCKERIGNORE = readDockerIgnore(ROOT);
+const DOCKERFILE_PATH = path.join(ROOT, 'Dockerfile');
 
 describe('docker build context', () => {
 	it('excludes non-runtime repository content from the build context', () => {
@@ -47,6 +50,20 @@ describe('docker build context', () => {
 			'audit should stay out of the build context'
 		);
 		assert.ok(
+			!isIgnoredByDockerIgnore(
+				'scripts/materialize-runtime-workspace-deps.ts',
+				DOCKERIGNORE
+			),
+			'the runtime dependency materialization script must remain in the build context'
+		);
+		assert.ok(
+			isIgnoredByDockerIgnore(
+				'scripts/build-production-image-smoke.sh',
+				DOCKERIGNORE
+			),
+			'other operational scripts should stay out of the build context'
+		);
+		assert.ok(
 			isIgnoredByDockerIgnore('apps/hub/src/build.test.ts', DOCKERIGNORE),
 			'in-tree application test files should stay out of the build context'
 		);
@@ -76,6 +93,21 @@ describe('docker build context', () => {
 			!isIgnoredByDockerIgnore('Dockerfile', DOCKERIGNORE),
 			'the Dockerfile must remain in the build context'
 		);
+	});
+
+	it('keeps every local Dockerfile COPY source available to the build context', () => {
+		const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
+
+		for (const source of getLocalBuildContextCopySources(dockerfile)) {
+			assert.ok(
+				existsSync(path.join(ROOT, source)),
+				`Dockerfile COPY source must exist in the repository: ${source}`
+			);
+			assert.ok(
+				!isIgnoredByDockerIgnore(source, DOCKERIGNORE),
+				`Dockerfile COPY source must remain in the build context: ${source}`
+			);
+		}
 	});
 
 	it('applies later negation rules after a path has been excluded', () => {

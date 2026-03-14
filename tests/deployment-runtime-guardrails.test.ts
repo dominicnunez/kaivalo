@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
 import { getHubBuildEnv } from '../apps/hub/scripts/build-env.ts';
+import { getDockerCopyInstructions } from './helpers/dockerfile.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DEPLOY_WORKFLOW_PATH = path.join(
@@ -262,59 +263,14 @@ function includesSensitiveSecretReference(value: unknown): boolean {
 }
 
 function getRuntimeStageBuildCopies(dockerfile: string) {
-	const records = [];
-	let currentStage: string | null = null;
-
-	for (const rawLine of dockerfile.split('\n')) {
-		const line = rawLine.trim();
-		if (!line || line.startsWith('#')) {
-			continue;
-		}
-
-		const fromMatch = line.match(/^FROM\b.+\bAS\s+([a-z0-9_-]+)\s*$/i);
-		if (fromMatch) {
-			currentStage = fromMatch[1].toLowerCase();
-			continue;
-		}
-
-		if (currentStage !== 'runtime' || !line.startsWith('COPY ')) {
-			continue;
-		}
-
-		const tokens = line.split(/\s+/).slice(1);
-		const flags: Record<string, string> = {};
-		const args = [];
-
-		for (const token of tokens) {
-			if (token.startsWith('--')) {
-				const [flag, value = ''] = token.slice(2).split('=');
-				flags[flag] = value;
-				continue;
-			}
-			args.push(token);
-		}
-
-		if (flags.from !== 'build') {
-			continue;
-		}
-
-		const destination = args.at(-1);
-		const sources = args.slice(0, -1);
-		assert.ok(destination, 'runtime COPY entries should include a destination');
-		assert.ok(
-			sources.length > 0,
-			'runtime COPY entries should include at least one source'
-		);
-
-		for (const source of sources) {
-			records.push({
+	return getDockerCopyInstructions(dockerfile)
+		.filter(({ stage, flags }) => stage === 'runtime' && flags.from === 'build')
+		.flatMap(({ sources, destination }) =>
+			sources.map((source) => ({
 				source,
 				destination
-			});
-		}
-	}
-
-	return records;
+			}))
+		);
 }
 
 function getDockerfileFromImages(dockerfile: string) {
