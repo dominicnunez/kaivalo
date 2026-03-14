@@ -693,27 +693,39 @@ describe('deployment runtime guardrails', () => {
 		}
 	});
 
-	it('materializes workspace runtime packages after pruning production dependencies', () => {
+	it('keeps workspace-only ui sources out of runtime packaging', () => {
 		const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
-		const materializeCopyIndex = dockerfile.indexOf(
-			'COPY scripts/materialize-runtime-workspace-deps.ts scripts/materialize-runtime-workspace-deps.ts'
-		);
+		const hubPackage = JSON.parse(
+			readFileSync(path.join(ROOT, 'apps', 'hub', 'package.json'), 'utf8')
+		) as {
+			dependencies?: Record<string, string>;
+			devDependencies?: Record<string, string>;
+		};
 		const pruneIndex = dockerfile.indexOf('RUN npm prune --omit=dev');
-		const materializeRunIndex = dockerfile.indexOf(
-			'RUN node scripts/materialize-runtime-workspace-deps.ts'
-		);
 
 		assert.ok(
-			materializeCopyIndex >= 0,
-			'build stage should copy the runtime workspace materialization script'
+			!('@kaivalo/ui' in (hubPackage.dependencies ?? {})),
+			'hub runtime dependencies should not retain workspace-only ui sources'
+		);
+		assert.ok(
+			hubPackage.devDependencies?.['@kaivalo/ui'],
+			'hub build-time dependencies should keep the workspace ui package available'
 		);
 		assert.ok(
 			pruneIndex >= 0,
 			'build stage should prune development dependencies before runtime packaging'
 		);
 		assert.ok(
-			materializeRunIndex > pruneIndex,
-			'build stage should materialize runtime workspace packages after pruning'
+			!dockerfile.includes(
+				'COPY scripts/materialize-runtime-workspace-deps.ts scripts/materialize-runtime-workspace-deps.ts'
+			),
+			'runtime packaging should not copy workspace dependency materialization scripts'
+		);
+		assert.ok(
+			!dockerfile.includes(
+				'RUN node scripts/materialize-runtime-workspace-deps.ts'
+			),
+			'runtime packaging should not rehydrate pruned workspace ui packages'
 		);
 	});
 

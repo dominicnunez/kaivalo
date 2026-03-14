@@ -14,7 +14,6 @@ eslint.config.js
 flake.lock
 flake.nix
 scripts
-!scripts/materialize-runtime-workspace-deps.ts
 tests
 .envrc
 .prettierignore

@@ -12,11 +12,9 @@ RUN npm ci --ignore-scripts
 
 COPY apps/hub apps/hub
 COPY packages/ui packages/ui
-COPY scripts/materialize-runtime-workspace-deps.ts scripts/materialize-runtime-workspace-deps.ts
 
 RUN HUB_BUILD_ALLOW_PLACEHOLDERS=true npm --prefix apps/hub run build
 RUN npm prune --omit=dev
-RUN node scripts/materialize-runtime-workspace-deps.ts
 
 FROM node:24.14.0-bookworm-slim@sha256:b4687aef2571c632a1953695ce4d61d6462a7eda471fe6e272eebf0418f276ba AS runtime
 

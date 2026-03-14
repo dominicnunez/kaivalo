@@ -50,13 +50,6 @@ describe('docker build context', () => {
 			'audit should stay out of the build context'
 		);
 		assert.ok(
-			!isIgnoredByDockerIgnore(
-				'scripts/materialize-runtime-workspace-deps.ts',
-				DOCKERIGNORE
-			),
-			'the runtime dependency materialization script must remain in the build context'
-		);
-		assert.ok(
 			isIgnoredByDockerIgnore(
 				'scripts/build-production-image-smoke.sh',
 				DOCKERIGNORE

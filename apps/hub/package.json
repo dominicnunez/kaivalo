@@ -15,6 +15,7 @@
 		"test:watch": "vitest"
 	},
 	"devDependencies": {
+		"@kaivalo/ui": "*",
 		"@sveltejs/adapter-node": "^5.5.2",
 		"@sveltejs/kit": "^2.20.0",
 		"@sveltejs/vite-plugin-svelte": "^5.0.0",
@@ -32,7 +33,6 @@
 	},
 	"type": "module",
 	"dependencies": {
-		"@kaivalo/ui": "*",
 		"@workos/authkit-sveltekit": "^0.1.0",
 		"lucide-svelte": "^0.563.0"
 	}
