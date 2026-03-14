@@ -22,6 +22,17 @@ readonly SMOKE_AUTH_ERROR_SIGNING_SECRET='cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd
 
 container_id=''
 
+should_skip_build() {
+	case "${PRODUCTION_IMAGE_SMOKE_SKIP_BUILD:-}" in
+		1 | true | yes)
+			return 0
+			;;
+		*)
+			return 1
+			;;
+	esac
+}
+
 cleanup() {
 	if [[ -n "$container_id" ]]; then
 		"$DOCKER_BIN" container rm --force "$container_id" >/dev/null 2>&1 || true
@@ -69,7 +80,9 @@ probe_container_health() {
 		"http://127.0.0.1:${published_port}${CONTAINER_HEALTH_PATH}"
 }
 
-"$DOCKER_BIN" build --file "$DOCKERFILE_PATH" --tag "$IMAGE_TAG" "$BUILD_CONTEXT"
+if ! should_skip_build; then
+	"$DOCKER_BIN" build --file "$DOCKERFILE_PATH" --tag "$IMAGE_TAG" "$BUILD_CONTEXT"
+fi
 
 container_id="$(
 	"$DOCKER_BIN" run \

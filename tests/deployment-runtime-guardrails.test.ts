@@ -446,25 +446,53 @@ describe('deployment runtime guardrails', () => {
 		assert.ok(runCommands.includes('npm run test:deploy'));
 	});
 
-	it('smoke builds the production image before deployment', () => {
+	it('smoke tests the built production image before deployment', () => {
 		const workflow = readWorkflow(DEPLOY_WORKFLOW_PATH);
-		const runCommands = getWorkflowRunCommands(workflow, 'smoke_build');
+		const runCommands = getWorkflowRunCommands(workflow, 'smoke_test');
+		const smokeProbeStep = findWorkflowStep(
+			workflow,
+			'smoke_test',
+			(step) =>
+				normalizeShellScript(step.run ?? '').includes(
+					'./scripts/build-production-image-smoke.sh'
+				),
+			'the smoke image probe step'
+		);
+		const loginStep = findWorkflowStep(
+			workflow,
+			'smoke_test',
+			(step) => step.uses?.startsWith('docker/login-action@') ?? false,
+			'the registry login step for smoke testing the built image'
+		);
 
-		assert.deepStrictEqual(getWorkflowJobNeeds(workflow, 'smoke_build'), [
-			'test'
+		assert.deepStrictEqual(getWorkflowJobNeeds(workflow, 'build'), ['test']);
+		assert.deepStrictEqual(getWorkflowJobNeeds(workflow, 'smoke_test'), [
+			'build'
 		]);
-		assert.deepStrictEqual(getWorkflowJobNeeds(workflow, 'build'), [
-			'smoke_build'
+		assert.deepStrictEqual(getWorkflowJobNeeds(workflow, 'deploy'), [
+			'smoke_test'
 		]);
 		assert.strictEqual(
-			getWorkflowJobCondition(workflow, 'smoke_build'),
+			getWorkflowJobCondition(workflow, 'smoke_test'),
 			DEPLOYABLE_REF_CONDITION
 		);
-		assert.deepStrictEqual(getWorkflowJobPermissions(workflow, 'smoke_build'), {
-			contents: 'read'
+		assert.deepStrictEqual(getWorkflowJobPermissions(workflow, 'smoke_test'), {
+			contents: 'read',
+			packages: 'read'
 		});
 		assert.ok(
 			runCommands.includes('./scripts/build-production-image-smoke.sh')
+		);
+		assert.strictEqual(loginStep.with.registry, 'ghcr.io');
+		assert.strictEqual(loginStep.with.username, '${{ github.actor }}');
+		assert.strictEqual(loginStep.with.password, '${{ secrets.GITHUB_TOKEN }}');
+		assert.strictEqual(
+			smokeProbeStep.env.PRODUCTION_IMAGE_SMOKE_SKIP_BUILD,
+			'true'
+		);
+		assert.strictEqual(
+			smokeProbeStep.env.PRODUCTION_IMAGE_SMOKE_TAG,
+			'${{ needs.build.outputs.image_ref }}'
 		);
 		assert.ok(
 			readFileSync(PRODUCTION_IMAGE_SMOKE_BUILD_SCRIPT_PATH, 'utf8').startsWith(
@@ -525,6 +553,14 @@ describe('deployment runtime guardrails', () => {
 		assert.strictEqual(sshOptions.get('ConnectTimeout'), '10');
 		assert.strictEqual(sshOptions.get('ServerAliveInterval'), '15');
 		assert.strictEqual(sshOptions.get('ServerAliveCountMax'), '3');
+		assert.strictEqual(
+			deployStep.env.DEPLOY_SSH_KEY,
+			'${{ secrets.DEPLOY_SSH_KEY }}'
+		);
+		assert.ok(
+			deployCommand.includes('ssh-add - <<< "$DEPLOY_SSH_KEY"'),
+			'deploy step should load the SSH key in the same step that executes the remote deploy'
+		);
 		assert.ok(
 			checkoutIndex >= 0 && checkoutIndex < verifyIndex,
 			'deploy job should check out the repository before verifying deployment health'
@@ -614,9 +650,10 @@ describe('deployment runtime guardrails', () => {
 			contents: 'read'
 		});
 		assert.deepStrictEqual(
-			getWorkflowJobPermissions(deployWorkflow, 'smoke_build'),
+			getWorkflowJobPermissions(deployWorkflow, 'smoke_test'),
 			{
-				contents: 'read'
+				contents: 'read',
+				packages: 'read'
 			}
 		);
 		assert.deepStrictEqual(getWorkflowJobPermissions(deployWorkflow, 'build'), {
@@ -662,6 +699,10 @@ describe('deployment runtime guardrails', () => {
 
 		assert.strictEqual(
 			getWorkflowJobCondition(workflow, 'build'),
+			DEPLOYABLE_REF_CONDITION
+		);
+		assert.strictEqual(
+			getWorkflowJobCondition(workflow, 'smoke_test'),
 			DEPLOYABLE_REF_CONDITION
 		);
 		assert.strictEqual(

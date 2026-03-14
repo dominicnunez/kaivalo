@@ -240,6 +240,36 @@ describe('production image smoke build script', () => {
 		]);
 	});
 
+	it('reuses a prebuilt image when smoke-build skip mode is enabled', async () => {
+		const { fakeCurlPath, fakeDockerPath, invocationLogPath } =
+			createFakeDocker();
+		const result = await runSmokeBuildScript({
+			environmentOverrides: {
+				CURL_BIN: fakeCurlPath,
+				DOCKER_BIN: fakeDockerPath,
+				FAKE_DOCKER_LOG: invocationLogPath,
+				PRODUCTION_IMAGE_SMOKE_SKIP_BUILD: 'true',
+				PRODUCTION_IMAGE_SMOKE_TAG: SMOKE_IMAGE_TAG
+			}
+		});
+
+		assert.strictEqual(result.exitCode, 0, result.stderr || result.stdout);
+		assert.strictEqual(result.signal, null);
+		const invocations = readInvocationLog(invocationLogPath);
+
+		assertCommandSequence(invocations, [
+			/^docker run\b/,
+			/^docker port\b/,
+			/^curl\b/,
+			/^docker container rm\b/,
+			/^docker image rm\b/
+		]);
+		assertCommandIncludes(invocations[0] ?? '', [
+			'--publish 127.0.0.1::3100',
+			SMOKE_IMAGE_TAG
+		]);
+	});
+
 	it('prints container logs and removes temporary resources when the health probe body is unhealthy', async () => {
 		const { fakeCurlPath, fakeDockerPath, invocationLogPath } =
 			createFakeDocker();

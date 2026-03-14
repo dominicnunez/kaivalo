@@ -32,23 +32,9 @@ jobs:
       - name: Run full deploy test suite
         run: npm run test:deploy
 
-  smoke_build:
-    runs-on: ubuntu-latest
-    needs: test
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-
-      - name: Build production image smoke test
-        shell: bash
-        run: ./scripts/build-production-image-smoke.sh
-
   build:
     runs-on: ubuntu-latest
-    needs: smoke_build
+    needs: test
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
@@ -100,9 +86,34 @@ jobs:
             exit 1
           fi
 
-  deploy:
+  smoke_test:
     runs-on: ubuntu-latest
     needs: build
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Log in to GHCR
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Smoke test built production image
+        env:
+          PRODUCTION_IMAGE_SMOKE_SKIP_BUILD: 'true'
+          PRODUCTION_IMAGE_SMOKE_TAG: ${{ needs.build.outputs.image_ref }}
+        shell: bash
+        run: ./scripts/build-production-image-smoke.sh
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: smoke_test
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     timeout-minutes: 15
     environment:
@@ -113,29 +124,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
-      - name: Configure SSH
+      - name: Deploy image
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        shell: bash
         run: |
           install -m 700 -d "$HOME/.ssh"
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
           eval "$(ssh-agent -s)"
           ssh-add - <<< "$DEPLOY_SSH_KEY"
-          printf 'DEPLOY_HOST=%s\nDEPLOY_PORT=%s\nDEPLOY_USER=%s\n' "$DEPLOY_HOST" "${DEPLOY_PORT:-22}" "$DEPLOY_USER" >> "$GITHUB_ENV"
-
-      - name: Deploy image
-        run: |
           ssh \
             -o BatchMode=yes \
             -o ConnectTimeout=10 \
             -o ServerAliveInterval=15 \
             -o ServerAliveCountMax=3 \
-            -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            -p "${DEPLOY_PORT:-22}" "$DEPLOY_USER@$DEPLOY_HOST" \
             "deploy-app $SERVICE_NAME ${{ needs.build.outputs.image_ref }}"
 
       - name: Set up Node.js
