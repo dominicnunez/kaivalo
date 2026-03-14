@@ -24,6 +24,18 @@ const baseEnv = {
 	AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
 	ORIGIN: 'http://127.0.0.1:3100'
 };
+const SOCKET_CLOSE_TIMEOUT_MS = 1_500;
+const SHORT_HEADERS_TIMEOUT_MS = 100;
+const SHORT_REQUEST_TIMEOUT_MS = 150;
+const SHORT_KEEP_ALIVE_TIMEOUT_MS = 120;
+const SHORT_KEEP_ALIVE_TIMEOUT_BUFFER_MS = 0;
+const SHORT_CONNECTIONS_CHECK_INTERVAL_MS = 50;
+const PARTIAL_HEADERS_REQUEST =
+	'GET /favicon.svg HTTP/1.1\r\nHost: 127.0.0.1\r\n';
+const PARTIAL_BODY_REQUEST =
+	'POST /favicon.svg HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 4\r\n\r\n12';
+const KEEP_ALIVE_REQUEST =
+	'GET /favicon.svg HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\n\r\n';
 
 /**
  * @param {http.Server} server
@@ -121,6 +133,75 @@ function httpGetWithAbortObservation(
 		req.on('error', reject);
 		req.setTimeout(5000, () => req.destroy(new Error('request timeout')));
 	});
+}
+
+/**
+ * @param {number} port
+ * @returns {Promise<net.Socket>}
+ */
+function connectRawSocket(port) {
+	return new Promise((resolve, reject) => {
+		const socket = net.connect({ host: '127.0.0.1', port });
+		const handleError = (error) => {
+			socket.off('connect', handleConnect);
+			reject(error);
+		};
+		const handleConnect = () => {
+			socket.off('error', handleError);
+			resolve(socket);
+		};
+
+		socket.once('error', handleError);
+		socket.once('connect', handleConnect);
+	});
+}
+
+/**
+ * @param {net.Socket} socket
+ * @param {number} [timeoutMs]
+ * @returns {Promise<{ data: string; error: Error | null; hadError: boolean }>}
+ */
+function waitForSocketClose(socket, timeoutMs = SOCKET_CLOSE_TIMEOUT_MS) {
+	return new Promise((resolve, reject) => {
+		const chunks = [];
+		let socketError = null;
+		const timeout = setTimeout(() => {
+			reject(new Error('expected socket to close before timeout'));
+		}, timeoutMs);
+		timeout.unref?.();
+
+		socket.on('data', (chunk) =>
+			chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+		);
+		socket.once('error', (error) => {
+			socketError = error;
+		});
+		socket.once('close', (hadError) => {
+			clearTimeout(timeout);
+			resolve({
+				data: Buffer.concat(chunks).toString('utf8'),
+				error: socketError,
+				hadError
+			});
+		});
+	});
+}
+
+/**
+ * @param {http.Server} server
+ * @param {{
+ *   headersTimeout?: number;
+ *   keepAliveTimeout?: number;
+ *   requestTimeout?: number;
+ * }} [overrides]
+ */
+function applyShortConnectionTimeouts(server, overrides = {}) {
+	server.headersTimeout = overrides.headersTimeout ?? SHORT_HEADERS_TIMEOUT_MS;
+	server.requestTimeout = overrides.requestTimeout ?? SHORT_REQUEST_TIMEOUT_MS;
+	server.keepAliveTimeout =
+		overrides.keepAliveTimeout ?? SHORT_KEEP_ALIVE_TIMEOUT_MS;
+	server.keepAliveTimeoutBuffer = SHORT_KEEP_ALIVE_TIMEOUT_BUFFER_MS;
+	server.connectionsCheckingInterval = SHORT_CONNECTIONS_CHECK_INTERVAL_MS;
 }
 
 const servers = [];
@@ -451,7 +532,7 @@ describe('node server proxy trust handling', () => {
 });
 
 describe('node server lifecycle', () => {
-	it('configures bounded request timeout on created servers', () => {
+	it('configures bounded request, header, and keep-alive timeouts', () => {
 		const { server } = createHubServer({
 			handler: (_req, res) => res.end('ok'),
 			env: baseEnv
@@ -459,6 +540,104 @@ describe('node server lifecycle', () => {
 		servers.push(server);
 
 		assert.strictEqual(server.requestTimeout, 30_000);
+		assert.strictEqual(server.headersTimeout, 60_000);
+		assert.strictEqual(server.keepAliveTimeout, 5_000);
+	});
+
+	it('terminates slow-header connections before the handler runs', async () => {
+		let requestCount = 0;
+		const { server } = createHubServer({
+			handler: (_req, res) => {
+				requestCount += 1;
+				res.end('ok');
+			},
+			env: baseEnv
+		});
+		servers.push(server);
+		applyShortConnectionTimeouts(server, {
+			headersTimeout: SHORT_HEADERS_TIMEOUT_MS,
+			requestTimeout: SHORT_REQUEST_TIMEOUT_MS * 2
+		});
+
+		const port = await listenOnEphemeralPort(server);
+		const socket = await connectRawSocket(port);
+		const socketClosed = waitForSocketClose(socket);
+
+		socket.write(PARTIAL_HEADERS_REQUEST);
+
+		const result = await socketClosed;
+		assert.strictEqual(requestCount, 0);
+		assert.strictEqual(result.hadError, false);
+		assert.strictEqual(result.error, null);
+		assert.match(result.data, /HTTP\/1\.1 408 Request Timeout/);
+		assert.match(result.data, /Connection: close/);
+	});
+
+	it('terminates incomplete request bodies once the request timeout elapses', async () => {
+		let requestCount = 0;
+		let receivedBody = '';
+		const { server } = createHubServer({
+			handler: (req, res) => {
+				requestCount += 1;
+				req.on('data', (chunk) => {
+					receivedBody += chunk.toString('utf8');
+				});
+				req.on('end', () => {
+					res.end('ok');
+				});
+			},
+			env: baseEnv
+		});
+		servers.push(server);
+		applyShortConnectionTimeouts(server, {
+			headersTimeout: SHORT_REQUEST_TIMEOUT_MS * 4,
+			requestTimeout: SHORT_REQUEST_TIMEOUT_MS
+		});
+
+		const port = await listenOnEphemeralPort(server);
+		const socket = await connectRawSocket(port);
+		const socketClosed = waitForSocketClose(socket);
+
+		socket.write(PARTIAL_BODY_REQUEST);
+
+		const result = await socketClosed;
+		assert.strictEqual(requestCount, 1);
+		assert.strictEqual(receivedBody, '12');
+		assert.strictEqual(result.hadError, false);
+		assert.strictEqual(result.error, null);
+		assert.match(result.data, /HTTP\/1\.1 408 Request Timeout/);
+		assert.ok(!result.data.includes('200 OK'));
+	});
+
+	it('closes idle keep-alive sockets after the configured timeout', async () => {
+		let requestCount = 0;
+		const { server } = createHubServer({
+			handler: (_req, res) => {
+				requestCount += 1;
+				res.end('ok');
+			},
+			env: baseEnv
+		});
+		servers.push(server);
+		applyShortConnectionTimeouts(server, {
+			headersTimeout: SHORT_REQUEST_TIMEOUT_MS * 4,
+			requestTimeout: SHORT_REQUEST_TIMEOUT_MS * 4,
+			keepAliveTimeout: SHORT_KEEP_ALIVE_TIMEOUT_MS
+		});
+
+		const port = await listenOnEphemeralPort(server);
+		const socket = await connectRawSocket(port);
+		const socketClosed = waitForSocketClose(socket);
+
+		socket.write(KEEP_ALIVE_REQUEST);
+
+		const result = await socketClosed;
+		assert.strictEqual(requestCount, 1);
+		assert.strictEqual(result.hadError, false);
+		assert.strictEqual(result.error, null);
+		assert.match(result.data, /HTTP\/1\.1 200 OK/);
+		assert.match(result.data, /\r\nConnection: keep-alive\r\n/i);
+		assert.match(result.data, /\r\n\r\nok$/);
 	});
 
 	it('returns non-zero shutdown status when in-flight requests exceed shutdown timeout', async () => {
