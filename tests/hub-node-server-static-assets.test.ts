@@ -136,12 +136,82 @@ describe('node server static asset classification', () => {
 		assert.strictEqual(dynamicResponse.headers['cache-control'], undefined);
 	});
 
+	it('does not apply public cache headers to cookie-setting asset responses', async () => {
+		const { server } = createHubServer({
+			handler: (_req, res) => {
+				res.writeHead(200, {
+					'Content-Type': 'image/svg+xml; charset=utf-8',
+					'Set-Cookie': 'asset-session=fixture; Path=/; HttpOnly; Secure'
+				});
+				res.end('<svg />');
+			},
+			env: baseEnv
+		});
+		servers.push(server);
+		const port = await listenOnEphemeralPort(server);
+
+		const response = await httpGet(port, '/favicon.svg');
+
+		assert.strictEqual(response.statusCode, 200);
+		assert.strictEqual(response.headers['cache-control'], undefined);
+		assert.match(
+			String(response.headers['set-cookie']),
+			/asset-session=fixture/
+		);
+		assert.strictEqual(response.body, '<svg />');
+	});
+
 	it('applies static cache headers when streamed asset responses commit inline headers', async () => {
 		const { server } = createHubServer({
 			handler: (_req, res) => {
 				res.writeHead(200, {
 					'Content-Type': 'image/svg+xml; charset=utf-8'
 				});
+				res.write('<svg');
+				res.end(' />');
+			},
+			env: baseEnv
+		});
+		servers.push(server);
+		const port = await listenOnEphemeralPort(server);
+
+		const response = await httpGet(port, '/favicon.svg');
+
+		assert.strictEqual(response.statusCode, 200);
+		assert.strictEqual(
+			response.headers['cache-control'],
+			'public, max-age=86400, stale-while-revalidate=600'
+		);
+		assert.strictEqual(response.body, '<svg />');
+	});
+
+	it('applies static cache headers when asset responses use writeHead header arrays', async () => {
+		const { server } = createHubServer({
+			handler: (_req, res) => {
+				res.writeHead(200, ['Content-Type', 'image/svg+xml; charset=utf-8']);
+				res.end('<svg />');
+			},
+			env: baseEnv
+		});
+		servers.push(server);
+		const port = await listenOnEphemeralPort(server);
+
+		const response = await httpGet(port, '/favicon.svg');
+
+		assert.strictEqual(response.statusCode, 200);
+		assert.strictEqual(
+			response.headers['cache-control'],
+			'public, max-age=86400, stale-while-revalidate=600'
+		);
+		assert.strictEqual(response.body, '<svg />');
+	});
+
+	it('applies static cache headers when asset responses flush headers before streaming', async () => {
+		const { server } = createHubServer({
+			handler: (_req, res) => {
+				res.statusCode = 200;
+				res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+				res.flushHeaders?.();
 				res.write('<svg');
 				res.end(' />');
 			},
