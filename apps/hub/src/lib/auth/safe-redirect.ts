@@ -90,6 +90,7 @@ export function isRedirectLikeObject(
 		'status' in value &&
 		'location' in value &&
 		typeof value.status === 'number' &&
+		REDIRECT_RESPONSE_STATUSES.has(value.status) &&
 		typeof value.location === 'string'
 	);
 }

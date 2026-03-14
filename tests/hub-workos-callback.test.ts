@@ -304,6 +304,39 @@ describe('WorkOS Auth Callback Route', () => {
 			);
 		});
 
+		it('treats non-redirect status objects as unexpected callback failures', async () => {
+			const logs = [];
+			const handler = createHandler({
+				handleCallback: () => async () => {
+					throw {
+						status: 200,
+						location: 'https://kaivalo.test/services'
+					};
+				},
+				isRedirect: () => false,
+				isHttpError,
+				authErrorSigningSecret,
+				logError: (...args) => logs.push(args)
+			});
+
+			await assert.rejects(
+				() => handler(createEvent({ accept: 'application/json' })),
+				(caught) => {
+					assert.ok(isHttpError(caught));
+					assert.strictEqual(caught.status, 503);
+					assert.match(
+						caught.body.message,
+						/^Auth callback failed\. Reference: authcb_[0-9a-f-]+$/
+					);
+					return true;
+				}
+			);
+
+			assert.strictEqual(logs.length, 1);
+			assert.strictEqual(logs[0][0], 'Auth callback failed');
+			assert.match(logs[0][1].incidentId, /^authcb_[0-9a-f-]+$/);
+		});
+
 		it('translates vendor auth error redirects into the signed landing-page error flow', async () => {
 			const logs = [];
 			const redirectErr = {

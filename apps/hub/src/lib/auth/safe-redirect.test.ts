@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	isRedirectLikeObject,
 	normalizeSameOriginRedirectLocation,
 	normalizeTrustedRedirectLocation
 } from './safe-redirect.ts';
@@ -7,6 +8,27 @@ import {
 const REQUEST_ORIGIN = 'https://kaivalo.test';
 
 describe('normalizeTrustedRedirectLocation', () => {
+	it('only treats supported redirect statuses as redirect-like objects', () => {
+		expect(
+			isRedirectLikeObject({
+				status: 303,
+				location: '/services'
+			})
+		).toBe(true);
+		expect(
+			isRedirectLikeObject({
+				status: 200,
+				location: '/services'
+			})
+		).toBe(false);
+		expect(
+			isRedirectLikeObject({
+				status: 309,
+				location: '/services'
+			})
+		).toBe(false);
+	});
+
 	it.each([
 		'/%0A//evil.example/path',
 		'/%09//evil.example/path',

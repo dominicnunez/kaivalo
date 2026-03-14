@@ -589,6 +589,47 @@ describe('sign-out handler unit behavior', () => {
 		);
 	});
 
+	it('treats non-redirect status objects as unexpected sign-out failures', async () => {
+		const logs = [];
+		const postHandler = createSignOutPostHandler({
+			signOut: async () => {
+				throw {
+					status: 200,
+					location: 'https://kaivalo.com/account?from=sign-out#done'
+				};
+			},
+			expectedOrigin: 'https://kaivalo.com',
+			logError: (...args) => logs.push(args)
+		});
+
+		await assert.rejects(
+			() =>
+				postHandler({
+					request: new Request('https://kaivalo.test/auth/sign-out', {
+						method: 'POST',
+						headers: {
+							origin: 'https://kaivalo.com',
+							accept: 'application/json'
+						}
+					}),
+					url: new URL('https://kaivalo.test/auth/sign-out')
+				}),
+			(caught) => {
+				assert.ok(isHttpError(caught));
+				assert.strictEqual(caught.status, 503);
+				assert.match(
+					caught.body.message,
+					/^Sign-out failed\. Reference: authso_[0-9a-f-]+$/
+				);
+				return true;
+			}
+		);
+
+		assert.strictEqual(logs.length, 1);
+		assert.strictEqual(logs[0][0], 'Sign-out failed');
+		assert.match(logs[0][1].incidentId, /^authso_[0-9a-f-]+$/);
+	});
+
 	it('preserves same-origin redirect-like responses as absolute URLs when the request host is poisoned', async () => {
 		const postHandler = createSignOutPostHandler({
 			signOut: async () =>
