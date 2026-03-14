@@ -11,6 +11,11 @@ import {
 	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
 	readVerifiedAuthError
 } from '../apps/hub/src/lib/auth/auth-error-query.ts';
+import {
+	getHubHealthResponseViolations,
+	getHubHealthUrl,
+	isHubHealthResponse
+} from './helpers/hub-health.ts';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 import { assertHubBuildAvailable } from './helpers/hub-build.ts';
 import { reserveLocalPort } from './helpers/network.ts';
@@ -135,11 +140,16 @@ function getCookiePair(
 
 async function probePreviewReady(baseUrl: string): Promise<boolean> {
 	try {
-		const response = await httpGet(`${baseUrl}/healthz`);
-		return response.statusCode === 200 && response.data.trim() === 'ok';
+		const response = await httpGet(getHubHealthUrl(baseUrl));
+		return isHubHealthResponse(response);
 	} catch {
 		return false;
 	}
+}
+
+async function assertPreviewHealthContract(baseUrl: string): Promise<void> {
+	const response = await httpGet(getHubHealthUrl(baseUrl));
+	assert.deepStrictEqual(getHubHealthResponseViolations(response), []);
 }
 
 async function assertPreviewAuthRoutes(
@@ -357,6 +367,7 @@ describe('hub preview script', () => {
 		try {
 			preview = await startHubPreview({ shared: false });
 
+			await assertPreviewHealthContract(preview.baseUrl);
 			const homepage = await httpGet(preview.baseUrl);
 			assert.strictEqual(homepage.statusCode, 200);
 			assert.match(homepage.data, /Kaivalo/i);
@@ -380,6 +391,7 @@ describe('hub preview script', () => {
 				sanitizeInheritedRuntimeEnv: false
 			});
 
+			await assertPreviewHealthContract(preview.baseUrl);
 			const homepage = await httpGet(preview.baseUrl);
 			assert.strictEqual(homepage.statusCode, 200);
 			assert.match(homepage.data, /Kaivalo/i);

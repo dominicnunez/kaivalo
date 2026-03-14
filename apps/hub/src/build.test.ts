@@ -8,6 +8,11 @@ import {
 	findProductionArtifactLeaks,
 	getHubBuildPaths
 } from '../scripts/build-artifacts.ts';
+import {
+	getHubHealthResponseViolations,
+	getHubHealthUrl,
+	isHubHealthResponse
+} from '../../../tests/helpers/hub-health.ts';
 import { createHubBuiltRuntimeEnv } from '../../../tests/helpers/hub-runtime-env.ts';
 
 const hubDir = process.cwd();
@@ -85,7 +90,11 @@ function runBuildWithDiagnostics() {
 	}
 }
 
-function httpGet(url: string): Promise<{ statusCode: number; data: string }> {
+function httpGet(url: string): Promise<{
+	statusCode: number;
+	data: string;
+	headers: http.IncomingHttpHeaders;
+}> {
 	return new Promise((resolve, reject) => {
 		const req = http.get(url, (response) => {
 			const chunks: Buffer[] = [];
@@ -95,7 +104,8 @@ function httpGet(url: string): Promise<{ statusCode: number; data: string }> {
 			response.on('end', () => {
 				resolve({
 					statusCode: response.statusCode ?? 0,
-					data: Buffer.concat(chunks).toString('utf8')
+					data: Buffer.concat(chunks).toString('utf8'),
+					headers: response.headers
 				});
 			});
 		});
@@ -149,8 +159,8 @@ async function startBuiltServer() {
 	const startupDeadline = Date.now() + STARTUP_TIMEOUT_MS;
 	while (Date.now() < startupDeadline) {
 		try {
-			const health = await httpGet(new URL('/healthz', baseUrl).toString());
-			if (health.statusCode === 200 && health.data.trim() === 'ok') {
+			const health = await httpGet(getHubHealthUrl(baseUrl));
+			if (isHubHealthResponse(health)) {
 				return { server, baseUrl };
 			}
 		} catch {
@@ -178,12 +188,9 @@ describe('Production build', () => {
 			const { server, baseUrl } = await startBuiltServer();
 
 			try {
-				const health = await httpGet(new URL('/healthz', baseUrl).toString());
+				const health = await httpGet(getHubHealthUrl(baseUrl));
 				const landingPage = await httpGet(baseUrl);
-				expect(health).toEqual({
-					statusCode: 200,
-					data: 'ok'
-				});
+				expect(getHubHealthResponseViolations(health)).toEqual([]);
 				expect(landingPage.statusCode).toBe(200);
 				expect(landingPage.data).toContain('<!doctype html>');
 			} finally {
