@@ -1,6 +1,9 @@
 import { spawnSync } from 'node:child_process';
 import { isIP } from 'node:net';
-import { isLoopbackHostname } from '../src/lib/server/ip-address.ts';
+import {
+	canonicalizeIpAddress,
+	isLoopbackHostname
+} from '../src/lib/server/ip-address.ts';
 import { parsePort } from '../src/lib/server/port.ts';
 import { getValidatedWorkosEnv } from '../src/lib/server/workos-security-env.ts';
 import { getHubBuildPaths, removeServerSourceMaps } from './build-artifacts.ts';
@@ -61,7 +64,7 @@ function getLocalPreviewOrigin(baseEnv: NodeJS.ProcessEnv): string {
 
 	const port = String(parsePort(baseEnv.PORT));
 	const host = getLocalPreviewHost(baseEnv);
-	return new URL(`http://${host}:${port}`).origin;
+	return new URL(`http://${formatOriginHost(host)}:${port}`).origin;
 }
 
 function getLocalPreviewHost(baseEnv: NodeJS.ProcessEnv): string {
@@ -70,16 +73,18 @@ function getLocalPreviewHost(baseEnv: NodeJS.ProcessEnv): string {
 		return DEFAULT_LOCAL_PREVIEW_HOST;
 	}
 
+	const normalizedHost = normalizeLocalPreviewHost(configuredHost);
 	if (
 		LOCAL_PREVIEW_WILDCARD_HOSTS.has(configuredHost) ||
-		!isLoopbackHostname(configuredHost)
+		LOCAL_PREVIEW_WILDCARD_HOSTS.has(normalizedHost) ||
+		!isLoopbackHostname(normalizedHost)
 	) {
 		throw new Error(
 			'ORIGIN must be set when HOST is not a concrete loopback address'
 		);
 	}
 
-	return formatOriginHost(configuredHost);
+	return normalizedHost;
 }
 
 function isLoopbackPreviewOrigin(origin: string): boolean {
@@ -94,13 +99,26 @@ function formatOriginHost(host: string): string {
 	return isIP(host) === 6 && !host.startsWith('[') ? `[${host}]` : host;
 }
 
+function normalizeLocalPreviewHost(host: string): string {
+	return canonicalizeIpAddress(host) || host;
+}
+
+function getNormalizedLocalPreviewHostEnvValue(
+	baseEnv: NodeJS.ProcessEnv
+): string | undefined {
+	const configuredHost = baseEnv.HOST?.trim();
+	return configuredHost ? getLocalPreviewHost(baseEnv) : undefined;
+}
+
 export function getHubLocalPlaceholderEnv(
 	baseEnv: NodeJS.ProcessEnv = process.env
 ): NodeJS.ProcessEnv {
 	const origin = getLocalPreviewOrigin(baseEnv);
+	const normalizedHost = getNormalizedLocalPreviewHostEnvValue(baseEnv);
 
 	return {
 		...LOCAL_PLACEHOLDER_ENV_DEFAULTS,
+		...(normalizedHost ? { HOST: normalizedHost } : {}),
 		WORKOS_REDIRECT_URI: `${origin}/auth/callback`,
 		ORIGIN: origin
 	};
@@ -113,7 +131,7 @@ function mergePlaceholderEnv(
 	return Object.fromEntries(
 		Object.entries(placeholderEnv).map(([name, value]) => [
 			name,
-			name === 'ORIGIN' ? value : (baseEnv[name] ?? value)
+			name === 'HOST' || name === 'ORIGIN' ? value : (baseEnv[name] ?? value)
 		])
 	);
 }
@@ -122,11 +140,13 @@ function getHubPreviewPlaceholderEnv(
 	baseEnv: NodeJS.ProcessEnv = process.env
 ): NodeJS.ProcessEnv {
 	const origin = getLocalPreviewOrigin(baseEnv);
+	const normalizedHost = getNormalizedLocalPreviewHostEnvValue(baseEnv);
 
 	return {
 		...(isLoopbackPreviewOrigin(origin)
 			? LOCAL_PLACEHOLDER_ENV_DEFAULTS
 			: LOCAL_PREVIEW_IDENTITY_PLACEHOLDER_ENV_DEFAULTS),
+		...(normalizedHost ? { HOST: normalizedHost } : {}),
 		WORKOS_REDIRECT_URI: `${origin}/auth/callback`,
 		ORIGIN: origin
 	};

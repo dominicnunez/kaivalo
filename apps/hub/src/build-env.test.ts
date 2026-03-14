@@ -77,6 +77,32 @@ describe('hub build environment', () => {
 		expect(previewEnv.ORIGIN).toBe('http://127.0.0.1:4173');
 	});
 
+	it('normalizes bracketed ipv6 preview hosts before returning runtime env', () => {
+		const previewEnv = getHubPreviewEnv({
+			HOST: '[::1]',
+			PORT: '4173'
+		});
+
+		expect(previewEnv.HOST).toBe('::1');
+		expect(previewEnv.WORKOS_REDIRECT_URI).toBe(
+			'http://[::1]:4173/auth/callback'
+		);
+		expect(previewEnv.ORIGIN).toBe('http://[::1]:4173');
+	});
+
+	it('normalizes bracketed ipv6 build hosts before returning placeholder build env', () => {
+		const buildEnv = getHubBuildEnv({
+			NODE_ENV: 'test',
+			HOST: '[::1]'
+		});
+
+		expect(buildEnv.HOST).toBe('::1');
+		expect(buildEnv.WORKOS_REDIRECT_URI).toBe(
+			'http://[::1]:3100/auth/callback'
+		);
+		expect(buildEnv.ORIGIN).toBe('http://[::1]:3100');
+	});
+
 	it('requires an explicit origin when preview binds a wildcard host', () => {
 		expect(() =>
 			getHubPreviewEnv({
