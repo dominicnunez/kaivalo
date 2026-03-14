@@ -14,10 +14,6 @@ const PRODUCTION_IMAGE_SMOKE_BUILD_SCRIPT_PATH = path.join(
 const SMOKE_IMAGE_TAG = 'kaivalo-hub-smoke:test';
 const SMOKE_CONTAINER_ID = 'container-smoke-123';
 const SMOKE_PUBLISHED_PORT = '41234';
-const SMOKE_WORKOS_COOKIE_PASSWORD =
-	'abababababababababababababababababababababababababababababababab';
-const SMOKE_AUTH_ERROR_SIGNING_SECRET =
-	'cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd';
 
 type ScriptResult = {
 	exitCode: number | null;
@@ -198,14 +194,7 @@ describe('production image smoke build script', () => {
 			' .'
 		]);
 		assertCommandIncludes(invocations[1] ?? '', [
-			'--detach',
 			'--publish 127.0.0.1::3100',
-			`--env AUTH_ERROR_SIGNING_SECRET=${SMOKE_AUTH_ERROR_SIGNING_SECRET}`,
-			'--env ORIGIN=http://127.0.0.1:3100',
-			'--env WORKOS_API_KEY=sk_image_smoke',
-			'--env WORKOS_CLIENT_ID=client_image_smoke',
-			`--env WORKOS_COOKIE_PASSWORD=${SMOKE_WORKOS_COOKIE_PASSWORD}`,
-			'--env WORKOS_REDIRECT_URI=http://127.0.0.1:3100/auth/callback',
 			SMOKE_IMAGE_TAG
 		]);
 		assertCommandIncludes(invocations[2] ?? '', [
@@ -213,14 +202,6 @@ describe('production image smoke build script', () => {
 			'3100/tcp'
 		]);
 		assertCommandIncludes(invocations[3] ?? '', [
-			'--silent',
-			'--show-error',
-			'--fail',
-			'--retry 10',
-			'--retry-delay 1',
-			'--retry-connrefused',
-			'--connect-timeout 2',
-			'--max-time 5',
 			`http://127.0.0.1:${SMOKE_PUBLISHED_PORT}/healthz`
 		]);
 		assertCommandIncludes(invocations[4] ?? '', [

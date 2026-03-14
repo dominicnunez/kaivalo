@@ -21,7 +21,7 @@
 		"test": "npm run test:full",
 		"test:fast": "npm run lint && npm run test:core",
 		"test:full": "npm run test:fast && npm run test:build:hub && npm run test:preview:hub && npm run test:production && npm run test:integration && npm run audit:deps",
-		"test:production": "node --test --test-concurrency=1 tests/hub-adapter-node.test.ts",
+		"test:production": "node --test --test-concurrency=1 tests/hub-adapter-node.test.ts tests/production-image-smoke-build.integration.test.ts",
 		"test:integration": "node --test --test-concurrency=1 tests/hub-auth-landing.test.ts tests/hub-avatar.test.ts tests/hub-favicon.test.ts tests/hub-links.test.ts tests/hub-lucide-icons.test.ts tests/hub-og-image.test.ts tests/hub-seo-meta.test.ts tests/hub-sign-out.test.ts tests/hub-tailwind.test.ts tests/hub-workos-callback.test.ts tests/hub-workos-hooks.test.ts",
 		"test:ci": "npm run test:fast",
 		"test:deploy": "npm run test:full"
