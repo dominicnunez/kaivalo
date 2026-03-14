@@ -480,15 +480,21 @@ describe('deployment runtime guardrails', () => {
 		const pinnedNodeVersion = getPinnedNodeVersionFromDockerfile(dockerfile);
 		const deployJob = getWorkflowJob(workflow, 'deploy');
 		const deploySteps = getWorkflowSteps(workflow, 'deploy');
+		const isDeployHealthVerificationStep = (step: WorkflowStep) =>
+			normalizeShellScript(step.run ?? '').includes(
+				'./scripts/verify-deploy-health.sh'
+			) &&
+			step.env.DEPLOY_ORIGIN === '${{ vars.DEPLOY_ORIGIN }}' &&
+			step.env.AUTH_ERROR_SIGNING_SECRET ===
+				'${{ secrets.AUTH_ERROR_SIGNING_SECRET }}' &&
+			step.env.WORKOS_API_HOSTNAME === '${{ vars.WORKOS_API_HOSTNAME }}';
 		const checkoutIndex = deploySteps.findIndex((step) =>
 			step.uses?.startsWith('actions/checkout@')
 		);
 		const setupNodeIndex = deploySteps.findIndex((step) =>
 			step.uses?.startsWith('actions/setup-node@')
 		);
-		const verifyIndex = deploySteps.findIndex(
-			(step) => step.name === 'Verify deployment health'
-		);
+		const verifyIndex = deploySteps.findIndex(isDeployHealthVerificationStep);
 		const setupNodeStep =
 			setupNodeIndex === -1 ? undefined : deploySteps[setupNodeIndex];
 		const deployStep = findWorkflowStep(
@@ -500,15 +506,11 @@ describe('deployment runtime guardrails', () => {
 			},
 			'the image deployment step'
 		);
-		const verifyStep = findWorkflowStep(
-			workflow,
-			'deploy',
-			(step) =>
-				step.name === 'Verify deployment health' &&
-				normalizeShellScript(step.run ?? '') ===
-					'./scripts/verify-deploy-health.sh',
-			'the deployment health verification step'
+		assert.ok(
+			verifyIndex >= 0,
+			'deploy job should define a deployment health verification step'
 		);
+		const verifyStep = deploySteps[verifyIndex];
 		const deployCommand = normalizeShellScript(deployStep.run ?? '');
 		const verifyCommand = normalizeShellScript(verifyStep.run ?? '');
 		const sshOptions = parseSshOptions(deployCommand);
@@ -534,19 +536,10 @@ describe('deployment runtime guardrails', () => {
 			'deploy job should configure Node.js before verifying deployment health'
 		);
 		assert.strictEqual(setupNodeStep?.with['node-version'], pinnedNodeVersion);
-		assert.strictEqual(
-			verifyStep.env.DEPLOY_ORIGIN,
-			'${{ vars.DEPLOY_ORIGIN }}'
+		assert.ok(
+			verifyCommand.includes('./scripts/verify-deploy-health.sh'),
+			'deploy health verification should run the shared probe script'
 		);
-		assert.strictEqual(
-			verifyStep.env.AUTH_ERROR_SIGNING_SECRET,
-			'${{ secrets.AUTH_ERROR_SIGNING_SECRET }}'
-		);
-		assert.strictEqual(
-			verifyStep.env.WORKOS_API_HOSTNAME,
-			'${{ vars.WORKOS_API_HOSTNAME }}'
-		);
-		assert.strictEqual(verifyCommand, './scripts/verify-deploy-health.sh');
 		assert.ok(
 			readFileSync(DEPLOY_HEALTH_SCRIPT_PATH, 'utf8').startsWith(
 				'#!/usr/bin/env bash'

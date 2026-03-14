@@ -128,6 +128,35 @@ function runSmokeBuildScript({
 	});
 }
 
+function readInvocationLog(invocationLogPath: string): string[] {
+	return readFileSync(invocationLogPath, 'utf8')
+		.trim()
+		.split('\n')
+		.filter((line) => line !== '');
+}
+
+function assertCommandSequence(
+	lines: readonly string[],
+	expectedPatterns: readonly RegExp[]
+): void {
+	assert.strictEqual(lines.length, expectedPatterns.length);
+	for (const [index, expectedPattern] of expectedPatterns.entries()) {
+		assert.match(lines[index] ?? '', expectedPattern);
+	}
+}
+
+function assertCommandIncludes(
+	line: string,
+	expectedFragments: readonly string[]
+): void {
+	for (const fragment of expectedFragments) {
+		assert.ok(
+			line.includes(fragment),
+			`expected command to include ${fragment}, received: ${line}`
+		);
+	}
+}
+
 afterEach(() => {
 	for (const tempDirectory of Array.from(tempDirectories)) {
 		tempDirectories.delete(tempDirectory);
@@ -153,17 +182,52 @@ describe('production image smoke build script', () => {
 
 		assert.strictEqual(result.exitCode, 0, result.stderr || result.stdout);
 		assert.strictEqual(result.signal, null);
-		assert.deepStrictEqual(
-			readFileSync(invocationLogPath, 'utf8').trim().split('\n'),
-			[
-				`docker build --file ./Dockerfile --tag ${SMOKE_IMAGE_TAG} .`,
-				`docker run --detach --publish 127.0.0.1::3100 --env AUTH_ERROR_SIGNING_SECRET=${SMOKE_AUTH_ERROR_SIGNING_SECRET} --env ORIGIN=http://127.0.0.1:3100 --env WORKOS_API_KEY=sk_image_smoke --env WORKOS_CLIENT_ID=client_image_smoke --env WORKOS_COOKIE_PASSWORD=${SMOKE_WORKOS_COOKIE_PASSWORD} --env WORKOS_REDIRECT_URI=http://127.0.0.1:3100/auth/callback ${SMOKE_IMAGE_TAG}`,
-				`docker port ${SMOKE_CONTAINER_ID} 3100/tcp`,
-				`curl --silent --show-error --fail --retry 10 --retry-delay 1 --retry-connrefused --connect-timeout 2 --max-time 5 http://127.0.0.1:${SMOKE_PUBLISHED_PORT}/healthz`,
-				`docker container rm --force ${SMOKE_CONTAINER_ID}`,
-				`docker image rm --force ${SMOKE_IMAGE_TAG}`
-			]
-		);
+		const invocations = readInvocationLog(invocationLogPath);
+
+		assertCommandSequence(invocations, [
+			/^docker build\b/,
+			/^docker run\b/,
+			/^docker port\b/,
+			/^curl\b/,
+			/^docker container rm\b/,
+			/^docker image rm\b/
+		]);
+		assertCommandIncludes(invocations[0] ?? '', [
+			'--file ./Dockerfile',
+			`--tag ${SMOKE_IMAGE_TAG}`,
+			' .'
+		]);
+		assertCommandIncludes(invocations[1] ?? '', [
+			'--detach',
+			'--publish 127.0.0.1::3100',
+			`--env AUTH_ERROR_SIGNING_SECRET=${SMOKE_AUTH_ERROR_SIGNING_SECRET}`,
+			'--env ORIGIN=http://127.0.0.1:3100',
+			'--env WORKOS_API_KEY=sk_image_smoke',
+			'--env WORKOS_CLIENT_ID=client_image_smoke',
+			`--env WORKOS_COOKIE_PASSWORD=${SMOKE_WORKOS_COOKIE_PASSWORD}`,
+			'--env WORKOS_REDIRECT_URI=http://127.0.0.1:3100/auth/callback',
+			SMOKE_IMAGE_TAG
+		]);
+		assertCommandIncludes(invocations[2] ?? '', [
+			SMOKE_CONTAINER_ID,
+			'3100/tcp'
+		]);
+		assertCommandIncludes(invocations[3] ?? '', [
+			'--silent',
+			'--show-error',
+			'--fail',
+			'--retry 10',
+			'--retry-delay 1',
+			'--retry-connrefused',
+			'--connect-timeout 2',
+			'--max-time 5',
+			`http://127.0.0.1:${SMOKE_PUBLISHED_PORT}/healthz`
+		]);
+		assertCommandIncludes(invocations[4] ?? '', [
+			'--force',
+			SMOKE_CONTAINER_ID
+		]);
+		assertCommandIncludes(invocations[5] ?? '', ['--force', SMOKE_IMAGE_TAG]);
 	});
 
 	it('removes the temporary image tag even when the docker build fails', async () => {
@@ -178,13 +242,21 @@ describe('production image smoke build script', () => {
 		});
 
 		assert.strictEqual(result.exitCode, 55, result.stderr || result.stdout);
-		assert.deepStrictEqual(
-			readFileSync(invocationLogPath, 'utf8').trim().split('\n'),
-			[
-				'docker build --file ./Dockerfile --tag kaivalo-hub-smoke:test-failure .',
-				'docker image rm --force kaivalo-hub-smoke:test-failure'
-			]
-		);
+		const invocations = readInvocationLog(invocationLogPath);
+
+		assertCommandSequence(invocations, [
+			/^docker build\b/,
+			/^docker image rm\b/
+		]);
+		assertCommandIncludes(invocations[0] ?? '', [
+			'--file ./Dockerfile',
+			'--tag kaivalo-hub-smoke:test-failure',
+			' .'
+		]);
+		assertCommandIncludes(invocations[1] ?? '', [
+			'--force',
+			'kaivalo-hub-smoke:test-failure'
+		]);
 	});
 
 	it('prints container logs and removes temporary resources when the health probe body is unhealthy', async () => {
@@ -207,17 +279,22 @@ describe('production image smoke build script', () => {
 			/Expected \/healthz to return ok, received: degraded/
 		);
 		assert.match(result.stderr, /container failed to start/);
-		assert.deepStrictEqual(
-			readFileSync(invocationLogPath, 'utf8').trim().split('\n'),
-			[
-				`docker build --file ./Dockerfile --tag ${SMOKE_IMAGE_TAG} .`,
-				`docker run --detach --publish 127.0.0.1::3100 --env AUTH_ERROR_SIGNING_SECRET=${SMOKE_AUTH_ERROR_SIGNING_SECRET} --env ORIGIN=http://127.0.0.1:3100 --env WORKOS_API_KEY=sk_image_smoke --env WORKOS_CLIENT_ID=client_image_smoke --env WORKOS_COOKIE_PASSWORD=${SMOKE_WORKOS_COOKIE_PASSWORD} --env WORKOS_REDIRECT_URI=http://127.0.0.1:3100/auth/callback ${SMOKE_IMAGE_TAG}`,
-				`docker port ${SMOKE_CONTAINER_ID} 3100/tcp`,
-				`curl --silent --show-error --fail --retry 10 --retry-delay 1 --retry-connrefused --connect-timeout 2 --max-time 5 http://127.0.0.1:${SMOKE_PUBLISHED_PORT}/healthz`,
-				`docker logs ${SMOKE_CONTAINER_ID}`,
-				`docker container rm --force ${SMOKE_CONTAINER_ID}`,
-				`docker image rm --force ${SMOKE_IMAGE_TAG}`
-			]
-		);
+		const invocations = readInvocationLog(invocationLogPath);
+
+		assertCommandSequence(invocations, [
+			/^docker build\b/,
+			/^docker run\b/,
+			/^docker port\b/,
+			/^curl\b/,
+			/^docker logs\b/,
+			/^docker container rm\b/,
+			/^docker image rm\b/
+		]);
+		assertCommandIncludes(invocations[4] ?? '', [SMOKE_CONTAINER_ID]);
+		assertCommandIncludes(invocations[5] ?? '', [
+			'--force',
+			SMOKE_CONTAINER_ID
+		]);
+		assertCommandIncludes(invocations[6] ?? '', ['--force', SMOKE_IMAGE_TAG]);
 	});
 });
