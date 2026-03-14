@@ -8,6 +8,7 @@ import {
 	AUTH_ERROR_SIGNATURE_QUERY_NAME,
 	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
 	AUTH_ERROR_MESSAGE,
+	buildAuthErrorLandingRedirectLocation,
 	buildAuthErrorRedirectQuery,
 	clearAuthErrorQuery,
 	readVerifiedAuthError
@@ -259,6 +260,39 @@ describe('readVerifiedAuthError', () => {
 			message: AUTH_ERROR_MESSAGE,
 			incidentId: signInIncidentId
 		});
+	});
+
+	it('builds an absolute landing-page redirect on the configured origin', () => {
+		const location = buildAuthErrorLandingRedirectLocation({
+			incidentId,
+			secret: cookiePassword,
+			origin: 'https://kaivalo.test',
+			now: issuedAt
+		});
+
+		const parsedLocation = new URL(location);
+		expect(parsedLocation.origin).toBe('https://kaivalo.test');
+		expect(parsedLocation.pathname).toBe('/');
+		expect(
+			readVerifiedAuthError(parsedLocation.searchParams, {
+				secret: cookiePassword,
+				now: issuedAt
+			})
+		).toEqual({
+			message: AUTH_ERROR_MESSAGE,
+			incidentId
+		});
+	});
+
+	it('rejects malformed landing-page origins', () => {
+		expect(() =>
+			buildAuthErrorLandingRedirectLocation({
+				incidentId,
+				secret: cookiePassword,
+				origin: 'https://kaivalo.test/services',
+				now: issuedAt
+			})
+		).toThrowError('origin must be a valid URL origin');
 	});
 });
 

@@ -3,7 +3,7 @@ import type { RequestEvent } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import { getErrorLogContext } from '../server/error-diagnostics.ts';
 import { normalizeRequestId } from '../server/request-id.ts';
-import { buildAuthErrorRedirectQuery } from './auth-error-query.ts';
+import { buildAuthErrorLandingRedirectLocation } from './auth-error-query.ts';
 import {
 	isRedirectLikeObject,
 	normalizeSameOriginRedirectLocation,
@@ -238,10 +238,11 @@ export function createAuthCallbackGetHandler({
 
 			throw redirect(
 				303,
-				`/?${buildAuthErrorRedirectQuery({
+				buildAuthErrorLandingRedirectLocation({
 					incidentId,
-					secret: authErrorSigningSecret
-				})}`
+					secret: authErrorSigningSecret,
+					origin: trustedOrigin
+				})
 			);
 		}
 	};

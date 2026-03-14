@@ -308,6 +308,74 @@ describe('auth callback route', () => {
 		);
 	});
 
+	it('pins poisoned-host browser failures to the trusted landing-page origin', async () => {
+		const errorSpy = vi
+			.spyOn(console, 'error')
+			.mockImplementation(() => undefined);
+		mockHandleCallback.mockImplementation(() => {
+			throw new Error('upstream unavailable');
+		});
+
+		const { GET } = await import('./+server');
+
+		try {
+			await GET(
+				createEvent(
+					{
+						accept: 'text/html',
+						'sec-fetch-mode': 'navigate'
+					},
+					'https://attacker.test/auth/callback?code=test-code&state=test-state'
+				)
+			);
+			throw new Error('expected callback route to redirect');
+		} catch (caught) {
+			const redirectLike = caught as { status: number; location: string };
+			expect(redirectLike).toMatchObject({
+				status: 303,
+				location: expect.stringMatching(/^https:\/\/kaivalo\.test\/\?/)
+			});
+
+			const location = new URL(redirectLike.location);
+			expect(location.origin).toBe(mockEnv.ORIGIN);
+			expect(location.pathname).toBe('/');
+			expect(location.searchParams.get(AUTH_ERROR_QUERY_NAME)).toBe(
+				AUTH_ERROR_QUERY_VALUE
+			);
+			expect(
+				location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME) ?? ''
+			).toMatch(/^authcb_[0-9a-f-]+$/);
+			expect(location.searchParams.has(AUTH_ERROR_TIMESTAMP_QUERY_NAME)).toBe(
+				true
+			);
+			expect(location.searchParams.has(AUTH_ERROR_SIGNATURE_QUERY_NAME)).toBe(
+				true
+			);
+			expect(
+				readVerifiedAuthError(location.searchParams, {
+					secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
+					now:
+						Number(location.searchParams.get(AUTH_ERROR_TIMESTAMP_QUERY_NAME)) +
+						1
+				})
+			).toEqual({
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
+				incidentId: location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME)
+			});
+			expect(errorSpy).toHaveBeenCalledWith(
+				'Auth callback failed',
+				expect.objectContaining({
+					errorCode: 'AUTH_CALLBACK_UNEXPECTED_FAILURE',
+					pathname: '/auth/callback',
+					method: 'GET',
+					incidentId: expect.stringMatching(/^authcb_/),
+					errorName: 'Error'
+				})
+			);
+		}
+	});
+
 	it('treats redirect responses without a location header as route failures', async () => {
 		mockEnv.NODE_ENV = 'development';
 		const errorSpy = vi

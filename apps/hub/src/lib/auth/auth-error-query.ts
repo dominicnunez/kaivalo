@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { normalizeConfiguredOrigin } from './request-policy.ts';
 export {
 	AUTH_ERROR_INCIDENT_QUERY_NAME,
 	AUTH_ERROR_MESSAGE,
@@ -27,6 +28,11 @@ type BuildAuthErrorRedirectQueryOptions = {
 	secret: string;
 	now?: number;
 };
+
+type BuildAuthErrorLandingRedirectLocationOptions =
+	BuildAuthErrorRedirectQueryOptions & {
+		origin: string;
+	};
 
 type ReadVerifiedAuthErrorOptions = {
 	secret: string;
@@ -93,6 +99,21 @@ export function buildAuthErrorRedirectQuery({
 		signAuthErrorIncident(incidentId, timestamp, normalizedSecret)
 	);
 	return params.toString();
+}
+
+export function buildAuthErrorLandingRedirectLocation({
+	incidentId,
+	secret,
+	origin,
+	now
+}: BuildAuthErrorLandingRedirectLocationOptions): string {
+	const landingUrl = new URL('/', normalizeConfiguredOrigin(origin, 'origin'));
+	landingUrl.search = buildAuthErrorRedirectQuery({
+		incidentId,
+		secret,
+		now
+	});
+	return landingUrl.toString();
 }
 
 export function readVerifiedAuthError(
