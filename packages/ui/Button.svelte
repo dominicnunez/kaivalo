@@ -1,23 +1,22 @@
-<script>
-	/** @type {import('./props.ts').ButtonProps} */
+<script lang="ts">
+	import type { ButtonProps } from './props.ts';
+
 	let {
 		type = 'button',
 		variant = 'primary',
 		size = 'md',
 		disabled = false,
-		onclick,
 		class: className = '',
-		children
-	} = $props();
+		children,
+		...restProps
+	}: ButtonProps = $props();
 </script>
 
 <button
+	{...restProps}
 	{type}
-	class="btn btn-{variant} btn-{size} {disabled
-		? 'btn-disabled'
-		: ''} {className}"
+	class={`btn btn-${variant} btn-${size} ${disabled ? 'btn-disabled' : ''} ${className}`.trim()}
 	{disabled}
-	{onclick}
 >
 	{@render children?.()}
 </button>

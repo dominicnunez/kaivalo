@@ -1,6 +1,12 @@
-<script>
-	/** @type {import('./props.ts').ContainerProps} */
-	let { size = 'lg', class: className = '', children } = $props();
+<script lang="ts">
+	import type { ContainerProps } from './props.ts';
+
+	let {
+		size = 'lg',
+		class: className = '',
+		children,
+		...restProps
+	}: ContainerProps = $props();
 
 	const baseClasses = 'w-full mx-auto px-4 sm:px-6 lg:px-8';
 
@@ -18,6 +24,11 @@
 	);
 </script>
 
-<div class={computedClasses} data-ui="container" data-size={resolvedSize}>
+<div
+	{...restProps}
+	class={computedClasses}
+	data-ui="container"
+	data-size={resolvedSize}
+>
 	{@render children?.()}
 </div>

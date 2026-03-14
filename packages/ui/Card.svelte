@@ -1,5 +1,6 @@
-<script>
-	/** @type {import('./props.ts').CardProps} */
+<script lang="ts">
+	import type { CardElementProps } from './props.ts';
+
 	let {
 		variant = 'default',
 		href = '',
@@ -8,16 +9,15 @@
 		allowExternal = false,
 		allowedExternalHosts = [],
 		class: className = '',
-		children
-	} = $props();
+		children,
+		...restProps
+	}: CardElementProps = $props();
 
-	/** @param {string} value */
-	function normalizeHost(value) {
+	function normalizeHost(value: string) {
 		return value.trim().toLowerCase();
 	}
 
-	/** @type {Record<string, string>} */
-	const DEFAULT_PORTS = {
+	const DEFAULT_PORTS: Record<'http:' | 'https:', string> = {
 		'http:': '80',
 		'https:': '443'
 	};
@@ -25,8 +25,7 @@
 	const ENCODED_CONTROL_OR_SEPARATOR_PATTERN =
 		/%(?:0[0-9a-f]|1[0-9a-f]|7f|2f|5c)/i;
 
-	/** @param {string} value */
-	function hasControlCharacter(value) {
+	function hasControlCharacter(value: string) {
 		for (const char of value) {
 			const code = char.charCodeAt(0);
 			if ((code >= 0 && code <= 31) || code === 127) {
@@ -37,17 +36,18 @@
 		return false;
 	}
 
-	/** @param {URL} parsedUrl */
-	function hasDisallowedPort(parsedUrl) {
+	function hasDisallowedPort(parsedUrl: URL) {
 		if (!parsedUrl.port) {
 			return false;
 		}
 
-		return DEFAULT_PORTS[parsedUrl.protocol] !== parsedUrl.port;
+		return (
+			DEFAULT_PORTS[parsedUrl.protocol as keyof typeof DEFAULT_PORTS] !==
+			parsedUrl.port
+		);
 	}
 
-	/** @param {string} value */
-	function isUnsafeRawHref(value) {
+	function isUnsafeRawHref(value: string) {
 		return (
 			value !== value.trim() ||
 			value.includes('\\') ||
@@ -55,8 +55,7 @@
 		);
 	}
 
-	/** @param {string} value */
-	function normalizeRelativeHref(value) {
+	function normalizeRelativeHref(value: string) {
 		if (ENCODED_CONTROL_OR_SEPARATOR_PATTERN.test(value)) {
 			return '';
 		}
@@ -90,8 +89,7 @@
 		return hosts;
 	});
 
-	/** @param {string} value */
-	function resolveSafeHref(value) {
+	function resolveSafeHref(value: string) {
 		if (!value) {
 			return '';
 		}
@@ -131,14 +129,43 @@
 	}
 
 	let safeHref = $derived(resolveSafeHref(href));
-	let isLink = $derived(variant === 'link' && safeHref);
+	let isActiveLink = $derived(variant === 'link' && safeHref !== '');
+	let isDisabledLink = $derived(variant === 'link' && safeHref === '');
+	let rootClass = $derived(
+		[
+			'card',
+			hover && !isDisabledLink ? 'card-hover' : '',
+			isDisabledLink ? 'card-disabled' : '',
+			className
+		]
+			.filter(Boolean)
+			.join(' ')
+	);
 </script>
 
-{#if isLink}
+{#if isActiveLink}
 	<a
+		{...restProps}
 		href={safeHref}
-		class="card {hover ? 'card-hover' : ''} {className}"
+		class={rootClass}
 		data-ui="card"
+		data-card-state="link"
+	>
+		{#if header}
+			<div class="card-header">{header}</div>
+		{/if}
+		<div class="card-body">
+			{@render children?.()}
+		</div>
+	</a>
+{:else if isDisabledLink}
+	<a
+		{...restProps}
+		aria-disabled="true"
+		class={rootClass}
+		data-ui="card"
+		data-card-state="disabled"
+		tabindex="-1"
 	>
 		{#if header}
 			<div class="card-header">{header}</div>
@@ -148,7 +175,12 @@
 		</div>
 	</a>
 {:else}
-	<div class="card {hover ? 'card-hover' : ''} {className}" data-ui="card">
+	<div
+		{...restProps}
+		class={rootClass}
+		data-ui="card"
+		data-card-state="default"
+	>
 		{#if header}
 			<div class="card-header">{header}</div>
 		{/if}
@@ -179,6 +211,12 @@
 		box-shadow:
 			0 0 40px var(--accent-glow),
 			0 8px 32px rgba(0, 0, 0, 0.4);
+	}
+
+	.card-disabled {
+		cursor: not-allowed;
+		opacity: 0.72;
+		pointer-events: none;
 	}
 
 	.card-header {

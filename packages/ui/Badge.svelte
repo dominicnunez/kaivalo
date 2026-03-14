@@ -1,15 +1,18 @@
-<script>
-	/** @type {import('./props.ts').BadgeProps} */
+<script lang="ts">
+	import type { BadgeProps } from './props.ts';
+
 	let {
 		status = 'default',
 		size = 'md',
 		class: className = '',
-		children
-	} = $props();
+		children,
+		...restProps
+	}: BadgeProps = $props();
 </script>
 
 <span
-	class="badge badge-{status} badge-{size} {className}"
+	{...restProps}
+	class={`badge badge-${status} badge-${size} ${className}`.trim()}
 	data-ui="badge"
 	data-status={status}
 	data-size={size}
