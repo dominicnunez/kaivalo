@@ -83,4 +83,58 @@ describe('production image smoke build integration', () => {
 			);
 		}
 	);
+
+	it(
+		'keeps a reused image tag when skip-build mode is enabled',
+		{ skip: !hasDocker() },
+		async () => {
+			const smokeImageTag = `kaivalo-hub-smoke:integration-reuse-${Date.now()}-${process.pid}`;
+			const buildResult = spawnSync(
+				'docker',
+				['build', '--file', './Dockerfile', '--tag', smokeImageTag, '.'],
+				{
+					cwd: ROOT,
+					encoding: 'utf8',
+					stdio: 'pipe'
+				}
+			);
+
+			assert.strictEqual(
+				buildResult.status,
+				0,
+				buildResult.stderr || buildResult.stdout
+			);
+
+			try {
+				const result = await runSmokeBuildScript({
+					PRODUCTION_IMAGE_SMOKE_SKIP_BUILD: 'true',
+					PRODUCTION_IMAGE_SMOKE_TAG: smokeImageTag
+				});
+
+				assert.strictEqual(result.exitCode, 0, result.stderr || result.stdout);
+				assert.strictEqual(result.signal, null);
+
+				const inspectResult = spawnSync(
+					'docker',
+					['image', 'inspect', smokeImageTag],
+					{
+						cwd: ROOT,
+						encoding: 'utf8',
+						stdio: 'pipe'
+					}
+				);
+				assert.strictEqual(
+					inspectResult.status,
+					0,
+					`expected smoke-build script to keep reused image ${smokeImageTag}`
+				);
+			} finally {
+				spawnSync('docker', ['image', 'rm', '--force', smokeImageTag], {
+					cwd: ROOT,
+					encoding: 'utf8',
+					stdio: 'pipe'
+				});
+			}
+		}
+	);
 });

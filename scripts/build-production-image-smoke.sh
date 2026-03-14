@@ -21,6 +21,7 @@ readonly SMOKE_WORKOS_COOKIE_PASSWORD='ababababababababababababababababababababa
 readonly SMOKE_AUTH_ERROR_SIGNING_SECRET='cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd'
 
 container_id=''
+remove_image_tag='false'
 
 should_skip_build() {
 	case "${PRODUCTION_IMAGE_SMOKE_SKIP_BUILD:-}" in
@@ -38,7 +39,9 @@ cleanup() {
 		"$DOCKER_BIN" container rm --force "$container_id" >/dev/null 2>&1 || true
 	fi
 
-	"$DOCKER_BIN" image rm --force "$IMAGE_TAG" >/dev/null 2>&1 || true
+	if [[ "$remove_image_tag" == 'true' ]]; then
+		"$DOCKER_BIN" image rm --force "$IMAGE_TAG" >/dev/null 2>&1 || true
+	fi
 }
 
 trap cleanup EXIT
@@ -81,6 +84,7 @@ probe_container_health() {
 }
 
 if ! should_skip_build; then
+	remove_image_tag='true'
 	"$DOCKER_BIN" build --file "$DOCKERFILE_PATH" --tag "$IMAGE_TAG" "$BUILD_CONTEXT"
 fi
 

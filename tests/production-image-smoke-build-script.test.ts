@@ -261,12 +261,43 @@ describe('production image smoke build script', () => {
 			/^docker run\b/,
 			/^docker port\b/,
 			/^curl\b/,
-			/^docker container rm\b/,
-			/^docker image rm\b/
+			/^docker container rm\b/
 		]);
 		assertCommandIncludes(invocations[0] ?? '', [
 			'--publish 127.0.0.1::3100',
 			SMOKE_IMAGE_TAG
+		]);
+	});
+
+	it('keeps a reused image tag when skip mode fails after the container starts', async () => {
+		const { fakeCurlPath, fakeDockerPath, invocationLogPath } =
+			createFakeDocker();
+		const result = await runSmokeBuildScript({
+			environmentOverrides: {
+				CURL_BIN: fakeCurlPath,
+				DOCKER_BIN: fakeDockerPath,
+				FAKE_CURL_RESPONSE_BODY: 'degraded',
+				FAKE_DOCKER_LOG: invocationLogPath,
+				FAKE_DOCKER_LOGS_OUTPUT: 'container failed to start',
+				PRODUCTION_IMAGE_SMOKE_SKIP_BUILD: 'true',
+				PRODUCTION_IMAGE_SMOKE_TAG: SMOKE_IMAGE_TAG
+			}
+		});
+
+		assert.strictEqual(result.exitCode, 1, result.stderr || result.stdout);
+		const invocations = readInvocationLog(invocationLogPath);
+
+		assertCommandSequence(invocations, [
+			/^docker run\b/,
+			/^docker port\b/,
+			/^curl\b/,
+			/^docker logs\b/,
+			/^docker container rm\b/
+		]);
+		assertCommandIncludes(invocations[3] ?? '', [SMOKE_CONTAINER_ID]);
+		assertCommandIncludes(invocations[4] ?? '', [
+			'--force',
+			SMOKE_CONTAINER_ID
 		]);
 	});
 
