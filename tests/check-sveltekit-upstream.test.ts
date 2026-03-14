@@ -13,6 +13,29 @@ import {
 	readLatestMetadata
 } from '../scripts/check-sveltekit-upstream.ts';
 
+function escapeRegExp(value) {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function readGithubMultilineOutputEntry(serialized, name) {
+	const entryHeader = new RegExp(`^${name}<<([^\\n]+)$`, 'm');
+	const entryHeaderMatch = serialized.match(entryHeader);
+	assert.ok(entryHeaderMatch, `expected ${name} output entry`);
+
+	const delimiter = entryHeaderMatch[1];
+	const entryPattern = new RegExp(
+		`^${name}<<${escapeRegExp(delimiter)}\\n([\\s\\S]*?)\\n${escapeRegExp(delimiter)}$`,
+		'm'
+	);
+	const entryMatch = serialized.match(entryPattern);
+	assert.ok(entryMatch, `expected complete ${name} output block`);
+
+	return {
+		delimiter,
+		value: entryMatch[1]
+	};
+}
+
 describe('check-sveltekit-upstream', () => {
 	it('uses a bounded timeout when fetching registry metadata', async () => {
 		const controller = new AbortController();
@@ -178,7 +201,7 @@ describe('check-sveltekit-upstream', () => {
 		}
 	});
 
-	it('formats github output with collision-safe delimiters for multiline values', async () => {
+	it('formats github output as valid multiline entries with collision-safe delimiters', async () => {
 		const githubOutputPath = join(
 			mkdtempSync(join(tmpdir(), 'kaivalo-upstream-output-')),
 			'github-output.txt'
@@ -199,12 +222,30 @@ describe('check-sveltekit-upstream', () => {
 		await appendFile(githubOutputPath, `${entries.join('\n')}\n`);
 
 		const serialized = readFileSync(githubOutputPath, 'utf8');
-		assert.match(serialized, /summary<<kaivalo_output_safe-summary/);
-		assert.match(serialized, /issue_body<<kaivalo_output_safe-body/);
-		assert.doesNotMatch(serialized, /<<EOF/);
-		assert.match(serialized, /Current resolved version: `2\.20\.0`/);
-		assert.match(
+		assert.match(serialized, /^current_version=2\.20\.0$/m);
+		assert.match(serialized, /^latest_version=2\.20\.1$/m);
+		assert.match(serialized, /^has_newer_upstream=true$/m);
+
+		const summaryEntry = readGithubMultilineOutputEntry(serialized, 'summary');
+		assert.match(summaryEntry.delimiter, /^kaivalo_output_/);
+		assert.doesNotMatch(
+			summaryEntry.value,
+			new RegExp(escapeRegExp(summaryEntry.delimiter))
+		);
+		assert.match(summaryEntry.value, /Current resolved version: `2\.20\.0`/);
+
+		const issueBodyEntry = readGithubMultilineOutputEntry(
 			serialized,
+			'issue_body'
+		);
+		assert.match(issueBodyEntry.delimiter, /^kaivalo_output_/);
+		assert.notStrictEqual(summaryEntry.delimiter, issueBodyEntry.delimiter);
+		assert.doesNotMatch(
+			issueBodyEntry.value,
+			new RegExp(escapeRegExp(issueBodyEntry.delimiter))
+		);
+		assert.match(
+			issueBodyEntry.value,
 			/Cookie advisory exception: `audit\/exceptions\/risks\.md`/
 		);
 	});
