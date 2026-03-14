@@ -20,7 +20,7 @@ const validEnv = {
 	ORIGIN: 'https://kaivalo.test'
 };
 const PREVIEW_FIXTURE_IMPORT = new URL(
-	'./helpers/hub-preview-fixtures.mjs',
+	'./helpers/hub-preview-fixtures.mts',
 	import.meta.url
 ).href;
 

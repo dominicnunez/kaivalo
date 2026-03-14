@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 
 const PREVIEW_FIXTURE_IMPORT = new URL(
-	'./helpers/hub-preview-fixtures.mjs',
+	'./helpers/hub-preview-fixtures.mts',
 	import.meta.url
 ).href;
 const AVATAR_SOURCE =

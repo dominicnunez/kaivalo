@@ -5,7 +5,7 @@ import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 
 const AUTHKIT_COOKIE_NAME = '__Host-wos_session';
 const previewFixtureImport = new URL(
-	'./helpers/hub-preview-fixtures.mjs',
+	'./helpers/hub-preview-fixtures.mts',
 	import.meta.url
 ).href;
 

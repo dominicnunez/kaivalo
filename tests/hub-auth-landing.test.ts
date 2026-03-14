@@ -12,7 +12,7 @@ import { startHubPreview, httpGet } from './helpers/hub-preview.ts';
 describe('auth landing page behavior', () => {
 	const trustedPathPrefixes = ['/auth/sign-in', '/user_management/authorize'];
 	const previewFixtureImport = new URL(
-		'./helpers/hub-preview-fixtures.mjs',
+		'./helpers/hub-preview-fixtures.mts',
 		import.meta.url
 	).href;
 	let preview;
