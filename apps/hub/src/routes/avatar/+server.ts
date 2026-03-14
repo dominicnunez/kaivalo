@@ -16,7 +16,9 @@ import {
 	shouldIncludeErrorMessage
 } from '$lib/server/error-diagnostics.ts';
 import {
+	createRateLimitKey,
 	createSlidingWindowRateLimiter,
+	type RateLimitEvent,
 	type SlidingWindowRateLimiter
 } from '$lib/server/request-rate-limit.ts';
 import { normalizeRequestId } from '$lib/server/request-id.ts';
@@ -30,7 +32,12 @@ const AVATAR_CACHE_STALE_WHILE_REVALIDATE_SECONDS = 86400;
 const AVATAR_RATE_LIMIT_MAX_REQUESTS = 30;
 const AVATAR_RATE_LIMIT_WINDOW_MS = 60_000;
 const AVATAR_RATE_LIMIT_MAX_ENTRIES = 10_000;
+const AVATAR_RATE_LIMIT_PROFILE = 'avatar_proxy';
+const AVATAR_RATE_LIMIT_CHURN_THRESHOLD = 200;
+const AVATAR_RATE_LIMIT_EVICTION_THRESHOLD = 100;
+const AVATAR_RATE_LIMIT_GUARD_DURATION_MS = 60_000;
 const AVATAR_PROXY_ERROR_CODE = 'AVATAR_PROXY_FAILURE';
+const AVATAR_RATE_LIMIT_EVENT_CODE = 'AVATAR_RATE_LIMIT_EVENT';
 const TOO_MANY_REQUESTS_MESSAGE = 'Too many requests';
 const TOO_MANY_REQUESTS_STATUS = 429;
 const SERVICE_UNAVAILABLE_MESSAGE = 'Service unavailable';
@@ -164,6 +171,33 @@ function logAvatarClientAddressFailure({
 		source,
 		failureClass: 'client-address',
 		responseStatus: SERVICE_UNAVAILABLE_STATUS
+	});
+}
+
+function logAvatarRateLimitEvent(event: RateLimitEvent): void {
+	const { type, ...details } = event;
+	console.warn('Avatar rate limiter event', {
+		errorCode: AVATAR_RATE_LIMIT_EVENT_CODE,
+		eventType: type,
+		...details
+	});
+}
+
+function createAvatarRateLimiter(): SlidingWindowRateLimiter {
+	return createSlidingWindowRateLimiter({
+		profile: AVATAR_RATE_LIMIT_PROFILE,
+		limit: AVATAR_RATE_LIMIT_MAX_REQUESTS,
+		windowMs: AVATAR_RATE_LIMIT_WINDOW_MS,
+		maxEntries: AVATAR_RATE_LIMIT_MAX_ENTRIES,
+		guardrails: {
+			anomalyWindowMs: AVATAR_RATE_LIMIT_WINDOW_MS,
+			newKeysWhileFullThreshold: AVATAR_RATE_LIMIT_CHURN_THRESHOLD,
+			evictionsWhileFullThreshold: AVATAR_RATE_LIMIT_EVICTION_THRESHOLD,
+			triggerMode: 'both',
+			guardedOverflowDurationMs: AVATAR_RATE_LIMIT_GUARD_DURATION_MS,
+			evictionWarnThreshold: AVATAR_RATE_LIMIT_EVICTION_THRESHOLD
+		},
+		onEvent: logAvatarRateLimitEvent
 	});
 }
 
@@ -309,7 +343,9 @@ function getAvatarRateLimitKey(
 		trustedProxyIps
 	});
 
-	return trustedClientAddress || directClientAddress;
+	return createRateLimitKey({
+		networkKey: trustedClientAddress || directClientAddress
+	});
 }
 
 type CreateAvatarGetHandlerOptions = {
@@ -319,11 +355,7 @@ type CreateAvatarGetHandlerOptions = {
 
 export function _createAvatarGetHandler({
 	trustedProxyIps,
-	rateLimiter = createSlidingWindowRateLimiter({
-		limit: AVATAR_RATE_LIMIT_MAX_REQUESTS,
-		windowMs: AVATAR_RATE_LIMIT_WINDOW_MS,
-		maxEntries: AVATAR_RATE_LIMIT_MAX_ENTRIES
-	})
+	rateLimiter = createAvatarRateLimiter()
 }: CreateAvatarGetHandlerOptions = {}): RequestHandler {
 	const configuredTrustedProxyIps =
 		trustedProxyIps ??

@@ -4,7 +4,10 @@ import {
 	AVATAR_FETCH_TIMEOUT_MS,
 	AVATAR_MAX_RESPONSE_BYTES
 } from '$lib/server/avatar-proxy.ts';
-import { createSlidingWindowRateLimiter } from '$lib/server/request-rate-limit.ts';
+import {
+	createSlidingWindowRateLimiter,
+	type SlidingWindowRateLimiter
+} from '$lib/server/request-rate-limit.ts';
 import { _createAvatarGetHandler } from './+server';
 
 let GET: ReturnType<typeof _createAvatarGetHandler>;
@@ -612,6 +615,7 @@ describe('avatar proxy route', () => {
 	it('rate limits repeated avatar fetches from the same client address', async () => {
 		const GET = _createAvatarGetHandler({
 			rateLimiter: createSlidingWindowRateLimiter({
+				profile: 'avatar_test',
 				limit: 2,
 				windowMs: 60_000,
 				maxEntries: 128,
@@ -652,9 +656,127 @@ describe('avatar proxy route', () => {
 		await expect(limited.text()).resolves.toBe('Too many requests');
 	});
 
+	it('preserves the 429 body when guarded overflow rejects a new client address', async () => {
+		let now = 1_000;
+		const GET = _createAvatarGetHandler({
+			rateLimiter: createSlidingWindowRateLimiter({
+				profile: 'avatar_test',
+				limit: 1,
+				windowMs: 60_000,
+				maxEntries: 1,
+				now: () => now,
+				guardrails: {
+					anomalyWindowMs: 60_000,
+					newKeysWhileFullThreshold: 1,
+					evictionsWhileFullThreshold: 99,
+					triggerMode: 'either',
+					guardedOverflowDurationMs: 60_000
+				}
+			})
+		});
+		const fetch = vi.fn(
+			async () =>
+				new Response('image-bytes', {
+					status: 200,
+					headers: {
+						'cache-control': 'public, max-age=60',
+						'content-type': 'image/png',
+						'content-length': '11'
+					}
+				})
+		);
+
+		const createEvent = (clientAddress: string) =>
+			({
+				request: new Request(
+					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+				),
+				url: new URL(
+					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+				),
+				fetch,
+				getClientAddress: () => clientAddress
+			}) as never;
+
+		expect((await GET(createEvent('203.0.113.10'))).status).toBe(200);
+		now += 1;
+
+		const limited = await GET(createEvent('203.0.113.11'));
+
+		expect(limited.status).toBe(429);
+		expect(limited.headers.get('retry-after')).toBe('60');
+		await expect(limited.text()).resolves.toBe('Too many requests');
+		expect(fetch).toHaveBeenCalledTimes(1);
+	});
+
+	it('formats avatar limiter keys through the shared network key helper', async () => {
+		const seenKeys: string[] = [];
+		const rateLimiter: SlidingWindowRateLimiter = {
+			check(key) {
+				seenKeys.push(key);
+				return {
+					allowed: true,
+					retryAfterSeconds: 0,
+					decision: 'allowed',
+					mode: 'lru'
+				};
+			},
+			clear() {},
+			snapshot() {
+				return {
+					nowMs: 0,
+					mode: 'lru',
+					guardedUntilMs: 0,
+					guardedRemainingMs: 0,
+					activeBucketCount: 0,
+					maxEntries: 1,
+					newKeysWhileFull: 0,
+					evictionsWhileFull: 0,
+					largestBucketSize: 0,
+					distinctKeysTracked: 0
+				};
+			}
+		};
+		const GET = _createAvatarGetHandler({
+			trustedProxyIps: ['203.0.113.1', '203.0.113.2'],
+			rateLimiter
+		});
+		const fetch = vi.fn(
+			async () =>
+				new Response('image-bytes', {
+					status: 200,
+					headers: {
+						'cache-control': 'public, max-age=60',
+						'content-type': 'image/png',
+						'content-length': '11'
+					}
+				})
+		);
+
+		await GET(createAvatarEvent(fetch));
+		await GET({
+			request: new Request(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1',
+				{
+					headers: {
+						'x-forwarded-for': '198.51.100.10, 203.0.113.1'
+					}
+				}
+			),
+			url: new URL(
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			),
+			fetch,
+			getClientAddress: () => '203.0.113.2'
+		} as never);
+
+		expect(seenKeys).toEqual(['network:203.0.113.10', 'network:198.51.100.10']);
+	});
+
 	it('admits new client addresses by evicting the stalest avatar limiter bucket', async () => {
 		const GET = _createAvatarGetHandler({
 			rateLimiter: createSlidingWindowRateLimiter({
+				profile: 'avatar_test',
 				limit: 2,
 				windowMs: 60_000,
 				maxEntries: 1,
@@ -700,6 +822,7 @@ describe('avatar proxy route', () => {
 		let now = 1_000;
 		const GET = _createAvatarGetHandler({
 			rateLimiter: createSlidingWindowRateLimiter({
+				profile: 'avatar_test',
 				limit: 2,
 				windowMs: 60_000,
 				maxEntries: 128,
@@ -744,6 +867,7 @@ describe('avatar proxy route', () => {
 	it('keeps avatar quotas independent for different client addresses', async () => {
 		const GET = _createAvatarGetHandler({
 			rateLimiter: createSlidingWindowRateLimiter({
+				profile: 'avatar_test',
 				limit: 2,
 				windowMs: 60_000,
 				maxEntries: 128,
@@ -787,6 +911,7 @@ describe('avatar proxy route', () => {
 		let now = 1_000;
 		const GET = _createAvatarGetHandler({
 			rateLimiter: createSlidingWindowRateLimiter({
+				profile: 'avatar_test',
 				limit: 2,
 				windowMs: 60_000,
 				maxEntries: 128,
@@ -840,6 +965,7 @@ describe('avatar proxy route', () => {
 		const GET = _createAvatarGetHandler({
 			trustedProxyIps: ['203.0.113.1', '203.0.113.2'],
 			rateLimiter: createSlidingWindowRateLimiter({
+				profile: 'avatar_test',
 				limit: 1,
 				windowMs: 60_000,
 				maxEntries: 128,
@@ -890,6 +1016,7 @@ describe('avatar proxy route', () => {
 	it('rejects avatar requests when the runtime cannot determine any client address', async () => {
 		const GET = _createAvatarGetHandler({
 			rateLimiter: createSlidingWindowRateLimiter({
+				profile: 'avatar_test',
 				limit: 1,
 				windowMs: 60_000,
 				maxEntries: 128,
@@ -935,6 +1062,7 @@ describe('avatar proxy route', () => {
 		let now = 1_000;
 		const GET = _createAvatarGetHandler({
 			rateLimiter: createSlidingWindowRateLimiter({
+				profile: 'avatar_test',
 				limit: 1,
 				windowMs: 60_000,
 				maxEntries: 128,
