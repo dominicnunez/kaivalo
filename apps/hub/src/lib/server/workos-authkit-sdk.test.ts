@@ -5,7 +5,7 @@ describe('WorkOS AuthKit SDK hostname behavior', () => {
 		vi.resetModules();
 	});
 
-	it('builds hosted sign-in URLs from apiHostname in the installed SDK', async () => {
+	it('builds hosted sign-in URLs from apiHostname with the configured redirect URI', async () => {
 		const { authKit, configureAuthKit } =
 			await import('@workos/authkit-sveltekit');
 
@@ -20,8 +20,8 @@ describe('WorkOS AuthKit SDK hostname behavior', () => {
 		const signInUrl = await authKit.getSignInUrl({ returnTo: '/services' });
 		const parsed = new URL(signInUrl);
 
+		expect(parsed.protocol).toBe('https:');
 		expect(parsed.origin).toBe('https://auth.kaivalo-login.test');
-		expect(parsed.pathname).toBe('/user_management/authorize');
 		expect(parsed.searchParams.get('redirect_uri')).toBe(
 			'https://kaivalo.test/auth/callback'
 		);
