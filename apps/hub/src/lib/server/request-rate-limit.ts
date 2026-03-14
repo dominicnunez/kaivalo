@@ -119,7 +119,7 @@ function getRetryAfterSeconds(
 	return Math.max(1, Math.ceil((oldestTimestamp + windowMs - now) / 1000));
 }
 
-function getOverflowRetryAfterSeconds(
+function getCapacityRetryAfterSeconds(
 	buckets: ReadonlyMap<string, SlidingWindowBucket>,
 	now: number,
 	windowMs: number
@@ -142,41 +142,6 @@ function getOverflowRetryAfterSeconds(
 	return earliestBucketEvictionTimestamp === null
 		? 1
 		: getRetryAfterSeconds(earliestBucketEvictionTimestamp, now, windowMs);
-}
-
-function getLeastRecentlyActiveBucketKey(
-	buckets: ReadonlyMap<string, SlidingWindowBucket>
-): string | null {
-	let candidateKey: string | null = null;
-	let candidateTimestamp: number | null = null;
-
-	for (const [key, bucket] of buckets.entries()) {
-		const newestBucketTimestamp = getNewestBucketTimestamp(bucket);
-		if (newestBucketTimestamp === null) {
-			continue;
-		}
-		if (
-			candidateTimestamp === null ||
-			newestBucketTimestamp < candidateTimestamp
-		) {
-			candidateKey = key;
-			candidateTimestamp = newestBucketTimestamp;
-		}
-	}
-
-	return candidateKey;
-}
-
-function evictLeastRecentlyActiveBucket(
-	buckets: Map<string, SlidingWindowBucket>
-): boolean {
-	const key = getLeastRecentlyActiveBucketKey(buckets);
-	if (key === null) {
-		return false;
-	}
-
-	buckets.delete(key);
-	return true;
 }
 
 export function createSlidingWindowRateLimiter({
@@ -208,13 +173,12 @@ export function createSlidingWindowRateLimiter({
 					deleteBuckets(buckets, sweepStaleBuckets(buckets, nowMs, windowMs));
 				}
 
-				if (
-					buckets.size >= maxEntries &&
-					!evictLeastRecentlyActiveBucket(buckets)
-				) {
+				// Preserve active client buckets when the table is full so churn
+				// from unseen keys cannot reset established quotas under load.
+				if (buckets.size >= maxEntries) {
 					return {
 						allowed: false,
-						retryAfterSeconds: getOverflowRetryAfterSeconds(
+						retryAfterSeconds: getCapacityRetryAfterSeconds(
 							buckets,
 							nowMs,
 							windowMs

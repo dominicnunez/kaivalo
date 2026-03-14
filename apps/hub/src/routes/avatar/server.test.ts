@@ -652,7 +652,7 @@ describe('avatar proxy route', () => {
 		await expect(limited.text()).resolves.toBe('Too many requests');
 	});
 
-	it('admits new client addresses by evicting the least recently active avatar bucket', async () => {
+	it('rejects new client addresses when the avatar limiter table is full', async () => {
 		const GET = _createAvatarGetHandler({
 			rateLimiter: createSlidingWindowRateLimiter({
 				limit: 2,
@@ -689,10 +689,12 @@ describe('avatar proxy route', () => {
 
 		const secondClient = await GET(createEvent('203.0.113.11'));
 
-		expect(secondClient.status).toBe(200);
-		expect(fetch).toHaveBeenCalledTimes(2);
+		expect(secondClient.status).toBe(429);
+		expect(secondClient.headers.get('retry-after')).toBe('60');
+		await expect(secondClient.text()).resolves.toBe('Too many requests');
+		expect(fetch).toHaveBeenCalledTimes(1);
 		expect((await GET(createEvent('203.0.113.10'))).status).toBe(200);
-		expect(fetch).toHaveBeenCalledTimes(3);
+		expect(fetch).toHaveBeenCalledTimes(2);
 	});
 
 	it('shares quotas across equivalent normalized client addresses', async () => {
