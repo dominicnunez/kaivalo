@@ -544,7 +544,9 @@ describe('hub preview script', () => {
 			envOverrides: {
 				DEV_AUTH_BYPASS: 'true',
 				ORIGIN: 'https://kaivalo.test',
-				WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback'
+				WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback',
+				WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
+				AUTH_ERROR_SIGNING_SECRET: PREVIEW_AUTH_ERROR_SIGNING_SECRET
 			},
 			imports: [PREVIEW_FIXTURE_IMPORT]
 		});
