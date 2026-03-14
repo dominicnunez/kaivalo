@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sanitizeProductionBundle } from '../scripts/build-artifacts.ts';
+import { RUNTIME_SERVER_FILES } from '../scripts/runtime-server-files.ts';
 
 type BundleShape = Parameters<typeof sanitizeProductionBundle>[0];
 
@@ -41,5 +42,9 @@ describe('build artifact sanitization', () => {
 			'C:\\\\repo\\\\apps\\\\hub\\\\src\\\\lib\\\\server.ts'
 		);
 		expect(code).not.toMatch(/meta\[[A-Za-z_$][\w$]*\]="[^"]*[\\/][^"]+"/);
+	});
+
+	it('includes shared runtime helpers needed by the packaged server', () => {
+		expect(RUNTIME_SERVER_FILES).toContain('port.ts');
 	});
 });
