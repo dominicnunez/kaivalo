@@ -538,6 +538,14 @@ describe('deployment runtime guardrails', () => {
 			verifyStep.env.DEPLOY_ORIGIN,
 			'${{ vars.DEPLOY_ORIGIN }}'
 		);
+		assert.strictEqual(
+			verifyStep.env.AUTH_ERROR_SIGNING_SECRET,
+			'${{ secrets.AUTH_ERROR_SIGNING_SECRET }}'
+		);
+		assert.strictEqual(
+			verifyStep.env.WORKOS_API_HOSTNAME,
+			'${{ vars.WORKOS_API_HOSTNAME }}'
+		);
 		assert.strictEqual(verifyCommand, './scripts/verify-deploy-health.sh');
 		assert.ok(
 			readFileSync(DEPLOY_HEALTH_SCRIPT_PATH, 'utf8').startsWith(

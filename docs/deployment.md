@@ -45,14 +45,21 @@ Create a `production` GitHub Environment in this repo and add:
 - `DEPLOY_USER`
 - `DEPLOY_SSH_KEY`
 - `DEPLOY_KNOWN_HOSTS`
+- `AUTH_ERROR_SIGNING_SECRET`
 - variable `DEPLOY_ORIGIN`
+- optional variable `WORKOS_API_HOSTNAME`
 
 These values are only for the CI-to-host deployment path.
 `DEPLOY_ORIGIN` should be the canonical public app origin, for example
 `https://hub.kaivalo.com`, with no path, query, or fragment so the workflow can
-verify `/`, `/healthz`, and the same-origin auth callback route after the host
-deploy command returns. Deployment health verification rejects non-HTTPS origins
-unless they target a loopback host for local test fixtures.
+verify `/`, `/healthz`, the local `/auth/sign-in` route, and the signed
+same-origin auth callback error landing route after the host deploy command
+returns. `AUTH_ERROR_SIGNING_SECRET` must match the runtime app secret so the
+workflow can verify the signed auth-error callback payload. Set
+`WORKOS_API_HOSTNAME` only when production uses a custom hosted WorkOS auth
+hostname; otherwise the workflow defaults to `api.workos.com`. Deployment
+health verification rejects non-HTTPS origins unless they target a loopback host
+for local test fixtures.
 
 Recommended:
 
@@ -90,7 +97,9 @@ After a deployment, verify:
 - the workflow completed successfully
 - the landing page loads
 - `/healthz` returns `200` with plain-text `ok`
-- the auth callback route is reachable at `/auth/callback`
+- `/services` redirects browser navigation to `/auth/sign-in`
+- `/auth/sign-in` redirects to the trusted hosted WorkOS authorization route
+- `/auth/callback` redirects back to `/` with a valid signed auth-error query
 
 ## Failure Handling
 

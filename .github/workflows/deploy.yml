@@ -145,6 +145,8 @@ jobs:
 
       - name: Verify deployment health
         env:
+          AUTH_ERROR_SIGNING_SECRET: ${{ secrets.AUTH_ERROR_SIGNING_SECRET }}
           DEPLOY_ORIGIN: ${{ vars.DEPLOY_ORIGIN }}
+          WORKOS_API_HOSTNAME: ${{ vars.WORKOS_API_HOSTNAME }}
         shell: bash
         run: ./scripts/verify-deploy-health.sh

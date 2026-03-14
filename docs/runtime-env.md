@@ -41,6 +41,9 @@ server process or container, not to the build step.
   Must be exactly 64 hex characters.
   Generate with `openssl rand -hex 32`.
   Used only to sign browser-facing auth failure redirect queries.
+  If you use the GitHub deploy workflow, mirror this same value into the
+  `production` GitHub Environment so post-deploy health verification can
+  validate signed auth-error callback redirects.
 
 ### Origin
 
