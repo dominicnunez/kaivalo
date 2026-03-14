@@ -15,7 +15,8 @@ export function sanitizeAvatarUrl(
 			parsed.protocol !== 'https:' ||
 			parsed.username ||
 			parsed.password ||
-			parsed.port
+			parsed.port ||
+			parsed.hash
 		) {
 			return null;
 		}
@@ -26,6 +27,7 @@ export function sanitizeAvatarUrl(
 
 		const sanitized = new URL(parsed.origin);
 		sanitized.pathname = parsed.pathname;
+		sanitized.search = parsed.search;
 		return sanitized.toString();
 	} catch {
 		return null;

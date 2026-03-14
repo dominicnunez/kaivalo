@@ -220,7 +220,29 @@ describe('layout server load', () => {
 		});
 	});
 
-	it('drops query strings and fragments from trusted avatar urls', async () => {
+	it('preserves query strings for trusted avatar urls', async () => {
+		mockGetUser.mockResolvedValue({
+			firstName: 'Kai',
+			email: 'kai@example.com',
+			profilePictureUrl:
+				'https://avatars.githubusercontent.com/u/1?token=signed&size=96'
+		} as never);
+
+		const result = await load(baseEvent as never);
+
+		expect(result).toEqual({
+			user: {
+				firstName: 'Kai',
+				email: 'kai@example.com',
+				profilePictureUrl:
+					'/avatar?source=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F1%3Ftoken%3Dsigned%26size%3D96'
+			},
+			signInUrl: null,
+			authError: null
+		});
+	});
+
+	it('rejects trusted avatar urls that include fragments', async () => {
 		mockGetUser.mockResolvedValue({
 			firstName: 'Kai',
 			email: 'kai@example.com',
@@ -234,8 +256,7 @@ describe('layout server load', () => {
 			user: {
 				firstName: 'Kai',
 				email: 'kai@example.com',
-				profilePictureUrl:
-					'/avatar?source=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F1'
+				profilePictureUrl: null
 			},
 			signInUrl: null,
 			authError: null
