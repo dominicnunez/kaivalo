@@ -42,10 +42,6 @@ function getOldestBucketTimestamp(bucket: SlidingWindowBucket): number | null {
 	return bucket.timestamps[bucket.headIndex] ?? null;
 }
 
-function getNewestBucketTimestamp(bucket: SlidingWindowBucket): number | null {
-	return bucket.timestamps[bucket.timestamps.length - 1] ?? null;
-}
-
 function compactBucket(bucket: SlidingWindowBucket): void {
 	if (bucket.headIndex === 0) {
 		return;
@@ -119,29 +115,22 @@ function getRetryAfterSeconds(
 	return Math.max(1, Math.ceil((oldestTimestamp + windowMs - now) / 1000));
 }
 
-function getCapacityRetryAfterSeconds(
-	buckets: ReadonlyMap<string, SlidingWindowBucket>,
-	now: number,
-	windowMs: number
-): number {
-	let earliestBucketEvictionTimestamp: number | null = null;
+function touchBucket(
+	buckets: Map<string, SlidingWindowBucket>,
+	key: string,
+	bucket: SlidingWindowBucket
+): void {
+	buckets.delete(key);
+	buckets.set(key, bucket);
+}
 
-	for (const bucket of buckets.values()) {
-		const newestBucketTimestamp = getNewestBucketTimestamp(bucket);
-		if (newestBucketTimestamp === null) {
-			continue;
-		}
-		if (
-			earliestBucketEvictionTimestamp === null ||
-			newestBucketTimestamp < earliestBucketEvictionTimestamp
-		) {
-			earliestBucketEvictionTimestamp = newestBucketTimestamp;
-		}
+function evictLeastRecentlyUsedBucket(
+	buckets: Map<string, SlidingWindowBucket>
+): void {
+	const oldestKey = buckets.keys().next().value as string | undefined;
+	if (oldestKey !== undefined) {
+		buckets.delete(oldestKey);
 	}
-
-	return earliestBucketEvictionTimestamp === null
-		? 1
-		: getRetryAfterSeconds(earliestBucketEvictionTimestamp, now, windowMs);
 }
 
 export function createSlidingWindowRateLimiter({
@@ -173,17 +162,8 @@ export function createSlidingWindowRateLimiter({
 					deleteBuckets(buckets, sweepStaleBuckets(buckets, nowMs, windowMs));
 				}
 
-				// Preserve active client buckets when the table is full so churn
-				// from unseen keys cannot reset established quotas under load.
 				if (buckets.size >= maxEntries) {
-					return {
-						allowed: false,
-						retryAfterSeconds: getCapacityRetryAfterSeconds(
-							buckets,
-							nowMs,
-							windowMs
-						)
-					};
+					evictLeastRecentlyUsedBucket(buckets);
 				}
 
 				bucket = {
@@ -193,6 +173,7 @@ export function createSlidingWindowRateLimiter({
 				buckets.set(normalizedKey, bucket);
 			} else {
 				pruneBucket(bucket, nowMs, windowMs);
+				touchBucket(buckets, normalizedKey, bucket);
 			}
 
 			if (getBucketSize(bucket) >= limit) {
