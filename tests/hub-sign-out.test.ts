@@ -4,6 +4,11 @@ import http from 'node:http';
 import { createSignOutPostHandler } from '../apps/hub/src/lib/auth/sign-out-handler.ts';
 import { isHttpError, isRedirect } from '@sveltejs/kit';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
+import {
+	assertClearedSessionCookieContract,
+	assertSessionCookieContract,
+	getSetCookieHeaders
+} from './helpers/session-cookie.ts';
 
 const AUTHKIT_COOKIE_NAME = '__Host-wos_session';
 const previewFixtureImport = new URL(
@@ -44,22 +49,6 @@ function post(url, headers = {}) {
 		});
 		req.end();
 	});
-}
-
-function getSetCookieHeaders(headers) {
-	const values = headers['set-cookie'];
-	if (!values) {
-		return [];
-	}
-	return Array.isArray(values) ? values : [values];
-}
-
-function getCookiePair(headers, cookieName) {
-	const cookieHeader = getSetCookieHeaders(headers).find((value) =>
-		value.startsWith(`${cookieName}=`)
-	);
-	assert.ok(cookieHeader, `Expected ${cookieName} to be set`);
-	return cookieHeader.split(';', 1)[0];
 }
 
 describe('sign-out handler unit behavior', () => {
@@ -983,9 +972,12 @@ describe('sign-out route integration behavior', () => {
 				}
 			);
 			assert.strictEqual(callbackResponse.statusCode, 302);
-			const sessionCookie = getCookiePair(
+			const sessionCookie = assertSessionCookieContract(
 				callbackResponse.headers,
-				AUTHKIT_COOKIE_NAME
+				{
+					cookieName: AUTHKIT_COOKIE_NAME,
+					expectedDecodedValue: 'preview-session'
+				}
 			);
 
 			const response = await post(`${fixturePreview.baseUrl}/auth/sign-out`, {
@@ -1012,17 +1004,9 @@ describe('sign-out route integration behavior', () => {
 				logoutLocation.searchParams.get('return_to'),
 				fixturePreview.baseUrl
 			);
-			const clearedSessionCookie = getCookiePair(
+			const clearedSessionCookie = assertClearedSessionCookieContract(
 				response.headers,
 				AUTHKIT_COOKIE_NAME
-			);
-			assert.ok(
-				getSetCookieHeaders(response.headers).some(
-					(cookie) =>
-						cookie.startsWith(`${AUTHKIT_COOKIE_NAME}=`) &&
-						/max-age=0/i.test(cookie)
-				),
-				'sign-out should clear the established session cookie'
 			);
 
 			const servicesResponse = await httpGet(

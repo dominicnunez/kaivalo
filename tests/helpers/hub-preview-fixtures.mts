@@ -5,6 +5,7 @@ const PEER_ADDRESS_OVERRIDE_HEADER = 'x-kaivalo-preview-peer-address';
 const PREVIEW_SESSION_COOKIE_NAME = '__Host-wos_session';
 const PREVIEW_SESSION_COOKIE_VALUE = 'preview-session';
 const PREVIEW_SESSION_COOKIE_PAIR = `${PREVIEW_SESSION_COOKIE_NAME}=${PREVIEW_SESSION_COOKIE_VALUE}`;
+const PREVIEW_SESSION_COOKIE_MAX_AGE = String(60 * 60 * 24 * 400);
 const OVERSIZED_AVATAR_CONTENT_LENGTH = String(AVATAR_MAX_RESPONSE_BYTES + 1);
 const PREVIEW_USER = Object.freeze({
 	object: 'user',
@@ -124,7 +125,7 @@ if (callbackFixtureMode) {
 				headers.set('location', `${process.env.ORIGIN}/services?welcome=1`);
 				headers.set(
 					'set-cookie',
-					`${PREVIEW_SESSION_COOKIE_PAIR}; Path=/; HttpOnly; Secure; SameSite=Lax`
+					`${PREVIEW_SESSION_COOKIE_PAIR}; Path=/; Max-Age=${PREVIEW_SESSION_COOKIE_MAX_AGE}; HttpOnly; Secure; SameSite=Lax`
 				);
 				return new Response(null, {
 					status: 302,

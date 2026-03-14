@@ -10,8 +10,10 @@ import {
 	readVerifiedAuthError
 } from '$lib/auth/auth-error-query.ts';
 import { AUTHKIT_COOKIE_NAME } from '$lib/server/authkit-config.ts';
+import { assertSessionCookieContract } from '../../../../../../tests/helpers/session-cookie.ts';
 
 const SESSION_COOKIE_PAIR = `${AUTHKIT_COOKIE_NAME}=callback-session`;
+const SESSION_COOKIE_MAX_AGE = String(60 * 60 * 24 * 400);
 const AUTHENTICATED_USER: User = {
 	object: 'user',
 	id: 'user_123',
@@ -125,7 +127,7 @@ describe('auth callback route', () => {
 			headers.set('location', 'https://kaivalo.test/services?welcome=1');
 			headers.set(
 				'set-cookie',
-				`${SESSION_COOKIE_PAIR}; Path=/; HttpOnly; Secure; SameSite=Lax`
+				`${SESSION_COOKIE_PAIR}; Path=/; Max-Age=${SESSION_COOKIE_MAX_AGE}; HttpOnly; Secure; SameSite=Lax`
 			);
 			return new Response(null, {
 				status: 302,
@@ -152,14 +154,18 @@ describe('auth callback route', () => {
 		expect(callbackResponse.headers.get('location')).toBe(
 			'/services?welcome=1'
 		);
-		expect(callbackResponse.headers.get('set-cookie')).toContain(
-			SESSION_COOKIE_PAIR
+
+		const sessionCookie = assertSessionCookieContract(
+			callbackResponse.headers,
+			{
+				expectedDecodedValue: 'callback-session'
+			}
 		);
 
 		const servicesRequest = new Request('https://kaivalo.test/services', {
 			headers: {
 				accept: 'text/html',
-				cookie: SESSION_COOKIE_PAIR
+				cookie: sessionCookie
 			}
 		});
 		const servicesEvent = {

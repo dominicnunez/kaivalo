@@ -20,6 +20,10 @@ import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 import { assertHubBuildAvailable } from './helpers/hub-build.ts';
 import { reserveLocalPort } from './helpers/network.ts';
 import { createHubPreviewScriptEnv } from './helpers/hub-runtime-env.ts';
+import {
+	assertSessionCookieContract,
+	getSetCookieHeaders
+} from './helpers/session-cookie.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const STARTUP_TIMEOUT_MS = 15000;
@@ -118,26 +122,6 @@ function setProcessEnv(
 	};
 }
 
-function getSetCookieHeaders(headers: http.IncomingHttpHeaders): string[] {
-	const values = headers['set-cookie'];
-	if (!values) {
-		return [];
-	}
-
-	return Array.isArray(values) ? values : [values];
-}
-
-function getCookiePair(
-	headers: http.IncomingHttpHeaders,
-	cookieName: string
-): string {
-	const cookieHeader = getSetCookieHeaders(headers).find((value) =>
-		value.startsWith(`${cookieName}=`)
-	);
-	assert.ok(cookieHeader, `Expected ${cookieName} to be set`);
-	return cookieHeader.split(';', 1)[0];
-}
-
 async function probePreviewReady(baseUrl: string): Promise<boolean> {
 	try {
 		const response = await httpGet(getHubHealthUrl(baseUrl));
@@ -206,11 +190,10 @@ async function assertAuthenticatedPreviewSession(
 	assert.strictEqual(redirectLocation.pathname, '/services');
 	assert.strictEqual(redirectLocation.searchParams.get('welcome'), '1');
 
-	const sessionCookie = getCookiePair(
-		callbackResponse.headers,
-		AUTHKIT_COOKIE_NAME
-	);
-	assert.match(sessionCookie, /^__Host-wos_session=preview-session$/);
+	const sessionCookie = assertSessionCookieContract(callbackResponse.headers, {
+		cookieName: AUTHKIT_COOKIE_NAME,
+		expectedDecodedValue: 'preview-session'
+	});
 
 	const servicesResponse = await httpGet(`${baseUrl}/services`, {
 		accept: 'text/html',

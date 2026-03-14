@@ -53,30 +53,6 @@ function getSetCookieHeaders(headers) {
 	return Array.isArray(values) ? values : [values];
 }
 
-/**
- * @param {string[]} setCookieHeaders
- */
-function assertHardenedCookies(setCookieHeaders) {
-	for (const cookie of setCookieHeaders) {
-		const lower = cookie.toLowerCase();
-		assert.match(
-			lower,
-			/\bhttponly\b/,
-			`set-cookie must include HttpOnly: ${cookie}`
-		);
-		assert.match(
-			lower,
-			/\bsecure\b/,
-			`set-cookie must include Secure: ${cookie}`
-		);
-		assert.match(
-			lower,
-			/\bsamesite=(strict|lax|none)\b/,
-			`set-cookie must include SameSite: ${cookie}`
-		);
-	}
-}
-
 describe('WorkOS Auth Callback Route', () => {
 	describe('callback handler behavior', () => {
 		it('returns upstream handler response on successful callback', async () => {
@@ -726,7 +702,11 @@ describe('WorkOS Auth Callback Route', () => {
 				).toLowerCase();
 				assert.ok(varyHeader.includes('cookie'));
 				assert.ok(varyHeader.includes('authorization'));
-				assertHardenedCookies(getSetCookieHeaders(browserResponse.headers));
+				assert.deepStrictEqual(
+					getSetCookieHeaders(browserResponse.headers),
+					[],
+					'failed callback redirects must not set session cookies'
+				);
 				assert.strictEqual(apiResponse.statusCode, 503);
 				assert.match(
 					apiResponse.data,

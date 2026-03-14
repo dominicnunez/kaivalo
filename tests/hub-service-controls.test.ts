@@ -2,6 +2,7 @@ import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
+import { assertSessionCookieContract } from './helpers/session-cookie.ts';
 
 const AUTHKIT_COOKIE_NAME = '__Host-wos_session';
 const previewFixtureImport = new URL(
@@ -16,23 +17,6 @@ let servicesPage;
 let publicDom;
 let signedInDom;
 let servicesDom;
-
-function getCookiePair(
-	headers: Record<string, string | string[] | undefined>,
-	cookieName: string
-): string {
-	const rawSetCookie = headers['set-cookie'];
-	const values = Array.isArray(rawSetCookie)
-		? rawSetCookie
-		: rawSetCookie
-			? [rawSetCookie]
-			: [];
-	const cookieHeader = values.find((value) =>
-		value.startsWith(`${cookieName}=`)
-	);
-	assert.ok(cookieHeader, `Expected ${cookieName} to be set`);
-	return cookieHeader.split(';', 1)[0];
-}
 
 function findLinkByText(
 	container: ParentNode,
@@ -85,9 +69,12 @@ describe('hub preview service controls', () => {
 				'sec-fetch-mode': 'navigate'
 			}
 		);
-		const sessionCookie = getCookiePair(
+		const sessionCookie = assertSessionCookieContract(
 			callbackResponse.headers,
-			AUTHKIT_COOKIE_NAME
+			{
+				cookieName: AUTHKIT_COOKIE_NAME,
+				expectedDecodedValue: 'preview-session'
+			}
 		);
 
 		signedInHomepage = await httpGet(preview.baseUrl, {
