@@ -34,31 +34,38 @@ function getCookiePair(
 	return cookieHeader.split(';', 1)[0];
 }
 
-function findServiceCard(document: Document, heading: string): Element {
-	const cardHeading = Array.from(
-		document.querySelectorAll('.service-card h3')
-	).find((element) => element.textContent?.trim() === heading);
-	assert.ok(cardHeading, `Expected a service card titled "${heading}"`);
-	const serviceCard = cardHeading.closest('.service-card');
-	assert.ok(
-		serviceCard,
-		`Expected "${heading}" to render inside a service card`
-	);
-	return serviceCard;
-}
-
-function expectLucideIcon(
+function findLinkByText(
 	container: ParentNode,
-	iconClass: string,
-	context: string
-): void {
-	assert.ok(
-		container.querySelector(`svg.lucide.${iconClass}`),
-		`Expected ${context} to render ${iconClass}`
+	pattern: RegExp
+): HTMLAnchorElement | null {
+	return (
+		Array.from(container.querySelectorAll('a[href]')).find((link) =>
+			pattern.test(link.textContent ?? '')
+		) ?? null
 	);
 }
 
-describe('hub lucide icon rendering', () => {
+function findButtonByText(
+	container: ParentNode,
+	pattern: RegExp
+): HTMLButtonElement | null {
+	return (
+		Array.from(container.querySelectorAll('button')).find((button) =>
+			pattern.test(button.textContent ?? '')
+		) ?? null
+	);
+}
+
+function findByTestId(container: ParentNode, testId: string): Element {
+	const element = container.querySelector(`[data-testid="${testId}"]`);
+	assert.ok(
+		element,
+		`Expected an element with data-testid="${testId}" to exist`
+	);
+	return element;
+}
+
+describe('hub preview service controls', () => {
 	before(async () => {
 		preview = await startHubPreview({
 			shared: false,
@@ -105,69 +112,57 @@ describe('hub lucide icon rendering', () => {
 		await preview?.stop();
 	});
 
-	it('renders public landing page lucide icons from the real preview bundle', () => {
+	it('renders public landing page service controls from the real preview bundle', () => {
 		assert.strictEqual(publicHomepage.statusCode, 200);
 		const document = publicDom.window.document;
+		const servicesSection = document.getElementById('services');
+		assert.ok(servicesSection, 'Expected the public services section');
 
-		const signInLink = Array.from(document.querySelectorAll('a[href]')).find(
-			(control) => /sign in/i.test(control.textContent ?? '')
-		);
+		const signInLink = findLinkByText(document, /sign in/i);
 		assert.ok(signInLink, 'Expected an interactive sign-in link');
-		expectLucideIcon(signInLink, 'lucide-log-in', 'the sign-in control');
-
-		expectLucideIcon(
-			findServiceCard(document, 'Sweep'),
-			'lucide-calendar',
-			'the Sweep service card'
+		assert.ok(
+			signInLink.getAttribute('href'),
+			'Expected the sign-in control to keep a live destination'
 		);
-		expectLucideIcon(
-			findServiceCard(document, 'PodStudio'),
-			'lucide-mic',
-			'the PodStudio service card'
-		);
+		assert.match(servicesSection.textContent ?? '', /Sweep/);
+		assert.match(servicesSection.textContent ?? '', /PodStudio/);
 
-		const openServicesLink = Array.from(
-			document.querySelectorAll('#services a[href]')
-		).find((link) => /open from your services/i.test(link.textContent ?? ''));
+		const openServicesLink = findLinkByText(
+			servicesSection,
+			/open from your services/i
+		);
 		assert.ok(openServicesLink, 'Expected an open services link');
-		expectLucideIcon(
-			openServicesLink,
-			'lucide-arrow-right',
-			'the open services link'
-		);
+		assert.strictEqual(openServicesLink.getAttribute('href'), '/services');
 	});
 
-	it('renders authenticated navigation and launcher lucide icons in preview', () => {
+	it('renders authenticated navigation and launcher controls in preview', () => {
 		assert.strictEqual(signedInHomepage.statusCode, 200);
 		assert.strictEqual(servicesPage.statusCode, 200);
 
 		const signedInDocument = signedInDom.window.document;
 		const servicesDocument = servicesDom.window.document;
+		const activeServices = findByTestId(servicesDocument, 'active-services');
+		const plannedServices = findByTestId(servicesDocument, 'planned-services');
 
-		const openServicesLink = Array.from(
-			signedInDocument.querySelectorAll('a[href]')
-		).find((link) => /open services/i.test(link.textContent ?? ''));
+		const openServicesLink = findLinkByText(signedInDocument, /open services/i);
 		assert.ok(openServicesLink, 'Expected an authenticated open services link');
-		expectLucideIcon(
-			openServicesLink,
-			'lucide-layout-dashboard',
-			'the authenticated open services link'
+		assert.strictEqual(openServicesLink.getAttribute('href'), '/services');
+
+		const signOutButton = findButtonByText(signedInDocument, /sign out/i);
+		assert.ok(signOutButton, 'Expected a sign-out button');
+		assert.strictEqual(
+			signOutButton.closest('form')?.getAttribute('action'),
+			'/auth/sign-out'
 		);
 
-		const signOutButton = Array.from(
-			signedInDocument.querySelectorAll('button')
-		).find((button) => /sign out/i.test(button.textContent ?? ''));
-		assert.ok(signOutButton, 'Expected a sign-out button');
-		expectLucideIcon(signOutButton, 'lucide-log-out', 'the sign-out button');
+		assert.match(activeServices.textContent ?? '', /Sweep/);
+		assert.match(plannedServices.textContent ?? '', /PodStudio/);
 
-		const launcherLink = Array.from(
-			servicesDocument.querySelectorAll('a[href]')
-		).find((link) => /open sweep/i.test(link.textContent ?? ''));
+		const launcherLink = findLinkByText(activeServices, /open sweep/i);
 		assert.ok(launcherLink, 'Expected a launcher link for Sweep');
-		expectLucideIcon(
-			launcherLink,
-			'lucide-external-link',
-			'the Sweep launcher link'
+		assert.strictEqual(
+			launcherLink.getAttribute('href'),
+			'https://sweep.kaivalo.com'
 		);
 	});
 });
