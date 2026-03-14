@@ -18,9 +18,9 @@ import {
 	evaluateSecureRequest,
 	getRequestPathname
 } from './node-server-request.ts';
+import { parsePort } from './port.ts';
 
 const DEFAULT_HOST = '127.0.0.1';
-const DEFAULT_PORT = 3100;
 const SHUTDOWN_TIMEOUT_MS = 30_000;
 const KEEP_ALIVE_TIMEOUT_MS = 5_000;
 const HEADERS_TIMEOUT_MS = 60_000;
@@ -30,8 +30,6 @@ const MAX_FORWARDED_PROTO_WARNING_KEYS = 512;
 const PRIVATE_NO_STORE_CACHE_CONTROL = 'private, no-store';
 const PRODUCTION_NODE_ENV = 'production';
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
-const MIN_PORT = 1;
-const MAX_PORT = 65_535;
 type Env = Record<string, string | undefined>;
 
 type FatalReason = 'startup-error' | 'shutdown-timeout';
@@ -109,23 +107,6 @@ function createFatalNotifier({
 			});
 		}
 	};
-}
-
-function parsePort(portValue: string | undefined): number {
-	if (portValue === undefined || portValue.trim() === '') {
-		return DEFAULT_PORT;
-	}
-	const normalized = portValue.trim();
-	if (!/^\d+$/.test(normalized)) {
-		throw new Error(
-			`PORT must be an integer between ${MIN_PORT} and ${MAX_PORT}`
-		);
-	}
-	const parsed = Number(normalized);
-	if (!Number.isInteger(parsed) || parsed < MIN_PORT || parsed > MAX_PORT) {
-		throw new Error(`PORT must be between ${MIN_PORT} and ${MAX_PORT}`);
-	}
-	return parsed;
 }
 
 function parsePositiveIntegerEnvValue(

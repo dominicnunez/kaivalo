@@ -1,10 +1,10 @@
 import { spawnSync } from 'node:child_process';
 import { isIP } from 'node:net';
 import { isLoopbackHostname } from '../src/lib/server/ip-address.ts';
+import { parsePort } from '../src/lib/server/port.ts';
 import { getValidatedWorkosEnv } from '../src/lib/server/workos-security-env.ts';
 import { getHubBuildPaths, removeServerSourceMaps } from './build-artifacts.ts';
 
-const DEFAULT_LOCAL_PREVIEW_PORT = '3100';
 const DEFAULT_LOCAL_PREVIEW_HOST = 'localhost';
 const LOCAL_PREVIEW_WILDCARD_HOSTS = new Set(['0.0.0.0', '::', '[::]']);
 const LOCAL_PLACEHOLDER_ENV_DEFAULTS = {
@@ -53,7 +53,7 @@ function getLocalPreviewOrigin(baseEnv: NodeJS.ProcessEnv): string {
 		return normalizeOriginForReuse(configuredOrigin);
 	}
 
-	const port = baseEnv.PORT?.trim() || DEFAULT_LOCAL_PREVIEW_PORT;
+	const port = String(parsePort(baseEnv.PORT));
 	const host = getLocalPreviewHost(baseEnv);
 	return new URL(`http://${host}:${port}`).origin;
 }

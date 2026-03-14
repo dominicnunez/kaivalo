@@ -98,4 +98,20 @@ describe('hub build environment', () => {
 		);
 		expect(previewEnv.ORIGIN).toBe('https://hub.kaivalo.com');
 	});
+
+	it('rejects malformed preview port values with the runtime integer message', () => {
+		expect(() =>
+			getHubPreviewEnv({
+				PORT: '3000abc'
+			})
+		).toThrow(/PORT must be an integer between 1 and 65535/);
+	});
+
+	it('rejects out-of-range preview port values with the runtime range message', () => {
+		expect(() =>
+			getHubPreviewEnv({
+				PORT: '65536'
+			})
+		).toThrow(/PORT must be between 1 and 65535/);
+	});
 });
