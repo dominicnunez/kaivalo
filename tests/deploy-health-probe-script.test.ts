@@ -2,8 +2,6 @@ import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import http from 'node:http';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { buildAuthErrorLandingRedirectLocation } from '../apps/hub/src/lib/auth/auth-error-query.ts';
 import { getTrustedWorkosAuthOrigin } from '../apps/hub/src/lib/server/auth-origin-policy.ts';
@@ -43,7 +41,6 @@ type ScriptResult = {
 };
 
 const serverClosers = new Set<() => Promise<void>>();
-const tempDirectories = new Set<string>();
 
 function startFixtureServer(handler: RouteHandler): Promise<FixtureServer> {
 	return new Promise((resolve, reject) => {
@@ -172,7 +169,6 @@ function runDeployHealthScript(
 			env: {
 				...process.env,
 				DEPLOY_ORIGIN: origin,
-				AUTH_ERROR_SIGNING_SECRET,
 				WORKOS_API_HOSTNAME,
 				DEPLOY_HEALTH_RETRY_COUNT: '1',
 				DEPLOY_HEALTH_RETRY_DELAY_SECONDS: '0',
@@ -199,47 +195,9 @@ function runDeployHealthScript(
 	});
 }
 
-function createTracingNodeBinary() {
-	const tempDirectory = mkdtempSync(
-		path.join(os.tmpdir(), 'kaivalo-deploy-health-node-')
-	);
-	const nodePath = path.join(tempDirectory, 'node');
-	const argsLogPath = path.join(tempDirectory, 'node-args.log');
-	const envLogPath = path.join(tempDirectory, 'node-env.log');
-
-	tempDirectories.add(tempDirectory);
-	writeFileSync(
-		nodePath,
-		[
-			'#!/usr/bin/env bash',
-			'set -euo pipefail',
-			'printf "%s\\n" "$*" >> "$TRACE_NODE_ARGS_LOG"',
-			'printf "%s\\n" "${AUTH_ERROR_SIGNING_SECRET:-}" >> "$TRACE_NODE_ENV_LOG"',
-			'exec "$REAL_NODE_BIN" "$@"'
-		].join('\n'),
-		{
-			mode: 0o755
-		}
-	);
-
-	return {
-		argsLogPath,
-		envLogPath,
-		nodePath
-	};
-}
-
 afterEach(async () => {
 	for (const close of Array.from(serverClosers)) {
 		await close();
-	}
-
-	for (const tempDirectory of Array.from(tempDirectories)) {
-		tempDirectories.delete(tempDirectory);
-		rmSync(tempDirectory, {
-			force: true,
-			recursive: true
-		});
 	}
 });
 
@@ -250,27 +208,6 @@ describe('deploy health probe script', () => {
 
 		assert.strictEqual(result.exitCode, 0, result.stderr || result.stdout);
 		assert.strictEqual(result.signal, null);
-	});
-
-	it('keeps the callback signing secret in the node process environment instead of argv', async () => {
-		const server = await startFixtureServer(createHealthyHandler());
-		const { argsLogPath, envLogPath, nodePath } = createTracingNodeBinary();
-		const result = await runDeployHealthScript(server.origin, {
-			NODE_BIN: nodePath,
-			REAL_NODE_BIN: process.execPath,
-			TRACE_NODE_ARGS_LOG: argsLogPath,
-			TRACE_NODE_ENV_LOG: envLogPath
-		});
-
-		assert.strictEqual(result.exitCode, 0, result.stderr || result.stdout);
-		assert.strictEqual(result.signal, null);
-
-		const argsLog = readFileSync(argsLogPath, 'utf8');
-		const envLog = readFileSync(envLogPath, 'utf8');
-
-		assert.ok(argsLog.length > 0, 'expected node invocations to be traced');
-		assert.doesNotMatch(argsLog, new RegExp(AUTH_ERROR_SIGNING_SECRET, 'g'));
-		assert.match(envLog, new RegExp(`^${AUTH_ERROR_SIGNING_SECRET}$`, 'm'));
 	});
 
 	it('rejects insecure non-loopback deploy origins before probing', async () => {
@@ -382,13 +319,13 @@ describe('deploy health probe script', () => {
 		);
 	});
 
-	it('fails when the callback redirect does not include a signed auth error payload', async () => {
+	it('fails when the callback redirect does not include the auth error redirect contract', async () => {
 		const server = await startFixtureServer(
 			createHealthyHandler({
 				'/auth/callback': () => ({
 					statusCode: 303,
 					headers: {
-						location: '/?not_signed=1'
+						location: '/?error=auth&incident=not-an-incident-id&ts=123&sig=abc'
 					}
 				})
 			})
@@ -398,7 +335,7 @@ describe('deploy health probe script', () => {
 		assert.notStrictEqual(result.exitCode, 0);
 		assert.match(
 			result.stderr,
-			/Expected callback redirect to include a valid signed auth error query/
+			/Expected callback redirect to include the auth error redirect contract/
 		);
 	});
 });

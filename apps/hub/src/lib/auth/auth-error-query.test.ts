@@ -11,6 +11,7 @@ import {
 	buildAuthErrorLandingRedirectLocation,
 	buildAuthErrorRedirectQuery,
 	clearAuthErrorQuery,
+	readAuthErrorRedirectShape,
 	readVerifiedAuthError
 } from './auth-error-query.ts';
 
@@ -293,6 +294,65 @@ describe('readVerifiedAuthError', () => {
 				now: issuedAt
 			})
 		).toThrowError('origin must be a valid URL origin');
+	});
+});
+
+describe('readAuthErrorRedirectShape', () => {
+	it('accepts a structurally valid auth error redirect query', () => {
+		expect(readAuthErrorRedirectShape(buildSearchParams())).toEqual({
+			incidentId,
+			signature: expect.stringMatching(/^[A-Za-z0-9_-]+$/),
+			timestamp: String(issuedAt)
+		});
+	});
+
+	it.each([
+		[
+			'missing auth marker',
+			(searchParams: URLSearchParams) =>
+				searchParams.delete(AUTH_ERROR_QUERY_NAME)
+		],
+		[
+			'unexpected auth marker',
+			(searchParams: URLSearchParams) =>
+				searchParams.set(AUTH_ERROR_QUERY_NAME, 'nope')
+		],
+		[
+			'malformed incident id',
+			(searchParams: URLSearchParams) =>
+				searchParams.set(
+					AUTH_ERROR_INCIDENT_QUERY_NAME,
+					'authcb_not-a-valid-incident'
+				)
+		],
+		[
+			'non-numeric timestamp',
+			(searchParams: URLSearchParams) =>
+				searchParams.set(AUTH_ERROR_TIMESTAMP_QUERY_NAME, 'not-a-number')
+		],
+		[
+			'unsafe integer timestamp',
+			(searchParams: URLSearchParams) =>
+				searchParams.set(
+					AUTH_ERROR_TIMESTAMP_QUERY_NAME,
+					String(Number.MAX_SAFE_INTEGER + 1)
+				)
+		],
+		[
+			'missing signature',
+			(searchParams: URLSearchParams) =>
+				searchParams.delete(AUTH_ERROR_SIGNATURE_QUERY_NAME)
+		],
+		[
+			'malformed signature',
+			(searchParams: URLSearchParams) =>
+				searchParams.set(AUTH_ERROR_SIGNATURE_QUERY_NAME, 'bad signature')
+		]
+	])('rejects %s', (_label, mutateSearchParams) => {
+		const searchParams = buildSearchParams();
+		mutateSearchParams(searchParams);
+
+		expect(readAuthErrorRedirectShape(searchParams)).toBeNull();
 	});
 });
 

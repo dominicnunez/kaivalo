@@ -10,7 +10,6 @@ readonly REPO_ROOT="$(
 )"
 readonly NODE_BIN="${NODE_BIN:-node}"
 readonly DEPLOY_ORIGIN_VALUE="${DEPLOY_ORIGIN:-}"
-readonly AUTH_ERROR_SIGNING_SECRET_VALUE="${AUTH_ERROR_SIGNING_SECRET:-}"
 readonly WORKOS_API_HOSTNAME_VALUE="${WORKOS_API_HOSTNAME:-}"
 readonly ROOT_PATH='/'
 readonly HEALTH_PATH='/healthz'
@@ -37,10 +36,6 @@ mapfile -t BROWSER_NAVIGATION_PROBE_HEADERS < <(
 
 if [[ -z "$DEPLOY_ORIGIN_VALUE" ]]; then
 	echo "DEPLOY_ORIGIN must be set for production health verification" >&2
-	exit 1
-fi
-if [[ -z "$AUTH_ERROR_SIGNING_SECRET_VALUE" ]]; then
-	echo "AUTH_ERROR_SIGNING_SECRET must be set for production health verification" >&2
 	exit 1
 fi
 
@@ -84,13 +79,9 @@ validate_callback_redirect() {
 	local location="$2"
 
 	"$NODE_BIN" --input-type=module -e '
-		import { readVerifiedAuthError } from "./apps/hub/src/lib/auth/auth-error-query.ts";
+		import { readAuthErrorRedirectShape } from "./apps/hub/src/lib/auth/auth-error-query.ts";
 
 		const expectedOrigin = process.argv[1];
-		const authErrorSigningSecret = process.env.AUTH_ERROR_SIGNING_SECRET;
-		if (!authErrorSigningSecret) {
-			throw new Error("AUTH_ERROR_SIGNING_SECRET must be set");
-		}
 		const location = process.argv[2];
 		const parsed = new URL(location, expectedOrigin);
 		if (parsed.origin !== expectedOrigin) {
@@ -103,13 +94,9 @@ validate_callback_redirect() {
 				`Expected callback redirect to land on /, received ${parsed.pathname}`
 			);
 		}
-		const verifiedAuthError = readVerifiedAuthError(parsed.searchParams, {
-			secret: authErrorSigningSecret,
-			now: Date.now()
-		});
-		if (!verifiedAuthError) {
+		if (!readAuthErrorRedirectShape(parsed.searchParams)) {
 			throw new Error(
-				"Expected callback redirect to include a valid signed auth error query"
+				"Expected callback redirect to include the auth error redirect contract"
 			);
 		}
 	' "$expected_origin" "$location"

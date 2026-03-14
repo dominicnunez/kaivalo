@@ -485,8 +485,6 @@ describe('deployment runtime guardrails', () => {
 				'./scripts/verify-deploy-health.sh'
 			) &&
 			step.env.DEPLOY_ORIGIN === '${{ vars.DEPLOY_ORIGIN }}' &&
-			step.env.AUTH_ERROR_SIGNING_SECRET ===
-				'${{ secrets.AUTH_ERROR_SIGNING_SECRET }}' &&
 			step.env.WORKOS_API_HOSTNAME === '${{ vars.WORKOS_API_HOSTNAME }}';
 		const checkoutIndex = deploySteps.findIndex((step) =>
 			step.uses?.startsWith('actions/checkout@')
@@ -539,6 +537,16 @@ describe('deployment runtime guardrails', () => {
 		assert.ok(
 			verifyCommand.includes('./scripts/verify-deploy-health.sh'),
 			'deploy health verification should run the shared probe script'
+		);
+		assert.strictEqual(
+			verifyStep.env.AUTH_ERROR_SIGNING_SECRET,
+			undefined,
+			'deploy health verification should not receive runtime auth signing secrets'
+		);
+		assert.strictEqual(
+			includesSensitiveSecretReference(verifyStep),
+			false,
+			'deploy health verification should stay free of runtime auth secret references'
 		);
 		assert.ok(
 			readFileSync(DEPLOY_HEALTH_SCRIPT_PATH, 'utf8').startsWith(

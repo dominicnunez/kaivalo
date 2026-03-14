@@ -39,10 +39,18 @@ type ReadVerifiedAuthErrorOptions = {
 	now?: number;
 };
 
+export type AuthErrorRedirectShape = {
+	incidentId: string;
+	timestamp: string;
+	signature: string;
+};
+
 export type VerifiedAuthError = {
 	message: string;
 	incidentId: string;
 };
+
+const AUTH_ERROR_SIGNATURE_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 function isValidAuthIncidentId(incidentId: string): boolean {
 	return AUTH_INCIDENT_ID_PATTERN.test(incidentId);
@@ -116,16 +124,10 @@ export function buildAuthErrorLandingRedirectLocation({
 	return landingUrl.toString();
 }
 
-export function readVerifiedAuthError(
-	searchParams: URLSearchParams,
-	{ secret, now = Date.now() }: ReadVerifiedAuthErrorOptions
-): VerifiedAuthError | null {
-	const normalizedSecret =
-		typeof secret === 'string' ? normalizeSigningSecret(secret) : '';
-	if (
-		searchParams.get(AUTH_ERROR_QUERY_NAME) !== AUTH_ERROR_QUERY_VALUE ||
-		normalizedSecret === ''
-	) {
+export function readAuthErrorRedirectShape(
+	searchParams: URLSearchParams
+): AuthErrorRedirectShape | null {
+	if (searchParams.get(AUTH_ERROR_QUERY_NAME) !== AUTH_ERROR_QUERY_VALUE) {
 		return null;
 	}
 
@@ -135,11 +137,42 @@ export function readVerifiedAuthError(
 	if (!incidentId || !timestamp || !signature) {
 		return null;
 	}
-	if (!isValidAuthIncidentId(incidentId) || !/^\d+$/.test(timestamp)) {
+	if (
+		!isValidAuthIncidentId(incidentId) ||
+		!/^\d+$/.test(timestamp) ||
+		!AUTH_ERROR_SIGNATURE_PATTERN.test(signature)
+	) {
 		return null;
 	}
 
 	const issuedAt = Number(timestamp);
+	if (!Number.isSafeInteger(issuedAt)) {
+		return null;
+	}
+
+	return {
+		incidentId,
+		timestamp,
+		signature
+	};
+}
+
+export function readVerifiedAuthError(
+	searchParams: URLSearchParams,
+	{ secret, now = Date.now() }: ReadVerifiedAuthErrorOptions
+): VerifiedAuthError | null {
+	const normalizedSecret =
+		typeof secret === 'string' ? normalizeSigningSecret(secret) : '';
+	if (normalizedSecret === '') {
+		return null;
+	}
+
+	const shape = readAuthErrorRedirectShape(searchParams);
+	if (!shape) {
+		return null;
+	}
+
+	const issuedAt = Number(shape.timestamp);
 	if (
 		!Number.isSafeInteger(issuedAt) ||
 		issuedAt - now > AUTH_ERROR_MAX_FUTURE_SKEW_MS
@@ -151,16 +184,16 @@ export function readVerifiedAuthError(
 	}
 
 	const expectedSignature = signAuthErrorIncident(
-		incidentId,
-		timestamp,
+		shape.incidentId,
+		shape.timestamp,
 		normalizedSecret
 	);
-	if (!signaturesMatch(signature, expectedSignature)) {
+	if (!signaturesMatch(shape.signature, expectedSignature)) {
 		return null;
 	}
 
 	return {
 		message: AUTH_ERROR_MESSAGE,
-		incidentId
+		incidentId: shape.incidentId
 	};
 }
