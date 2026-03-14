@@ -7,7 +7,7 @@ const PREVIEW_FIXTURE_IMPORT = new URL(
 	import.meta.url
 ).href;
 const AVATAR_SOURCE =
-	'https://avatars.githubusercontent.com/u/1?token=signed#tracker';
+	'https://avatars.githubusercontent.com/u/1?token=signed&size=96';
 const PEER_ADDRESS_OVERRIDE_HEADER = 'x-kaivalo-preview-peer-address';
 const PRIVATE_NO_STORE_CACHE_CONTROL = 'private, no-store';
 

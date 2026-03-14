@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/svelte';
+import { tick } from 'svelte';
 
 vi.mock('lucide-svelte', async () => {
 	const { default: IconStub } =
@@ -18,6 +19,10 @@ vi.mock('lucide-svelte', async () => {
 
 import Page from './+page.svelte';
 import type { PageData } from './$types';
+
+afterEach(() => {
+	vi.useRealTimers();
+});
 
 function createPageData(overrides: Partial<PageData> = {}): PageData {
 	return {
@@ -130,6 +135,31 @@ describe('services page content', () => {
 		expect(
 			screen.getByText(
 				/services linked to your kaivalo account live here first/i
+			)
+		).toBeTruthy();
+	});
+
+	it('refreshes the footer year at midnight without a reload', async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2025-12-31T23:59:59.500'));
+
+		const { container } = render(Page, {
+			data: createPageData({
+				currentYear: 2025
+			})
+		});
+
+		expect(
+			within(container.querySelector('footer') as HTMLElement).getByText(
+				'© 2025'
+			)
+		).toBeTruthy();
+
+		await vi.advanceTimersByTimeAsync(500);
+		await tick();
+		expect(
+			within(container.querySelector('footer') as HTMLElement).getByText(
+				'© 2026'
 			)
 		).toBeTruthy();
 	});

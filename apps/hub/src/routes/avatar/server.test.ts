@@ -55,6 +55,10 @@ function createAvatarEvent(
 	} as never;
 }
 
+function createAvatarProxyRequestUrl(sourceUrl: string): string {
+	return `https://kaivalo.test/avatar?source=${encodeURIComponent(sourceUrl)}`;
+}
+
 describe('avatar proxy route', () => {
 	it('rejects untrusted avatar sources before fetching', async () => {
 		const fetch = vi.fn();
@@ -91,12 +95,14 @@ describe('avatar proxy route', () => {
 		const response = await GET(
 			createAvatarEvent(
 				fetch,
-				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1?token=signed#tracker'
+				createAvatarProxyRequestUrl(
+					'https://avatars.githubusercontent.com/u/1?token=signed&size=96'
+				)
 			)
 		);
 
 		expect(fetch).toHaveBeenCalledWith(
-			'https://avatars.githubusercontent.com/u/1',
+			'https://avatars.githubusercontent.com/u/1?token=signed&size=96',
 			expect.objectContaining({
 				headers: {
 					accept: 'image/*'
@@ -113,6 +119,22 @@ describe('avatar proxy route', () => {
 		);
 		expect(response.headers.get('x-content-type-options')).toBe('nosniff');
 		expect(response.headers.get('etag')).toBe('"avatar-1"');
+	});
+
+	it('rejects trusted avatar urls that include fragments', async () => {
+		const fetch = vi.fn();
+
+		const response = await GET(
+			createAvatarEvent(
+				fetch,
+				createAvatarProxyRequestUrl(
+					'https://avatars.githubusercontent.com/u/1?token=signed#tracker'
+				)
+			)
+		);
+
+		expect(response.status).toBe(404);
+		expect(fetch).not.toHaveBeenCalled();
 	});
 
 	it('defaults successful avatar responses to private no-store when upstream cache policy is absent', async () => {
