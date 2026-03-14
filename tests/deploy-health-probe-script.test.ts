@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
+import { buildAuthErrorLandingRedirectLocation } from '../apps/hub/src/lib/auth/auth-error-query.ts';
+import { getTrustedWorkosAuthOrigin } from '../apps/hub/src/lib/server/auth-origin-policy.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DEPLOY_HEALTH_SCRIPT_PATH = path.join(
@@ -11,6 +13,14 @@ const DEPLOY_HEALTH_SCRIPT_PATH = path.join(
 	'verify-deploy-health.sh'
 );
 const LOCAL_SIGN_IN_PATH = '/auth/sign-in';
+const CALLBACK_PATH = '/auth/callback';
+const AUTH_ERROR_SIGNING_SECRET = 'cd'.repeat(32);
+const WORKOS_API_HOSTNAME = 'auth.kaivalo-login.com';
+const TRUSTED_AUTH_ORIGIN = getTrustedWorkosAuthOrigin({
+	apiHostname: WORKOS_API_HOSTNAME
+});
+const AUTH_AUTHORIZE_PATH = '/user_management/authorize';
+const AUTH_ERROR_INCIDENT_ID = 'authcb_123e4567-e89b-12d3-a456-426614174000';
 
 type RouteHandler = (request: http.IncomingMessage) => {
 	statusCode: number;
@@ -81,7 +91,8 @@ function createHealthyHandler(
 	overrides: Partial<Record<string, RouteHandler>> = {}
 ): RouteHandler {
 	return (request) => {
-		const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname;
+		const requestOrigin = `http://${request.headers.host ?? '127.0.0.1'}`;
+		const pathname = new URL(request.url ?? '/', requestOrigin).pathname;
 		const override = overrides[pathname];
 		if (override) {
 			return override(request);
@@ -111,11 +122,32 @@ function createHealthyHandler(
 						location: LOCAL_SIGN_IN_PATH
 					}
 				};
+			case '/auth/sign-in': {
+				const location = new URL(
+					`${TRUSTED_AUTH_ORIGIN}${AUTH_AUTHORIZE_PATH}`
+				);
+				location.searchParams.set(
+					'redirect_uri',
+					`${requestOrigin}${CALLBACK_PATH}`
+				);
+				location.searchParams.set('screen_hint', 'sign-up');
+				return {
+					statusCode: 303,
+					headers: {
+						location: location.toString()
+					}
+				};
+			}
 			case '/auth/callback':
 				return {
 					statusCode: 303,
 					headers: {
-						location: '/?welcome=1'
+						location: buildAuthErrorLandingRedirectLocation({
+							incidentId: AUTH_ERROR_INCIDENT_ID,
+							secret: AUTH_ERROR_SIGNING_SECRET,
+							origin: requestOrigin,
+							now: Date.now()
+						})
 					}
 				};
 			default:
@@ -137,6 +169,8 @@ function runDeployHealthScript(
 			env: {
 				...process.env,
 				DEPLOY_ORIGIN: origin,
+				AUTH_ERROR_SIGNING_SECRET,
+				WORKOS_API_HOSTNAME,
 				DEPLOY_HEALTH_RETRY_COUNT: '1',
 				DEPLOY_HEALTH_RETRY_DELAY_SECONDS: '0',
 				DEPLOY_HEALTH_CONNECT_TIMEOUT_SECONDS: '2',
@@ -248,6 +282,24 @@ describe('deploy health probe script', () => {
 		);
 	});
 
+	it('fails when the local sign-in route does not redirect to the hosted auth flow', async () => {
+		const server = await startFixtureServer(
+			createHealthyHandler({
+				'/auth/sign-in': () => ({
+					statusCode: 500,
+					body: 'broken sign-in'
+				})
+			})
+		);
+		const result = await runDeployHealthScript(server.origin);
+
+		assert.notStrictEqual(result.exitCode, 0);
+		assert.match(
+			result.stderr,
+			/Expected http:\/\/127\.0\.0\.1:\d+\/auth\/sign-in to return 303, received 500/
+		);
+	});
+
 	it('fails when the callback redirects away from the canonical origin', async () => {
 		const server = await startFixtureServer(
 			createHealthyHandler({
@@ -265,6 +317,26 @@ describe('deploy health probe script', () => {
 		assert.match(
 			result.stderr,
 			/Expected callback redirect to stay on http:\/\/127\.0\.0\.1:\d+, received https:\/\/evil\.example\.test/
+		);
+	});
+
+	it('fails when the callback redirect does not include a signed auth error payload', async () => {
+		const server = await startFixtureServer(
+			createHealthyHandler({
+				'/auth/callback': () => ({
+					statusCode: 303,
+					headers: {
+						location: '/?not_signed=1'
+					}
+				})
+			})
+		);
+		const result = await runDeployHealthScript(server.origin);
+
+		assert.notStrictEqual(result.exitCode, 0);
+		assert.match(
+			result.stderr,
+			/Expected callback redirect to include a valid signed auth error query/
 		);
 	});
 });

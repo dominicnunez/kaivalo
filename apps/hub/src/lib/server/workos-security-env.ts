@@ -3,7 +3,7 @@ import {
 	isLoopbackHostname,
 	isLoopbackIpAddress
 } from './ip-address.ts';
-import { parseCanonicalHostname } from '../hostname.ts';
+import { normalizeWorkosApiHostname } from './auth-origin-policy.ts';
 
 const REQUIRED_ENV_VARS = [
 	'WORKOS_CLIENT_ID',
@@ -13,7 +13,6 @@ const REQUIRED_ENV_VARS = [
 	'AUTH_ERROR_SIGNING_SECRET'
 ];
 const HEX_64_PATTERN = /^[a-f0-9]{64}$/i;
-const DEFAULT_WORKOS_API_HOSTNAME = 'api.workos.com';
 const WORKOS_REDIRECT_PATHNAME = '/auth/callback';
 export const PROXY_HSTS_CONFIGURATION_ERROR_MESSAGE =
 	'Production HTTPS origin requires trusted proxy proto forwarding for reliable HSTS. Set TRUST_X_FORWARDED_PROTO=true and TRUSTED_PROXY_IPS to trusted proxy addresses for proxied HTTPS deployments.';
@@ -78,43 +77,6 @@ function parseOriginUrl(value: string): URL {
 function assertHttpOrHttpsProtocol(url: URL, envVarName: string): void {
 	if (url.protocol !== 'http:' && url.protocol !== 'https:') {
 		throw new Error(`${envVarName} must use http or https`);
-	}
-}
-
-function parseWorkosHostname(
-	value: string | undefined,
-	envVarName: string,
-	defaultHostname: string
-): string {
-	const trimmed = value?.trim();
-	if (!trimmed) {
-		return defaultHostname;
-	}
-
-	if (
-		trimmed.includes('://') ||
-		trimmed.includes('/') ||
-		trimmed.includes('?') ||
-		trimmed.includes('#') ||
-		trimmed.includes('@') ||
-		trimmed.includes(':')
-	) {
-		throw new Error(
-			`${envVarName} must be a hostname without protocol, path, credentials, or port`
-		);
-	}
-
-	try {
-		const parsedHostname = parseCanonicalHostname(trimmed);
-		if (!parsedHostname) {
-			throw new Error();
-		}
-
-		return parsedHostname;
-	} catch {
-		throw new Error(
-			`${envVarName} must be a hostname without protocol, path, credentials, or port`
-		);
 	}
 }
 
@@ -250,11 +212,7 @@ export function getValidatedWorkosEnv(env: Env): WorkosEnv {
 		env,
 		'AUTH_ERROR_SIGNING_SECRET'
 	);
-	const apiHostname = parseWorkosHostname(
-		env.WORKOS_API_HOSTNAME,
-		'WORKOS_API_HOSTNAME',
-		DEFAULT_WORKOS_API_HOSTNAME
-	);
+	const apiHostname = normalizeWorkosApiHostname(env.WORKOS_API_HOSTNAME);
 
 	if (!HEX_64_PATTERN.test(cookiePassword)) {
 		throw new Error(

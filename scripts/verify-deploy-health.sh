@@ -9,11 +9,14 @@ readonly REPO_ROOT="$(
 	cd -- "$SCRIPT_DIR/.." && pwd
 )"
 readonly DEPLOY_ORIGIN_VALUE="${DEPLOY_ORIGIN:-}"
+readonly AUTH_ERROR_SIGNING_SECRET_VALUE="${AUTH_ERROR_SIGNING_SECRET:-}"
+readonly WORKOS_API_HOSTNAME_VALUE="${WORKOS_API_HOSTNAME:-}"
 readonly ROOT_PATH='/'
 readonly HEALTH_PATH='/healthz'
 readonly SERVICES_PATH='/services'
 readonly CALLBACK_PATH='/auth/callback'
 readonly SIGN_IN_PATH='/auth/sign-in'
+readonly WORKOS_AUTHORIZE_PATH='/user_management/authorize'
 readonly EXPECTED_HEALTH_BODY='ok'
 readonly PROBE_RETRY_COUNT="${DEPLOY_HEALTH_RETRY_COUNT:-6}"
 readonly PROBE_RETRY_DELAY_SECONDS="${DEPLOY_HEALTH_RETRY_DELAY_SECONDS:-10}"
@@ -33,6 +36,10 @@ mapfile -t BROWSER_NAVIGATION_PROBE_HEADERS < <(
 
 if [[ -z "$DEPLOY_ORIGIN_VALUE" ]]; then
 	echo "DEPLOY_ORIGIN must be set for production health verification" >&2
+	exit 1
+fi
+if [[ -z "$AUTH_ERROR_SIGNING_SECRET_VALUE" ]]; then
+	echo "AUTH_ERROR_SIGNING_SECRET must be set for production health verification" >&2
 	exit 1
 fi
 
@@ -57,13 +64,31 @@ canonicalize_origin() {
 	' "$origin"
 }
 
+resolve_expected_auth_origin() {
+	local api_hostname="$1"
+
+	node --input-type=module -e '
+		import { getTrustedWorkosAuthOrigin } from "./apps/hub/src/lib/server/auth-origin-policy.ts";
+
+		process.stdout.write(
+			getTrustedWorkosAuthOrigin({
+				apiHostname: process.argv[1] === "" ? undefined : process.argv[1]
+			})
+		);
+	' "$api_hostname"
+}
+
 validate_callback_redirect() {
 	local expected_origin="$1"
-	local location="$2"
+	local auth_error_signing_secret="$2"
+	local location="$3"
 
-	node -e '
+	node --input-type=module -e '
+		import { readVerifiedAuthError } from "./apps/hub/src/lib/auth/auth-error-query.ts";
+
 		const expectedOrigin = process.argv[1];
-		const location = process.argv[2];
+		const authErrorSigningSecret = process.argv[2];
+		const location = process.argv[3];
 		const parsed = new URL(location, expectedOrigin);
 		if (parsed.origin !== expectedOrigin) {
 			throw new Error(
@@ -75,10 +100,16 @@ validate_callback_redirect() {
 				`Expected callback redirect to land on /, received ${parsed.pathname}`
 			);
 		}
-		if (!parsed.search) {
-			throw new Error("Expected callback redirect to include query parameters");
+		const verifiedAuthError = readVerifiedAuthError(parsed.searchParams, {
+			secret: authErrorSigningSecret,
+			now: Date.now()
+		});
+		if (!verifiedAuthError) {
+			throw new Error(
+				"Expected callback redirect to include a valid signed auth error query"
+			);
 		}
-	' "$expected_origin" "$location"
+	' "$expected_origin" "$auth_error_signing_secret" "$location"
 }
 
 validate_services_redirect() {
@@ -102,6 +133,41 @@ validate_services_redirect() {
 			);
 		}
 	' "$expected_origin" "$location" "$sign_in_path"
+}
+
+validate_sign_in_redirect() {
+	local expected_origin="$1"
+	local expected_auth_origin="$2"
+	local expected_callback_url="$3"
+	local authorize_path="$4"
+	local location="$5"
+
+	node -e '
+		const expectedOrigin = process.argv[1];
+		const expectedAuthOrigin = process.argv[2];
+		const expectedCallbackUrl = process.argv[3];
+		const authorizePath = process.argv[4];
+		const location = process.argv[5];
+		const parsed = new URL(location, expectedOrigin);
+		if (parsed.origin !== expectedAuthOrigin) {
+			throw new Error(
+				`Expected sign-in redirect to use ${expectedAuthOrigin}, received ${parsed.origin}`
+			);
+		}
+		if (
+			parsed.pathname !== authorizePath &&
+			!parsed.pathname.startsWith(`${authorizePath}/`)
+		) {
+			throw new Error(
+				`Expected sign-in redirect to use ${authorizePath}, received ${parsed.pathname}`
+			);
+		}
+		if (parsed.searchParams.get("redirect_uri") !== expectedCallbackUrl) {
+			throw new Error(
+				`Expected sign-in redirect_uri to be ${expectedCallbackUrl}, received ${parsed.searchParams.get("redirect_uri")}`
+			);
+		}
+	' "$expected_origin" "$expected_auth_origin" "$expected_callback_url" "$authorize_path" "$location"
 }
 
 request_url() {
@@ -150,6 +216,28 @@ run_probe() {
 	)"
 }
 
+assert_browser_navigation_redirect_probe() {
+	local url="$1"
+	local pathname="$2"
+
+	run_probe "$url" "${BROWSER_NAVIGATION_PROBE_HEADERS[@]}"
+
+	if [[ "$PROBE_STATUS" != "303" ]]; then
+		echo "Expected $url to return 303, received $PROBE_STATUS" >&2
+		exit 1
+	fi
+
+	if [[ "$PROBE_EFFECTIVE_URL" != "$url" ]]; then
+		echo "Expected $url probe to stay on the canonical origin, received $PROBE_EFFECTIVE_URL" >&2
+		exit 1
+	fi
+
+	if [[ -z "$PROBE_LOCATION" ]]; then
+		echo "Expected $pathname to include a redirect location" >&2
+		exit 1
+	fi
+}
+
 assert_no_redirect_probe() {
 	local url="$1"
 	local expected_status="$2"
@@ -173,6 +261,8 @@ assert_no_redirect_probe() {
 }
 
 expected_origin="$(canonicalize_origin "$DEPLOY_ORIGIN_VALUE")"
+expected_auth_origin="$(resolve_expected_auth_origin "$WORKOS_API_HOSTNAME_VALUE")"
+expected_callback_url="$(request_url "$expected_origin" "$CALLBACK_PATH")"
 
 root_url="$(request_url "$expected_origin" "$ROOT_PATH")"
 assert_no_redirect_probe "$root_url" "200"
@@ -185,41 +275,21 @@ if [[ "$PROBE_BODY" != "$EXPECTED_HEALTH_BODY" ]]; then
 fi
 
 services_url="$(request_url "$expected_origin" "$SERVICES_PATH")"
-run_probe "$services_url" "${BROWSER_NAVIGATION_PROBE_HEADERS[@]}"
-
-if [[ "$PROBE_STATUS" != "303" ]]; then
-	echo "Expected $services_url to return 303, received $PROBE_STATUS" >&2
-	exit 1
-fi
-
-if [[ "$PROBE_EFFECTIVE_URL" != "$services_url" ]]; then
-	echo "Expected $services_url probe to stay on the canonical origin, received $PROBE_EFFECTIVE_URL" >&2
-	exit 1
-fi
-
-if [[ -z "$PROBE_LOCATION" ]]; then
-	echo "Expected $SERVICES_PATH to include a redirect location" >&2
-	exit 1
-fi
-
+assert_browser_navigation_redirect_probe "$services_url" "$SERVICES_PATH"
 validate_services_redirect "$expected_origin" "$PROBE_LOCATION" "$SIGN_IN_PATH"
 
+sign_in_url="$(request_url "$expected_origin" "$SIGN_IN_PATH")"
+assert_browser_navigation_redirect_probe "$sign_in_url" "$SIGN_IN_PATH"
+validate_sign_in_redirect \
+	"$expected_origin" \
+	"$expected_auth_origin" \
+	"$expected_callback_url" \
+	"$WORKOS_AUTHORIZE_PATH" \
+	"$PROBE_LOCATION"
+
 callback_url="$(request_url "$expected_origin" "$CALLBACK_PATH")"
-run_probe "$callback_url" "${BROWSER_NAVIGATION_PROBE_HEADERS[@]}"
-
-if [[ "$PROBE_STATUS" != "303" ]]; then
-	echo "Expected $CALLBACK_PATH to return a same-origin browser redirect, received $PROBE_STATUS" >&2
-	exit 1
-fi
-
-if [[ "$PROBE_EFFECTIVE_URL" != "$callback_url" ]]; then
-	echo "Expected $CALLBACK_PATH probe to stay on the canonical callback URL, received $PROBE_EFFECTIVE_URL" >&2
-	exit 1
-fi
-
-if [[ -z "$PROBE_LOCATION" ]]; then
-	echo "Expected $CALLBACK_PATH to include a redirect location" >&2
-	exit 1
-fi
-
-validate_callback_redirect "$expected_origin" "$PROBE_LOCATION"
+assert_browser_navigation_redirect_probe "$callback_url" "$CALLBACK_PATH"
+validate_callback_redirect \
+	"$expected_origin" \
+	"$AUTH_ERROR_SIGNING_SECRET_VALUE" \
+	"$PROBE_LOCATION"

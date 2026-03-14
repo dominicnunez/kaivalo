@@ -1,4 +1,5 @@
 export const RUNTIME_SERVER_FILES = [
+	'auth-origin-policy.ts',
 	'authkit-config.ts',
 	'auth-cookie-names.ts',
 	'error-diagnostics.ts',
