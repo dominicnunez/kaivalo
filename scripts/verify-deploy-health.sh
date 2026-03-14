@@ -8,6 +8,7 @@ readonly SCRIPT_DIR="$(
 readonly REPO_ROOT="$(
 	cd -- "$SCRIPT_DIR/.." && pwd
 )"
+readonly NODE_BIN="${NODE_BIN:-node}"
 readonly DEPLOY_ORIGIN_VALUE="${DEPLOY_ORIGIN:-}"
 readonly AUTH_ERROR_SIGNING_SECRET_VALUE="${AUTH_ERROR_SIGNING_SECRET:-}"
 readonly WORKOS_API_HOSTNAME_VALUE="${WORKOS_API_HOSTNAME:-}"
@@ -26,7 +27,7 @@ readonly PROBE_MAX_TIME_SECONDS="${DEPLOY_HEALTH_MAX_TIME_SECONDS:-20}"
 cd "$REPO_ROOT"
 
 mapfile -t BROWSER_NAVIGATION_PROBE_HEADERS < <(
-	node --input-type=module -e '
+	"$NODE_BIN" --input-type=module -e '
 		import { getBrowserNavigationProbeHeaders } from "./apps/hub/src/lib/auth/request-policy.ts";
 		for (const [name, value] of Object.entries(getBrowserNavigationProbeHeaders())) {
 			process.stdout.write(`${name}: ${value}\n`);
@@ -46,7 +47,7 @@ fi
 canonicalize_origin() {
 	local origin="$1"
 
-	node --input-type=module -e '
+	"$NODE_BIN" --input-type=module -e '
 		import { normalizeConfiguredOrigin } from "./apps/hub/src/lib/auth/request-policy.ts";
 		import { isLoopbackHostname } from "./apps/hub/src/lib/server/ip-address.ts";
 
@@ -67,7 +68,7 @@ canonicalize_origin() {
 resolve_expected_auth_origin() {
 	local api_hostname="$1"
 
-	node --input-type=module -e '
+	"$NODE_BIN" --input-type=module -e '
 		import { getTrustedWorkosAuthOrigin } from "./apps/hub/src/lib/server/auth-origin-policy.ts";
 
 		process.stdout.write(
@@ -80,15 +81,17 @@ resolve_expected_auth_origin() {
 
 validate_callback_redirect() {
 	local expected_origin="$1"
-	local auth_error_signing_secret="$2"
-	local location="$3"
+	local location="$2"
 
-	node --input-type=module -e '
+	"$NODE_BIN" --input-type=module -e '
 		import { readVerifiedAuthError } from "./apps/hub/src/lib/auth/auth-error-query.ts";
 
 		const expectedOrigin = process.argv[1];
-		const authErrorSigningSecret = process.argv[2];
-		const location = process.argv[3];
+		const authErrorSigningSecret = process.env.AUTH_ERROR_SIGNING_SECRET;
+		if (!authErrorSigningSecret) {
+			throw new Error("AUTH_ERROR_SIGNING_SECRET must be set");
+		}
+		const location = process.argv[2];
 		const parsed = new URL(location, expectedOrigin);
 		if (parsed.origin !== expectedOrigin) {
 			throw new Error(
@@ -109,7 +112,7 @@ validate_callback_redirect() {
 				"Expected callback redirect to include a valid signed auth error query"
 			);
 		}
-	' "$expected_origin" "$auth_error_signing_secret" "$location"
+	' "$expected_origin" "$location"
 }
 
 validate_services_redirect() {
@@ -117,7 +120,7 @@ validate_services_redirect() {
 	local location="$2"
 	local sign_in_path="$3"
 
-	node -e '
+	"$NODE_BIN" -e '
 		const expectedOrigin = process.argv[1];
 		const location = process.argv[2];
 		const signInPath = process.argv[3];
@@ -142,7 +145,7 @@ validate_sign_in_redirect() {
 	local authorize_path="$4"
 	local location="$5"
 
-	node -e '
+	"$NODE_BIN" -e '
 		const expectedOrigin = process.argv[1];
 		const expectedAuthOrigin = process.argv[2];
 		const expectedCallbackUrl = process.argv[3];
@@ -291,5 +294,4 @@ callback_url="$(request_url "$expected_origin" "$CALLBACK_PATH")"
 assert_browser_navigation_redirect_probe "$callback_url" "$CALLBACK_PATH"
 validate_callback_redirect \
 	"$expected_origin" \
-	"$AUTH_ERROR_SIGNING_SECRET_VALUE" \
 	"$PROBE_LOCATION"
