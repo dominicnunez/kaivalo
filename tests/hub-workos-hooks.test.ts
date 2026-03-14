@@ -1016,10 +1016,8 @@ describe('Security headers on preview responses', () => {
 		await preview?.stop();
 	});
 
-	it('serves security headers from hooks on real responses', async () => {
+	it('serves hook-managed security and caching headers on real responses', async () => {
 		const homepage = await httpGet(preview.baseUrl);
-		const contentSecurityPolicy =
-			homepage.headers['content-security-policy'] ?? '';
 
 		assert.strictEqual(homepage.statusCode, 200);
 		assert.strictEqual(
@@ -1042,6 +1040,14 @@ describe('Security headers on preview responses', () => {
 		assert.ok(
 			!(homepage.headers['vary'] ?? '').toLowerCase().includes('authorization')
 		);
+	});
+
+	it('serves framework-managed content security policy on real responses', async () => {
+		const homepage = await httpGet(preview.baseUrl);
+		const contentSecurityPolicy =
+			homepage.headers['content-security-policy'] ?? '';
+
+		assert.strictEqual(homepage.statusCode, 200);
 		assert.ok(contentSecurityPolicy.includes("default-src 'self'"));
 		assert.ok(contentSecurityPolicy.includes("script-src 'self'"));
 		assert.ok(contentSecurityPolicy.includes("style-src 'self'"));
