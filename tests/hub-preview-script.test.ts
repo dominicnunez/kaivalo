@@ -330,6 +330,18 @@ async function assertCleanPreviewShutdown(
 	);
 }
 
+async function expectPreviewStartupFailure(
+	options: PreviewScriptOptions
+): Promise<string> {
+	try {
+		await startPreviewScript(options);
+		assert.fail('expected preview startup to fail');
+	} catch (error) {
+		assert.ok(error instanceof Error);
+		return error.message;
+	}
+}
+
 describe('hub preview script', () => {
 	it('starts the built node runtime with hermetic envs even when inherited runtime envs are polluted', async () => {
 		const restoreEnv = setProcessEnv(PREVIEW_POLLUTION_ENV);
@@ -505,5 +517,22 @@ describe('hub preview script', () => {
 		} finally {
 			await assertCleanPreviewShutdown(preview);
 		}
+	});
+
+	it('fails startup when DEV_AUTH_BYPASS is enabled for a non-loopback runtime origin', async () => {
+		const failureMessage = await expectPreviewStartupFailure({
+			nodeEnv: 'production',
+			envOverrides: {
+				DEV_AUTH_BYPASS: 'true',
+				ORIGIN: 'https://kaivalo.test',
+				WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback'
+			},
+			imports: [PREVIEW_FIXTURE_IMPORT]
+		});
+
+		assert.match(
+			failureMessage,
+			/DEV_AUTH_BYPASS requires NODE_ENV=development with loopback-only ORIGIN and WORKOS_REDIRECT_URI callback URL/
+		);
 	});
 });

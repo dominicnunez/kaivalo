@@ -170,6 +170,26 @@ describe('node server port validation', () => {
 		);
 	});
 
+	it('reports invalid DEV_AUTH_BYPASS configuration through startup fatal handling', async () => {
+		const { server, logs, fatalEvents } = await startWithFatalCapture({
+			...baseEnv,
+			NODE_ENV: 'production',
+			DEV_AUTH_BYPASS: 'true',
+			ORIGIN: 'https://kaivalo.test',
+			WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback'
+		});
+
+		assert.strictEqual(server, null);
+		assert.deepStrictEqual(logs, ['Failed to start hub server']);
+		assert.strictEqual(fatalEvents.length, 1);
+		assert.strictEqual(fatalEvents[0].reason, 'startup-error');
+		assert.strictEqual(fatalEvents[0].exitCode, 1);
+		assert.strictEqual(
+			fatalEvents[0].error?.message,
+			'DEV_AUTH_BYPASS requires NODE_ENV=development with loopback-only ORIGIN and WORKOS_REDIRECT_URI callback URL.'
+		);
+	});
+
 	it('contains startup failures when the fatal callback throws', async () => {
 		const logs = [];
 		const server = await startHubServer({

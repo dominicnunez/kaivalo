@@ -208,6 +208,68 @@ describe('workos environment protocols', () => {
 			);
 		}
 	});
+
+	it('allows DEV_AUTH_BYPASS for loopback-only development origins', () => {
+		expect(() =>
+			getValidatedWorkosEnv({
+				...validLocalEnv,
+				NODE_ENV: 'development',
+				DEV_AUTH_BYPASS: 'true',
+				ORIGIN: 'http://127.0.0.1:3100',
+				WORKOS_REDIRECT_URI: 'http://localhost:3100/auth/callback'
+			})
+		).not.toThrow();
+	});
+
+	it('rejects DEV_AUTH_BYPASS outside development', () => {
+		expect(() =>
+			getValidatedWorkosEnv({
+				...validLocalEnv,
+				NODE_ENV: 'production',
+				DEV_AUTH_BYPASS: 'true'
+			})
+		).toThrow(
+			/DEV_AUTH_BYPASS requires NODE_ENV=development with loopback-only ORIGIN and WORKOS_REDIRECT_URI callback URL/
+		);
+	});
+
+	it.each([
+		[
+			'non-loopback origin',
+			{
+				NODE_ENV: 'development',
+				DEV_AUTH_BYPASS: 'true',
+				ORIGIN: 'https://kaivalo.test',
+				WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback'
+			}
+		],
+		[
+			'non-loopback callback',
+			{
+				NODE_ENV: 'development',
+				DEV_AUTH_BYPASS: 'true',
+				ORIGIN: 'http://localhost:3100',
+				WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback'
+			}
+		],
+		[
+			'missing origin outside test mode',
+			{
+				NODE_ENV: 'development',
+				DEV_AUTH_BYPASS: 'true',
+				ORIGIN: ''
+			}
+		]
+	])('rejects DEV_AUTH_BYPASS with %s', (_label, envOverrides) => {
+		expect(() =>
+			getValidatedWorkosEnv({
+				...validLocalEnv,
+				...envOverrides
+			})
+		).toThrow(
+			/DEV_AUTH_BYPASS requires NODE_ENV=development with loopback-only ORIGIN and WORKOS_REDIRECT_URI callback URL/
+		);
+	});
 });
 
 describe('trusted forwarded proto parsing', () => {

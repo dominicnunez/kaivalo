@@ -18,13 +18,12 @@ import {
 } from '$lib/server/ip-address.ts';
 import {
 	markPrivateNoStoreDocument,
-	markSessionAwareDocument
+	markSessionAwareDocument,
+	isDevAuthBypassEnabled
 } from '$lib/server/workos-security.ts';
 import { authKit } from '@workos/authkit-sveltekit';
 
 const LOCAL_SIGN_IN_PATH = '/auth/sign-in';
-const DEV_AUTH_BYPASS_CONFIGURATION_ERROR_MESSAGE =
-	'DEV_AUTH_BYPASS requires NODE_ENV=development with loopback-only ORIGIN and WORKOS_REDIRECT_URI callback URL.';
 const DEV_AUTH_BYPASS_REQUEST_ERROR_MESSAGE =
 	'DEV_AUTH_BYPASS only serves requests from loopback hosts and loopback clients.';
 const DEV_AUTH_BYPASS_EMAIL = 'dev@kaivalo.local';
@@ -88,62 +87,6 @@ function isLoopbackHostname(hostname: string): boolean {
 	return isLoopbackHost(hostname);
 }
 
-function readUrl(candidate: string | undefined): URL | null {
-	if (!candidate?.trim()) {
-		return null;
-	}
-
-	try {
-		return new URL(candidate);
-	} catch {
-		return null;
-	}
-}
-
-function isLoopbackOriginUrl(candidate: string | undefined): boolean {
-	const parsed = readUrl(candidate);
-	if (!parsed || parsed.username || parsed.password) {
-		return false;
-	}
-
-	if (
-		(parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
-		parsed.pathname !== '/' ||
-		parsed.search ||
-		parsed.hash
-	) {
-		return false;
-	}
-
-	return isLoopbackHostname(parsed.hostname);
-}
-
-function isLoopbackCallbackUrl(candidate: string | undefined): boolean {
-	const parsed = readUrl(candidate);
-	if (!parsed || parsed.username || parsed.password) {
-		return false;
-	}
-
-	if (
-		(parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
-		parsed.pathname !== '/auth/callback' ||
-		parsed.search ||
-		parsed.hash
-	) {
-		return false;
-	}
-
-	return isLoopbackHostname(parsed.hostname);
-}
-
-function hasValidLocalDevelopmentAuthBypassConfiguration(): boolean {
-	return (
-		env.NODE_ENV?.trim().toLowerCase() === 'development' &&
-		isLoopbackOriginUrl(env.ORIGIN) &&
-		isLoopbackCallbackUrl(env.WORKOS_REDIRECT_URI)
-	);
-}
-
 function hasValidLocalDevelopmentAuthBypassRequest(
 	event: Parameters<LayoutServerLoad>[0]
 ): boolean {
@@ -165,12 +108,8 @@ function hasValidLocalDevelopmentAuthBypassRequest(
 function getDevelopmentAuthBypassUser(
 	event: Parameters<LayoutServerLoad>[0]
 ): LayoutUser | null {
-	if (env.DEV_AUTH_BYPASS?.trim().toLowerCase() !== 'true') {
+	if (!isDevAuthBypassEnabled(env)) {
 		return null;
-	}
-
-	if (!hasValidLocalDevelopmentAuthBypassConfiguration()) {
-		throw new Error(DEV_AUTH_BYPASS_CONFIGURATION_ERROR_MESSAGE);
 	}
 	if (!hasValidLocalDevelopmentAuthBypassRequest(event)) {
 		throw new Error(DEV_AUTH_BYPASS_REQUEST_ERROR_MESSAGE);

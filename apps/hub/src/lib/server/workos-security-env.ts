@@ -19,6 +19,8 @@ export const PROXY_HSTS_CONFIGURATION_ERROR_MESSAGE =
 	'Production HTTPS origin requires trusted proxy proto forwarding for reliable HSTS. Set TRUST_X_FORWARDED_PROTO=true and TRUSTED_PROXY_IPS to trusted proxy addresses for proxied HTTPS deployments.';
 export const LOOPBACK_PROXY_TRUST_ERROR_MESSAGE =
 	'Production HTTPS origin is configured to trust forwarded proto headers from loopback-only proxy IPs. This commonly indicates misconfigured TRUSTED_PROXY_IPS and can suppress HSTS for real client traffic.';
+export const DEV_AUTH_BYPASS_CONFIGURATION_ERROR_MESSAGE =
+	'DEV_AUTH_BYPASS requires NODE_ENV=development with loopback-only ORIGIN and WORKOS_REDIRECT_URI callback URL.';
 
 type Env = Record<string, string | undefined>;
 
@@ -182,12 +184,49 @@ function isLocalOrigin(origin: string): boolean {
 	}
 }
 
+export function isDevAuthBypassEnabled(env: Env): boolean {
+	return env.DEV_AUTH_BYPASS?.trim().toLowerCase() === 'true';
+}
+
 function readRequiredTrimmedEnvValue(env: Env, name: string): string {
 	const value = env[name]?.trim();
 	if (!value) {
 		throw new Error(`Missing required environment variable: ${name}`);
 	}
 	return value;
+}
+
+function assertValidDevAuthBypassConfiguration(
+	env: Env,
+	redirectUrl: URL
+): void {
+	if (!isDevAuthBypassEnabled(env)) {
+		return;
+	}
+
+	if (env.NODE_ENV?.trim().toLowerCase() !== 'development') {
+		throw new Error(DEV_AUTH_BYPASS_CONFIGURATION_ERROR_MESSAGE);
+	}
+	if (!isLocalRedirectUrl(redirectUrl)) {
+		throw new Error(DEV_AUTH_BYPASS_CONFIGURATION_ERROR_MESSAGE);
+	}
+
+	const originValue = env.ORIGIN?.trim();
+	if (!originValue) {
+		throw new Error(DEV_AUTH_BYPASS_CONFIGURATION_ERROR_MESSAGE);
+	}
+
+	let originUrl: URL;
+	try {
+		originUrl = parseOriginUrl(originValue);
+		assertHttpOrHttpsProtocol(originUrl, 'ORIGIN');
+	} catch {
+		throw new Error(DEV_AUTH_BYPASS_CONFIGURATION_ERROR_MESSAGE);
+	}
+
+	if (!isLocalRedirectUrl(originUrl)) {
+		throw new Error(DEV_AUTH_BYPASS_CONFIGURATION_ERROR_MESSAGE);
+	}
 }
 
 export function getValidatedWorkosEnv(env: Env): WorkosEnv {
@@ -235,6 +274,7 @@ export function getValidatedWorkosEnv(env: Env): WorkosEnv {
 			'WORKOS_REDIRECT_URI must use https outside local development'
 		);
 	}
+	assertValidDevAuthBypassConfiguration(env, redirectUrl);
 
 	const originValue = env.ORIGIN?.trim();
 	if (!originValue) {
