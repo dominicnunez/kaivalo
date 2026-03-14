@@ -7,11 +7,17 @@ import { getHubBuildPaths, removeServerSourceMaps } from './build-artifacts.ts';
 
 const DEFAULT_LOCAL_PREVIEW_HOST = 'localhost';
 const LOCAL_PREVIEW_WILDCARD_HOSTS = new Set(['0.0.0.0', '::', '[::]']);
-const LOCAL_PLACEHOLDER_ENV_DEFAULTS = {
+const LOCAL_PREVIEW_IDENTITY_PLACEHOLDER_ENV_DEFAULTS = {
 	WORKOS_CLIENT_ID: 'client_build_placeholder',
-	WORKOS_API_KEY: 'sk_build_placeholder',
+	WORKOS_API_KEY: 'sk_build_placeholder'
+} as const;
+const LOCAL_PREVIEW_SECRET_PLACEHOLDER_ENV_DEFAULTS = {
 	WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
 	AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32)
+} as const;
+const LOCAL_PLACEHOLDER_ENV_DEFAULTS = {
+	...LOCAL_PREVIEW_IDENTITY_PLACEHOLDER_ENV_DEFAULTS,
+	...LOCAL_PREVIEW_SECRET_PLACEHOLDER_ENV_DEFAULTS
 } as const;
 const BUILD_PLACEHOLDER_FLAG = 'HUB_BUILD_ALLOW_PLACEHOLDERS';
 
@@ -76,6 +82,14 @@ function getLocalPreviewHost(baseEnv: NodeJS.ProcessEnv): string {
 	return formatOriginHost(configuredHost);
 }
 
+function isLoopbackPreviewOrigin(origin: string): boolean {
+	try {
+		return isLoopbackHostname(new URL(origin).hostname);
+	} catch {
+		return false;
+	}
+}
+
 function formatOriginHost(host: string): string {
 	return isIP(host) === 6 && !host.startsWith('[') ? `[${host}]` : host;
 }
@@ -102,6 +116,20 @@ function mergePlaceholderEnv(
 			name === 'ORIGIN' ? value : (baseEnv[name] ?? value)
 		])
 	);
+}
+
+function getHubPreviewPlaceholderEnv(
+	baseEnv: NodeJS.ProcessEnv = process.env
+): NodeJS.ProcessEnv {
+	const origin = getLocalPreviewOrigin(baseEnv);
+
+	return {
+		...(isLoopbackPreviewOrigin(origin)
+			? LOCAL_PLACEHOLDER_ENV_DEFAULTS
+			: LOCAL_PREVIEW_IDENTITY_PLACEHOLDER_ENV_DEFAULTS),
+		WORKOS_REDIRECT_URI: `${origin}/auth/callback`,
+		ORIGIN: origin
+	};
 }
 
 function shouldAllowBuildPlaceholders(baseEnv: NodeJS.ProcessEnv): boolean {
@@ -142,7 +170,7 @@ export function getHubPreviewEnv(
 ): NodeJS.ProcessEnv {
 	const previewEnv = {
 		...baseEnv,
-		...mergePlaceholderEnv(baseEnv, getHubLocalPlaceholderEnv(baseEnv)),
+		...mergePlaceholderEnv(baseEnv, getHubPreviewPlaceholderEnv(baseEnv)),
 		NODE_ENV: baseEnv.NODE_ENV?.trim() || 'production'
 	};
 

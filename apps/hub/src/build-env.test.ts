@@ -67,15 +67,26 @@ describe('hub build environment', () => {
 		);
 	});
 
-	it('normalizes explicit preview origins before deriving placeholder callbacks', () => {
+	it('normalizes explicit preview origins when non-loopback preview secrets are provided', () => {
 		const previewEnv = getHubPreviewEnv({
-			ORIGIN: 'https://hub.kaivalo.com/'
+			ORIGIN: 'https://hub.kaivalo.com/',
+			WORKOS_COOKIE_PASSWORD: 'ef'.repeat(32),
+			AUTH_ERROR_SIGNING_SECRET: '12'.repeat(32)
 		});
 
+		expect(previewEnv.WORKOS_CLIENT_ID).toBe('client_build_placeholder');
 		expect(previewEnv.WORKOS_REDIRECT_URI).toBe(
 			'https://hub.kaivalo.com/auth/callback'
 		);
 		expect(previewEnv.ORIGIN).toBe('https://hub.kaivalo.com');
+	});
+
+	it('requires explicit preview secrets for non-loopback preview origins', () => {
+		expect(() =>
+			getHubPreviewEnv({
+				ORIGIN: 'https://hub.kaivalo.com/'
+			})
+		).toThrow(/Missing required environment variable: WORKOS_COOKIE_PASSWORD/);
 	});
 
 	it('preserves explicit preview auth env values', () => {
