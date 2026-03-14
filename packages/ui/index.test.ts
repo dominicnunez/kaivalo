@@ -76,6 +76,27 @@ describe('@kaivalo/ui public api', () => {
 			allowedExternalHosts: ['kaivalo.com'],
 			children: snippet
 		});
+		const externalBlankRender = render(Card, {
+			props: {
+				variant: 'link',
+				href: 'https://kaivalo.com/services',
+				allowExternal: true,
+				allowedExternalHosts: ['kaivalo.com'],
+				target: '_blank',
+				rel: 'noreferrer',
+				children: snippet
+			}
+		});
+		const externalBlankWithoutRelRender = render(Card, {
+			props: {
+				variant: 'link',
+				href: 'https://kaivalo.com/services',
+				allowExternal: true,
+				allowedExternalHosts: ['kaivalo.com'],
+				target: '_blank',
+				children: snippet
+			}
+		});
 		const unsafeRender = render(Card, {
 			variant: 'link',
 			href: 'javascript:alert(1)',
@@ -137,6 +158,9 @@ describe('@kaivalo/ui public api', () => {
 			disallowedAbsoluteRender.container.querySelector('a');
 		const allowedAbsoluteLink =
 			allowedAbsoluteRender.container.querySelector('a');
+		const externalBlankLink = externalBlankRender.container.querySelector('a');
+		const externalBlankWithoutRelLink =
+			externalBlankWithoutRelRender.container.querySelector('a');
 		const unsafeLink = unsafeRender.container.querySelector('a');
 		const protocolRelativeLink =
 			protocolRelativeRender.container.querySelector('a');
@@ -164,6 +188,11 @@ describe('@kaivalo/ui public api', () => {
 		expect(safeLink?.getAttribute('data-card-state')).toBe('link');
 		expect(allowedAbsoluteLink?.getAttribute('href')).toBe(
 			'https://kaivalo.com/services'
+		);
+		expect(externalBlankLink?.getAttribute('target')).toBe('_blank');
+		expect(externalBlankLink?.getAttribute('rel')).toBe('noreferrer noopener');
+		expect(externalBlankWithoutRelLink?.getAttribute('rel')).toBe(
+			'noopener noreferrer'
 		);
 		expect(safeRender.container.textContent).toContain('Header');
 		expect(normalizedAllowlistLink?.getAttribute('href')).toBe(

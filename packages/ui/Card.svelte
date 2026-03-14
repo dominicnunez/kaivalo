@@ -128,9 +128,38 @@
 			: '';
 	}
 
+	function isExternalHref(value: string) {
+		return value.startsWith('https://');
+	}
+
+	function getHardenedExternalRel(
+		href: string,
+		target: unknown,
+		rel: unknown
+	): string | undefined {
+		if (target !== '_blank' || !isExternalHref(href)) {
+			return typeof rel === 'string' ? rel : undefined;
+		}
+
+		const tokens =
+			typeof rel === 'string' ? rel.split(/\s+/).filter(Boolean) : [];
+		const seenTokens = new Set(tokens.map((token) => token.toLowerCase()));
+
+		for (const requiredToken of ['noopener', 'noreferrer']) {
+			if (!seenTokens.has(requiredToken)) {
+				tokens.push(requiredToken);
+			}
+		}
+
+		return tokens.join(' ');
+	}
+
 	let safeHref = $derived(resolveSafeHref(href));
 	let isActiveLink = $derived(variant === 'link' && safeHref !== '');
 	let isDisabledLink = $derived(variant === 'link' && safeHref === '');
+	let safeRel = $derived(
+		getHardenedExternalRel(safeHref, restProps.target, restProps.rel)
+	);
 	let rootClass = $derived(
 		[
 			'card',
@@ -147,6 +176,7 @@
 	<a
 		{...restProps}
 		href={safeHref}
+		rel={safeRel}
 		class={rootClass}
 		data-ui="card"
 		data-card-state="link"
