@@ -346,6 +346,49 @@ describe('avatar proxy route', () => {
 		);
 	});
 
+	it('omits upstream error messages from avatar failure logs in production', async () => {
+		vi.resetModules();
+		vi.doMock('$env/dynamic/private', () => ({
+			env: {
+				NODE_ENV: 'production',
+				ORIGIN: 'http://kaivalo.test'
+			}
+		}));
+		const { _createAvatarGetHandler: createAvatarGetHandler } =
+			await import('./+server');
+		const fetch = vi.fn(async () => {
+			throw new Error('socket hang up');
+		});
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		try {
+			const response = await createAvatarGetHandler()(createAvatarEvent(fetch));
+
+			expect(response.status).toBe(502);
+			expect(errorSpy).toHaveBeenCalledWith(
+				'Avatar proxy request failed',
+				expect.objectContaining({
+					incidentId: expect.stringMatching(/^avatar_[0-9a-f-]+$/),
+					requestId: 'missing',
+					pathname: '/avatar',
+					method: 'GET',
+					sourceHost: 'avatars.githubusercontent.com',
+					failureClass: 'fetch',
+					responseStatus: 502,
+					errorCode: 'AVATAR_PROXY_FAILURE',
+					errorName: 'Error'
+				})
+			);
+			expect(errorSpy.mock.calls[0]?.[1]).not.toHaveProperty('errorMessage');
+			expect(errorSpy.mock.calls[0]?.[1]).not.toHaveProperty(
+				'errorCauseMessage'
+			);
+		} finally {
+			vi.doUnmock('$env/dynamic/private');
+			vi.resetModules();
+		}
+	});
+
 	it('fails fast when the upstream avatar fetch exceeds the timeout', async () => {
 		const controller = new AbortController();
 		const originalTimeout = AbortSignal.timeout;
@@ -609,7 +652,7 @@ describe('avatar proxy route', () => {
 		await expect(limited.text()).resolves.toBe('Too many requests');
 	});
 
-	it('rejects new client addresses when the avatar limiter table is full', async () => {
+	it('admits new client addresses by evicting the least recently active avatar bucket', async () => {
 		const GET = _createAvatarGetHandler({
 			rateLimiter: createSlidingWindowRateLimiter({
 				limit: 2,
@@ -644,13 +687,12 @@ describe('avatar proxy route', () => {
 
 		expect((await GET(createEvent('203.0.113.10'))).status).toBe(200);
 
-		const overflowed = await GET(createEvent('203.0.113.11'));
+		const secondClient = await GET(createEvent('203.0.113.11'));
 
-		expect(overflowed.status).toBe(429);
-		expect(overflowed.headers.get('retry-after')).toBe('60');
-		expect(fetch).toHaveBeenCalledTimes(1);
-		expect((await GET(createEvent('203.0.113.10'))).status).toBe(200);
+		expect(secondClient.status).toBe(200);
 		expect(fetch).toHaveBeenCalledTimes(2);
+		expect((await GET(createEvent('203.0.113.10'))).status).toBe(200);
+		expect(fetch).toHaveBeenCalledTimes(3);
 	});
 
 	it('shares quotas across equivalent normalized client addresses', async () => {

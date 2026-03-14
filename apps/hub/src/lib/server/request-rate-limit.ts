@@ -42,6 +42,10 @@ function getOldestBucketTimestamp(bucket: SlidingWindowBucket): number | null {
 	return bucket.timestamps[bucket.headIndex] ?? null;
 }
 
+function getNewestBucketTimestamp(bucket: SlidingWindowBucket): number | null {
+	return bucket.timestamps[bucket.timestamps.length - 1] ?? null;
+}
+
 function compactBucket(bucket: SlidingWindowBucket): void {
 	if (bucket.headIndex === 0) {
 		return;
@@ -120,24 +124,59 @@ function getOverflowRetryAfterSeconds(
 	now: number,
 	windowMs: number
 ): number {
-	let oldestActiveTimestamp: number | null = null;
+	let earliestBucketEvictionTimestamp: number | null = null;
 
 	for (const bucket of buckets.values()) {
-		const bucketOldestTimestamp = getOldestBucketTimestamp(bucket);
-		if (bucketOldestTimestamp === null) {
+		const newestBucketTimestamp = getNewestBucketTimestamp(bucket);
+		if (newestBucketTimestamp === null) {
 			continue;
 		}
 		if (
-			oldestActiveTimestamp === null ||
-			bucketOldestTimestamp < oldestActiveTimestamp
+			earliestBucketEvictionTimestamp === null ||
+			newestBucketTimestamp < earliestBucketEvictionTimestamp
 		) {
-			oldestActiveTimestamp = bucketOldestTimestamp;
+			earliestBucketEvictionTimestamp = newestBucketTimestamp;
 		}
 	}
 
-	return oldestActiveTimestamp === null
+	return earliestBucketEvictionTimestamp === null
 		? 1
-		: getRetryAfterSeconds(oldestActiveTimestamp, now, windowMs);
+		: getRetryAfterSeconds(earliestBucketEvictionTimestamp, now, windowMs);
+}
+
+function getLeastRecentlyActiveBucketKey(
+	buckets: ReadonlyMap<string, SlidingWindowBucket>
+): string | null {
+	let candidateKey: string | null = null;
+	let candidateTimestamp: number | null = null;
+
+	for (const [key, bucket] of buckets.entries()) {
+		const newestBucketTimestamp = getNewestBucketTimestamp(bucket);
+		if (newestBucketTimestamp === null) {
+			continue;
+		}
+		if (
+			candidateTimestamp === null ||
+			newestBucketTimestamp < candidateTimestamp
+		) {
+			candidateKey = key;
+			candidateTimestamp = newestBucketTimestamp;
+		}
+	}
+
+	return candidateKey;
+}
+
+function evictLeastRecentlyActiveBucket(
+	buckets: Map<string, SlidingWindowBucket>
+): boolean {
+	const key = getLeastRecentlyActiveBucketKey(buckets);
+	if (key === null) {
+		return false;
+	}
+
+	buckets.delete(key);
+	return true;
 }
 
 export function createSlidingWindowRateLimiter({
@@ -169,7 +208,10 @@ export function createSlidingWindowRateLimiter({
 					deleteBuckets(buckets, sweepStaleBuckets(buckets, nowMs, windowMs));
 				}
 
-				if (buckets.size >= maxEntries) {
+				if (
+					buckets.size >= maxEntries &&
+					!evictLeastRecentlyActiveBucket(buckets)
+				) {
 					return {
 						allowed: false,
 						retryAfterSeconds: getOverflowRetryAfterSeconds(

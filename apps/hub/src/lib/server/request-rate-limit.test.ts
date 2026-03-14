@@ -75,7 +75,7 @@ describe('sliding window rate limiter', () => {
 		});
 	});
 
-	it('rejects unseen keys when capacity is full and preserves active buckets', () => {
+	it('evicts the least recently active bucket when a new key arrives at capacity', () => {
 		let now = 1_000;
 		const limiter = createSlidingWindowRateLimiter({
 			limit: 2,
@@ -91,10 +91,9 @@ describe('sliding window rate limiter', () => {
 		expect(limiter.check('203.0.113.10').allowed).toBe(true);
 		now += 1;
 		expect(limiter.check('203.0.113.12')).toMatchObject({
-			allowed: false,
-			retryAfterSeconds: 60
+			allowed: true,
+			retryAfterSeconds: 0
 		});
-		now += 1;
 
 		expect(limiter.check('203.0.113.10')).toMatchObject({
 			allowed: false,
@@ -124,6 +123,31 @@ describe('sliding window rate limiter', () => {
 		expect(limiter.check('203.0.113.11')).toMatchObject({
 			allowed: false,
 			retryAfterSeconds: 1
+		});
+	});
+
+	it('admits a new key even when the table is full of a rate-limited bucket', () => {
+		let now = 1_000;
+		const limiter = createSlidingWindowRateLimiter({
+			limit: 1,
+			windowMs: 60_000,
+			maxEntries: 1,
+			now: () => now
+		});
+
+		expect(limiter.check('203.0.113.10')).toMatchObject({
+			allowed: true,
+			retryAfterSeconds: 0
+		});
+		now += 30_000;
+		expect(limiter.check('203.0.113.10')).toMatchObject({
+			allowed: false,
+			retryAfterSeconds: 30
+		});
+		now += 1;
+		expect(limiter.check('203.0.113.11')).toMatchObject({
+			allowed: true,
+			retryAfterSeconds: 0
 		});
 	});
 });
