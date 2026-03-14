@@ -150,7 +150,7 @@ export function getHubBuildEnv(
 	const buildEnv = shouldAllowBuildPlaceholders(baseEnv)
 		? {
 				...baseEnv,
-				...mergePlaceholderEnv(baseEnv, getHubLocalPlaceholderEnv(baseEnv))
+				...getHubLocalPlaceholderEnv(baseEnv)
 			}
 		: { ...baseEnv };
 

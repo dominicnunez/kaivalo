@@ -31,6 +31,27 @@ describe('hub build environment', () => {
 		expect(buildEnv.AUTH_ERROR_SIGNING_SECRET).toBe('cd'.repeat(32));
 	});
 
+	it('replaces inherited auth secrets when placeholder builds are enabled', () => {
+		const buildEnv = getHubBuildEnv({
+			HUB_BUILD_ALLOW_PLACEHOLDERS: 'true',
+			WORKOS_CLIENT_ID: 'client_live',
+			WORKOS_API_KEY: 'sk_live',
+			WORKOS_COOKIE_PASSWORD: 'ef'.repeat(32),
+			AUTH_ERROR_SIGNING_SECRET: '12'.repeat(32),
+			WORKOS_REDIRECT_URI: 'https://hub.kaivalo.com/auth/callback',
+			ORIGIN: 'https://hub.kaivalo.com'
+		});
+
+		expect(buildEnv.WORKOS_CLIENT_ID).toBe('client_build_placeholder');
+		expect(buildEnv.WORKOS_API_KEY).toBe('sk_build_placeholder');
+		expect(buildEnv.WORKOS_COOKIE_PASSWORD).toBe('ab'.repeat(32));
+		expect(buildEnv.AUTH_ERROR_SIGNING_SECRET).toBe('cd'.repeat(32));
+		expect(buildEnv.WORKOS_REDIRECT_URI).toBe(
+			'https://hub.kaivalo.com/auth/callback'
+		);
+		expect(buildEnv.ORIGIN).toBe('https://hub.kaivalo.com');
+	});
+
 	it('fills missing preview auth env with local placeholder values', () => {
 		const previewEnv = getHubPreviewEnv({
 			PORT: '4173'
