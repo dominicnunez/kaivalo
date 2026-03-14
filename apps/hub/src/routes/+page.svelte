@@ -22,12 +22,10 @@
 	const TYPEWRITER_PAUSE_FULL_MS = 2000;
 	const TYPEWRITER_PAUSE_EMPTY_MS = 500;
 	const TYPEWRITER_MAX_CYCLES = 2;
-	const DAY_IN_MS = 24 * 60 * 60 * 1000;
 	let currentText = $state('');
 	let mounted = $state(false);
 	let pageVisible = $state(true);
 	let reducedMotion = $state(false);
-	let currentYear = $derived(data.currentYear);
 
 	onMount(() => {
 		mounted = true;
@@ -42,35 +40,10 @@
 		updateReducedMotion();
 		updateVisibility();
 
-		let yearRefreshTimeout: ReturnType<typeof setTimeout> | undefined;
-		let yearRefreshInterval: ReturnType<typeof setInterval> | undefined;
-		const scheduleYearRefresh = () => {
-			const now = new Date();
-			const nextMidnight = new Date(now);
-			nextMidnight.setHours(24, 0, 0, 0);
-			const delayUntilMidnight = Math.max(
-				0,
-				nextMidnight.getTime() - now.getTime()
-			);
-			yearRefreshTimeout = setTimeout(() => {
-				currentYear = new Date().getFullYear();
-				yearRefreshInterval = setInterval(() => {
-					currentYear = new Date().getFullYear();
-				}, DAY_IN_MS);
-			}, delayUntilMidnight);
-		};
-		scheduleYearRefresh();
-
 		mediaQuery.addEventListener('change', updateReducedMotion);
 		document.addEventListener('visibilitychange', updateVisibility);
 
 		return () => {
-			if (yearRefreshTimeout) {
-				clearTimeout(yearRefreshTimeout);
-			}
-			if (yearRefreshInterval) {
-				clearInterval(yearRefreshInterval);
-			}
 			mediaQuery.removeEventListener('change', updateReducedMotion);
 			document.removeEventListener('visibilitychange', updateVisibility);
 		};
@@ -284,4 +257,4 @@
 	</Container>
 </section>
 
-<ShellFooter {currentYear} />
+<ShellFooter currentYear={data.currentYear} />
