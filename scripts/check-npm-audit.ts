@@ -370,6 +370,15 @@ export function main() {
 	process.exitCode = 1;
 }
 
+function reportCliFailure(error: unknown): void {
+	const message =
+		error instanceof Error ? error.message : 'npm audit failed unexpectedly';
+	console.error(message);
+	process.exitCode = 1;
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
-	main();
+	Promise.resolve()
+		.then(() => main())
+		.catch(reportCliFailure);
 }

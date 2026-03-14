@@ -1,8 +1,9 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import {
 	AUDIT_MAX_ATTEMPTS,
 	AUDIT_RETRY_DELAY_MS,
@@ -12,6 +13,8 @@ import {
 	readAllowlist,
 	runAudit
 } from '../scripts/check-npm-audit.ts';
+
+const ROOT = resolve(import.meta.dirname, '..');
 
 describe('npm audit gate', () => {
 	it('collects concrete advisory records from npm audit output', () => {
@@ -315,5 +318,20 @@ describe('npm audit gate', () => {
 				}),
 			new Error('npm audit failed: terminated by SIGTERM')
 		);
+	});
+
+	it('reports top-level cli failures without an uncaught stack trace', () => {
+		const result = spawnSync(process.execPath, ['scripts/check-npm-audit.ts'], {
+			cwd: ROOT,
+			env: {
+				...process.env,
+				PATH: '/definitely/missing'
+			},
+			encoding: 'utf8'
+		});
+
+		assert.strictEqual(result.status, 1);
+		assert.match(result.stderr, /npm audit failed: spawnSync npm ENOENT/);
+		assert.doesNotMatch(result.stderr, /^\s+at /m);
 	});
 });
