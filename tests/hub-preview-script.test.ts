@@ -11,7 +11,7 @@ import {
 	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
 	readVerifiedAuthError
 } from '../apps/hub/src/lib/auth/auth-error-query.ts';
-import { httpGet } from './helpers/hub-preview.ts';
+import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 import { assertHubBuildAvailable } from './helpers/hub-build.ts';
 import { reserveLocalPort } from './helpers/network.ts';
 import { createHubPreviewScriptEnv } from './helpers/hub-runtime-env.ts';
@@ -29,6 +29,11 @@ const AUTHKIT_COOKIE_NAME = '__Host-wos_session';
 const PREVIEW_AUTH_ERROR_SIGNING_SECRET = 'cd'.repeat(32);
 const PREVIEW_POLLUTION_ENV = {
 	TRUST_X_FORWARDED_PROTO: 'true'
+} as const;
+const PREVIEW_HELPER_POLLUTION_ENV = {
+	TRUST_X_FORWARDED_PROTO: 'true',
+	WORKOS_API_HOSTNAME: 'accounts.attacker.test',
+	NODE_OPTIONS: '--require=/definitely/missing-preview-helper-fixture.cjs'
 } as const;
 type ProcessShutdownResult = {
 	forced: boolean;
@@ -345,6 +350,25 @@ async function expectPreviewStartupFailure(
 }
 
 describe('hub preview script', () => {
+	it('starts the helper-managed preview with hermetic envs even when inherited runtime envs are polluted', async () => {
+		assertHubBuildAvailable();
+		const restoreEnv = setProcessEnv(PREVIEW_HELPER_POLLUTION_ENV);
+		let preview: Awaited<ReturnType<typeof startHubPreview>> | null = null;
+		try {
+			preview = await startHubPreview({ shared: false });
+
+			const homepage = await httpGet(preview.baseUrl);
+			assert.strictEqual(homepage.statusCode, 200);
+			assert.match(homepage.data, /Kaivalo/i);
+			await assertPreviewAuthRoutes(preview.baseUrl);
+		} finally {
+			if (preview) {
+				await preview.stop();
+			}
+			restoreEnv();
+		}
+	});
+
 	it('starts the built node runtime with hermetic envs even when inherited runtime envs are polluted', async () => {
 		const restoreEnv = setProcessEnv(PREVIEW_POLLUTION_ENV);
 		let preview: StartedPreviewScript | null = null;

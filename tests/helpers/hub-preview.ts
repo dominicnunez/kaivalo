@@ -243,10 +243,7 @@ async function startPreviewProcess(
 		cwd: hubDir,
 		stdio: ['ignore', 'pipe', 'pipe'],
 		detached: true,
-		env: {
-			...process.env,
-			...createPreviewEnv(previewPort, options.env, options.imports)
-		}
+		env: createPreviewEnv(previewPort, options.env, options.imports)
 	});
 	server.stdout?.on('data', appendOutput);
 	server.stderr?.on('data', appendOutput);
