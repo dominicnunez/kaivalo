@@ -1,13 +1,16 @@
-const HEALTH_RESPONSE = 'ok';
-const NO_STORE_CACHE_CONTROL = 'no-store';
-const PLAIN_TEXT_CONTENT_TYPE = 'text/plain; charset=utf-8';
+import {
+	HUB_HEALTH_BODY,
+	HUB_HEALTH_CACHE_CONTROL,
+	HUB_HEALTH_CONTENT_TYPE,
+	HUB_HEALTH_STATUS_CODE
+} from '$lib/server/health-contract';
 
 export function GET() {
-	return new Response(HEALTH_RESPONSE, {
-		status: 200,
+	return new Response(HUB_HEALTH_BODY, {
+		status: HUB_HEALTH_STATUS_CODE,
 		headers: {
-			'cache-control': NO_STORE_CACHE_CONTROL,
-			'content-type': PLAIN_TEXT_CONTENT_TYPE
+			'cache-control': HUB_HEALTH_CACHE_CONTROL,
+			'content-type': HUB_HEALTH_CONTENT_TYPE
 		}
 	});
 }

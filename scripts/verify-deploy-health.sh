@@ -14,19 +14,16 @@ readonly DEPLOY_ORIGIN_VALUE="${DEPLOY_ORIGIN:-}"
 readonly DEPLOY_PROBE_ORIGIN_VALUE="${DEPLOY_PROBE_ORIGIN:-$DEPLOY_ORIGIN_VALUE}"
 readonly WORKOS_API_HOSTNAME_VALUE="${WORKOS_API_HOSTNAME:-}"
 readonly ROOT_PATH='/'
-readonly HEALTH_PATH='/healthz'
 readonly SERVICES_PATH='/services'
 readonly CALLBACK_PATH='/auth/callback'
 readonly SIGN_IN_PATH='/auth/sign-in'
 readonly WORKOS_AUTHORIZE_PATH='/user_management/authorize'
-readonly EXPECTED_HEALTH_BODY='ok'
 readonly PROBE_RETRY_COUNT="${DEPLOY_HEALTH_RETRY_COUNT:-6}"
 readonly PROBE_RETRY_DELAY_SECONDS="${DEPLOY_HEALTH_RETRY_DELAY_SECONDS:-10}"
 readonly PROBE_CONNECT_TIMEOUT_SECONDS="${DEPLOY_HEALTH_CONNECT_TIMEOUT_SECONDS:-10}"
 readonly PROBE_MAX_TIME_SECONDS="${DEPLOY_HEALTH_MAX_TIME_SECONDS:-20}"
 readonly PUBLIC_DOCUMENT_CACHE_CONTROL='public, max-age=300, stale-while-revalidate=60'
 readonly PRIVATE_NO_STORE_CACHE_CONTROL='private, no-store'
-readonly HEALTH_CACHE_CONTROL='no-store'
 readonly HSTS_HEADER_VALUE='max-age=63072000; includeSubDomains'
 readonly FRAME_OPTIONS_HEADER_VALUE='DENY'
 readonly CONTENT_TYPE_OPTIONS_HEADER_VALUE='nosniff'
@@ -34,6 +31,30 @@ readonly REFERRER_POLICY_HEADER_VALUE='strict-origin-when-cross-origin'
 readonly PERMISSIONS_POLICY_HEADER_VALUE='camera=(), microphone=(), geolocation=()'
 
 cd "$REPO_ROOT"
+
+mapfile -t HUB_HEALTH_CONTRACT < <(
+	"$NODE_BIN" --input-type=module -e '
+		import {
+			HUB_HEALTH_BODY,
+			HUB_HEALTH_CACHE_CONTROL,
+			HUB_HEALTH_CONTENT_TYPE,
+			HUB_HEALTH_PATH
+		} from "./apps/hub/src/lib/server/health-contract.ts";
+
+		for (const value of [
+			HUB_HEALTH_PATH,
+			HUB_HEALTH_BODY,
+			HUB_HEALTH_CACHE_CONTROL,
+			HUB_HEALTH_CONTENT_TYPE
+		]) {
+			process.stdout.write(`${value}\n`);
+		}
+	'
+)
+readonly HEALTH_PATH="${HUB_HEALTH_CONTRACT[0]}"
+readonly EXPECTED_HEALTH_BODY="${HUB_HEALTH_CONTRACT[1]}"
+readonly HEALTH_CACHE_CONTROL="${HUB_HEALTH_CONTRACT[2]}"
+readonly HEALTH_CONTENT_TYPE="${HUB_HEALTH_CONTRACT[3]}"
 
 mapfile -t BROWSER_NAVIGATION_PROBE_HEADERS < <(
 	"$NODE_BIN" --input-type=module -e '
@@ -261,6 +282,9 @@ run_probe() {
 	PROBE_CACHE_CONTROL="$(
 		awk 'BEGIN { IGNORECASE = 1 } /^cache-control:/ { sub(/^[^:]+:[[:space:]]*/, "", $0); sub(/\r$/, "", $0); print; exit }' "$header_file"
 	)"
+	PROBE_CONTENT_TYPE="$(
+		awk 'BEGIN { IGNORECASE = 1 } /^content-type:/ { sub(/^[^:]+:[[:space:]]*/, "", $0); sub(/\r$/, "", $0); print; exit }' "$header_file"
+	)"
 	PROBE_STRICT_TRANSPORT_SECURITY="$(
 		awk 'BEGIN { IGNORECASE = 1 } /^strict-transport-security:/ { sub(/^[^:]+:[[:space:]]*/, "", $0); sub(/\r$/, "", $0); print; exit }' "$header_file"
 	)"
@@ -420,6 +444,11 @@ assert_probe_header \
 	'cache-control' \
 	"$PROBE_CACHE_CONTROL" \
 	"$HEALTH_CACHE_CONTROL"
+assert_probe_header \
+	"$HEALTH_PATH" \
+	'content-type' \
+	"$PROBE_CONTENT_TYPE" \
+	"$HEALTH_CONTENT_TYPE"
 if [[ "$PROBE_BODY" != "$EXPECTED_HEALTH_BODY" ]]; then
 	echo "Expected $HEALTH_PATH to return plain-text $EXPECTED_HEALTH_BODY" >&2
 	exit 1

@@ -5,6 +5,11 @@ import path from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { canListenOnLoopback } from './helpers/runtime-capabilities.ts';
+import {
+	HUB_HEALTH_BODY,
+	HUB_HEALTH_CACHE_CONTROL,
+	HUB_HEALTH_CONTENT_TYPE
+} from '../apps/hub/src/lib/server/health-contract.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DEPLOY_HEALTH_SCRIPT_PATH = path.join(
@@ -40,7 +45,6 @@ const SECURITY_HEADERS = {
 const PUBLIC_DOCUMENT_CACHE_CONTROL =
 	'public, max-age=300, stale-while-revalidate=60';
 const PRIVATE_NO_STORE_CACHE_CONTROL = 'private, no-store';
-const HEALTH_CACHE_CONTROL = 'no-store';
 
 type RouteHandler = (request: http.IncomingMessage) => {
 	statusCode: number;
@@ -253,10 +257,10 @@ function createHealthyHandler(
 					statusCode: 200,
 					headers: {
 						...SECURITY_HEADERS,
-						'cache-control': HEALTH_CACHE_CONTROL,
-						'content-type': 'text/plain; charset=utf-8'
+						'cache-control': HUB_HEALTH_CACHE_CONTROL,
+						'content-type': HUB_HEALTH_CONTENT_TYPE
 					},
-					body: 'ok'
+					body: HUB_HEALTH_BODY
 				};
 			case '/services':
 				return {
@@ -408,6 +412,29 @@ describe(
 			assert.match(
 				result.stderr,
 				/Expected http:\/\/127\.0\.0\.1:\d+\/healthz to return 200, received 303/
+			);
+		});
+
+		it('fails when the health endpoint returns the wrong content type', async () => {
+			const server = await startFixtureServer(
+				createHealthyHandler({
+					'/healthz': () => ({
+						statusCode: 200,
+						headers: {
+							...SECURITY_HEADERS,
+							'cache-control': HUB_HEALTH_CACHE_CONTROL,
+							'content-type': 'text/html; charset=utf-8'
+						},
+						body: HUB_HEALTH_BODY
+					})
+				})
+			);
+			const result = await runDeployHealthScript(server.origin);
+
+			assert.notStrictEqual(result.exitCode, 0);
+			assert.match(
+				result.stderr,
+				/Expected \/healthz to include content-type: text\/plain; charset=utf-8, received text\/html; charset=utf-8/
 			);
 		});
 
