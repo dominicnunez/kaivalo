@@ -3,7 +3,6 @@ import { createSign, generateKeyPairSync } from 'node:crypto';
 import { AVATAR_MAX_RESPONSE_BYTES } from '../../apps/hub/src/lib/server/avatar-proxy.ts';
 
 const PEER_ADDRESS_OVERRIDE_HEADER = 'x-kaivalo-preview-peer-address';
-const PREVIEW_SESSION_COOKIE_NAME = '__Host-wos_session';
 const PREVIEW_SESSION_COOKIE_VALUE = 'preview-session';
 const OVERSIZED_AVATAR_CONTENT_LENGTH = String(AVATAR_MAX_RESPONSE_BYTES + 1);
 const PREVIEW_USER = Object.freeze({
@@ -204,38 +203,15 @@ if (callbackFixtureMode) {
 
 const signOutFixtureMode = process.env.HUB_PREVIEW_SIGN_OUT_FIXTURE_MODE;
 if (signOutFixtureMode) {
-	const { authKit } = await import('@workos/authkit-sveltekit');
-	const originalSignOut = authKit.signOut.bind(authKit);
-	authKit.signOut = async (event) => {
-		switch (signOutFixtureMode) {
-			case 'signed-in': {
-				const cookieHeader = event.request.headers.get('cookie') ?? '';
-				if (cookieHeader.includes(`${PREVIEW_SESSION_COOKIE_NAME}=`)) {
-					const headers = new Headers();
-					headers.set(
-						'location',
-						`${getPreviewAuthOrigin()}/user_management/sessions/logout?session_id=${encodeURIComponent(PREVIEW_SESSION_COOKIE_VALUE)}&return_to=${encodeURIComponent(process.env.ORIGIN || '')}`
-					);
-					headers.append(
-						'set-cookie',
-						`${PREVIEW_SESSION_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
-					);
+	if (signOutFixtureMode !== 'throw') {
+		throw new Error(
+			`Unsupported HUB_PREVIEW_SIGN_OUT_FIXTURE_MODE: ${signOutFixtureMode}`
+		);
+	}
 
-					return new Response(null, {
-						status: 302,
-						headers
-					});
-				}
-
-				return originalSignOut(event);
-			}
-			case 'throw':
-				throw new Error('fixture sign-out failure: preview secret');
-			default:
-				throw new Error(
-					`Unsupported HUB_PREVIEW_SIGN_OUT_FIXTURE_MODE: ${signOutFixtureMode}`
-				);
-		}
+	const { AuthService } = await import('@workos/authkit-session');
+	AuthService.prototype.signOut = async function signOutFixtureFailure() {
+		throw new Error('fixture sign-out failure: preview secret');
 	};
 }
 

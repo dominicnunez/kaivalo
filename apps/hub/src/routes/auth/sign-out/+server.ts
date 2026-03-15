@@ -4,7 +4,7 @@ import { createSignOutPostHandler } from '$lib/auth/sign-out-handler.ts';
 import { getValidatedWorkosEnv } from '$lib/server/workos-security.ts';
 import { shouldIncludeErrorMessage } from '$lib/server/error-diagnostics.ts';
 import { getTrustedWorkosAuthOrigin } from '$lib/server/auth-origin-policy.ts';
-import { authKit } from '@workos/authkit-sveltekit';
+import { createConfiguredWorkosSignOutRequestHandler } from '$lib/server/workos-auth.ts';
 
 let postHandler: ReturnType<typeof createSignOutPostHandler> | null = null;
 
@@ -14,8 +14,9 @@ function getPostHandler(): ReturnType<typeof createSignOutPostHandler> {
 	}
 
 	const workosEnv = getValidatedWorkosEnv(env);
+	const signOut = createConfiguredWorkosSignOutRequestHandler(workosEnv);
 	postHandler = createSignOutPostHandler({
-		signOut: authKit.signOut,
+		signOut,
 		expectedOrigin: workosEnv.origin,
 		allowedRedirectOrigins: [getTrustedWorkosAuthOrigin(workosEnv)],
 		includeMessageInLogs: shouldIncludeErrorMessage(env)

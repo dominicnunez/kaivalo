@@ -45,6 +45,8 @@ type CallbackRedirectResolution =
 
 const CALLBACK_AUTH_ERROR_PATHNAME = '/auth/error';
 const CALLBACK_AUTH_ERROR_REDIRECT_CODE = 'WORKOS_CALLBACK_AUTH_ERROR_REDIRECT';
+const CALLBACK_AUTH_ERROR_QUERY_NAME = 'code';
+const CALLBACK_PROVIDER_ERROR_CODE_QUERY_NAME = 'provider_code';
 const CALLBACK_MISSING_REDIRECT_LOCATION_ERROR_MESSAGE =
 	'Auth callback produced a redirect response without a location header';
 
@@ -71,23 +73,29 @@ function createAuthErrorRedirectFailure(
 	origin: string
 ): Error {
 	const parsedLocation = new URL(location, origin);
-	const upstreamErrorCode =
-		parsedLocation.searchParams.get('code') ?? undefined;
+	const errorCode =
+		parsedLocation.searchParams.get(CALLBACK_AUTH_ERROR_QUERY_NAME) ??
+		CALLBACK_AUTH_ERROR_REDIRECT_CODE;
+	const providerErrorCode =
+		parsedLocation.searchParams.get(CALLBACK_PROVIDER_ERROR_CODE_QUERY_NAME) ??
+		undefined;
 
-	return Object.assign(
+	const error = Object.assign(
 		new Error('Auth callback redirected to an unsupported auth error route'),
 		{
-			code: CALLBACK_AUTH_ERROR_REDIRECT_CODE,
-			cause: upstreamErrorCode
-				? Object.assign(
-						new Error(`Upstream auth callback error: ${upstreamErrorCode}`),
-						{
-							code: upstreamErrorCode
-						}
-					)
-				: undefined
+			code: errorCode
 		}
 	);
+	if (providerErrorCode) {
+		error.cause = Object.assign(
+			new Error(`Upstream auth callback error: ${providerErrorCode}`),
+			{
+				code: providerErrorCode
+			}
+		);
+	}
+
+	return error;
 }
 
 function normalizeCallbackRedirectLocation(

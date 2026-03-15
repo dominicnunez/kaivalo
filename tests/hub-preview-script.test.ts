@@ -480,15 +480,32 @@ describe('hub preview script', () => {
 	it('returns sanitized 503 responses when preview sign-out fails unexpectedly', async () => {
 		const preview = await startPreviewScript({
 			envOverrides: {
+				HUB_PREVIEW_CALLBACK_FIXTURE_MODE: 'signed-in',
 				HUB_PREVIEW_SIGN_OUT_FIXTURE_MODE: 'throw'
 			}
 		});
 
 		try {
+			const callbackResponse = await httpGet(
+				`${preview.baseUrl}/auth/callback?code=test-code&state=test-state`,
+				{
+					accept: 'text/html',
+					'sec-fetch-mode': 'navigate'
+				}
+			);
+			assert.strictEqual(callbackResponse.statusCode, 302);
+			const sessionCookie = assertSessionCookieContract(
+				callbackResponse.headers,
+				{
+					cookieName: AUTHKIT_COOKIE_NAME
+				}
+			);
+
 			const response = await post(`${preview.baseUrl}/auth/sign-out`, {
 				origin: preview.baseUrl,
 				accept: 'application/json',
-				'sec-fetch-site': 'same-origin'
+				'sec-fetch-site': 'same-origin',
+				cookie: sessionCookie
 			});
 
 			const failure = JSON.parse(response.data) as { message: string };

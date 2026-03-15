@@ -27,6 +27,10 @@ type WorkosEnvLike = {
 	apiHostname: string;
 };
 
+type WorkosSignOutEnvLike = WorkosEnvLike & {
+	origin: string;
+};
+
 type CallbackResult = {
 	response: Response | undefined;
 	headers: HeadersBag | undefined;
@@ -46,6 +50,13 @@ type SessionLogContext = ReturnType<typeof getErrorLogContext> & {
 	incidentId: string;
 	errorCode: string;
 };
+
+const CALLBACK_AUTH_ERROR_PATHNAME = '/auth/error';
+const CALLBACK_AUTH_ERROR_QUERY_NAME = 'code';
+const CALLBACK_PROVIDER_ERROR_CODE_QUERY_NAME = 'provider_code';
+const CALLBACK_ERROR_CODE_MAX_LENGTH = 64;
+const CALLBACK_ERROR_CODE_SEPARATOR_PATTERN = /[^A-Za-z0-9._:-]+/g;
+const CALLBACK_ERROR_CODE_EDGE_SEPARATOR_PATTERN = /^_+|_+$/g;
 
 export type WorkosCallbackRequestHandlerDependencies = {
 	handleCallback: (
@@ -321,6 +332,36 @@ function createSessionLogContext(
 	};
 }
 
+function sanitizeCallbackErrorCode(value: string | null): string | null {
+	if (typeof value !== 'string') {
+		return null;
+	}
+
+	const normalized = value
+		.trim()
+		.replace(CALLBACK_ERROR_CODE_SEPARATOR_PATTERN, '_')
+		.replace(CALLBACK_ERROR_CODE_EDGE_SEPARATOR_PATTERN, '')
+		.slice(0, CALLBACK_ERROR_CODE_MAX_LENGTH);
+
+	return normalized || null;
+}
+
+function createCallbackErrorRedirectLocation(
+	errorCode: string,
+	providerErrorCode: string | null
+): string {
+	const searchParams = new URLSearchParams();
+	searchParams.set(CALLBACK_AUTH_ERROR_QUERY_NAME, errorCode);
+	if (providerErrorCode) {
+		searchParams.set(
+			CALLBACK_PROVIDER_ERROR_CODE_QUERY_NAME,
+			providerErrorCode
+		);
+	}
+
+	return `${CALLBACK_AUTH_ERROR_PATHNAME}?${searchParams.toString()}`;
+}
+
 export function createWorkosCallbackRequestHandler({
 	handleCallback
 }: WorkosCallbackRequestHandlerDependencies): (
@@ -334,7 +375,13 @@ export function createWorkosCallbackRequestHandler({
 		if (callbackError) {
 			const errorCode =
 				callbackError === 'access_denied' ? 'ACCESS_DENIED' : 'AUTH_ERROR';
-			throw redirect(302, `/auth/error?code=${errorCode}`);
+			throw redirect(
+				302,
+				createCallbackErrorRedirectLocation(
+					errorCode,
+					sanitizeCallbackErrorCode(callbackError)
+				)
+			);
 		}
 		if (!code) {
 			throw new Error('Missing authorization code');
@@ -372,6 +419,39 @@ export function createConfiguredWorkosCallbackRequestHandler(
 		handleCallback: (request, response, options) =>
 			authService.handleCallback(request, response, options)
 	});
+}
+
+export function createConfiguredWorkosSignOutRequestHandler(
+	workosEnv: WorkosSignOutEnvLike
+): (event: RequestEvent) => Promise<Response> {
+	const config = configureAuthKitSession(workosEnv);
+	const authService = createAuthService<Request, Response>({
+		sessionStorageFactory: () => new RequestCookieSessionStorage(config)
+	});
+
+	return async (event: RequestEvent) => {
+		const sessionId = event.locals.auth?.sessionId;
+		if (!sessionId) {
+			throw redirect(302, '/');
+		}
+
+		const result = await authService.signOut(sessionId, {
+			returnTo: workosEnv.origin
+		});
+		const headers = new Headers();
+		headers.set('location', result.logoutUrl);
+		if (result.response) {
+			for (const [key, value] of result.response.headers.entries()) {
+				headers.set(key, value);
+			}
+		}
+		applyHeaderBag(headers, result.headers);
+
+		return new Response(null, {
+			status: 302,
+			headers
+		});
+	};
 }
 
 export function createWorkosSessionHandle({

@@ -5,6 +5,7 @@ import {
 } from '@workos/authkit-session';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+	createConfiguredWorkosSignOutRequestHandler,
 	createWorkosCallbackRequestHandler,
 	createWorkosSessionHandle
 } from './workos-auth.ts';
@@ -66,13 +67,45 @@ describe('WorkOS auth callback request handling', () => {
 			}
 
 			expect(caught.status).toBe(302);
-			expect(caught.location).toBe('/auth/error?code=AUTH_ERROR');
+			const location = new URL(caught.location, 'https://kaivalo.test');
+			expect(location.pathname).toBe('/auth/error');
+			expect(location.searchParams.get('code')).toBe('AUTH_ERROR');
+			expect(location.searchParams.get('provider_code')).toBe(
+				'oauth_code_secret'
+			);
 			return true;
 		});
 
 		expect(handleCallback).not.toHaveBeenCalled();
 		expect(consoleError).not.toHaveBeenCalled();
 		consoleError.mockRestore();
+	});
+});
+
+describe('WorkOS auth sign-out request handling', () => {
+	it('generates WorkOS logout redirects with a return_to for authenticated sessions', async () => {
+		const handler = createConfiguredWorkosSignOutRequestHandler({
+			clientId: 'client_123',
+			apiKey: 'sk_test_123',
+			redirectUri: 'https://kaivalo.test/auth/callback',
+			cookiePassword: 'ab'.repeat(32),
+			apiHostname: 'auth.kaivalo-login.com',
+			origin: 'https://kaivalo.test'
+		});
+		const event = createEvent('https://kaivalo.test/auth/sign-out');
+		event.locals.auth.sessionId = 'session_123';
+
+		const response = await handler(event as never);
+
+		expect(response.status).toBe(302);
+		expect(response.headers.get('location')).not.toBeNull();
+		const location = new URL(String(response.headers.get('location')));
+		expect(location.origin).toBe('https://auth.kaivalo-login.com');
+		expect(location.pathname).toBe('/user_management/sessions/logout');
+		expect(location.searchParams.get('session_id')).toBe('session_123');
+		expect(location.searchParams.get('return_to')).toBe('https://kaivalo.test');
+		expect(response.headers.get('set-cookie')).toContain('__Host-wos_session=');
+		expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
 	});
 });
 

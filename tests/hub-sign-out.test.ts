@@ -957,8 +957,7 @@ describe('sign-out route integration behavior', () => {
 		const fixturePreview = await startHubPreview({
 			shared: false,
 			env: {
-				HUB_PREVIEW_CALLBACK_FIXTURE_MODE: 'signed-in',
-				HUB_PREVIEW_SIGN_OUT_FIXTURE_MODE: 'signed-in'
+				HUB_PREVIEW_CALLBACK_FIXTURE_MODE: 'signed-in'
 			},
 			imports: [previewFixtureImport]
 		});

@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { createAuthCallbackGetHandler } from '../apps/hub/src/lib/auth/callback-handler.ts';
+import { createWorkosCallbackRequestHandler } from '../apps/hub/src/lib/server/workos-auth.ts';
 import {
 	AUTH_ERROR_INCIDENT_QUERY_NAME,
 	AUTH_ERROR_QUERY_NAME,
@@ -366,6 +367,41 @@ describe('WorkOS Auth Callback Route', () => {
 
 			assert.strictEqual(logs.length, 1);
 			assert.strictEqual(logs[0][0], 'Auth callback failed');
+		});
+
+		it('preserves sanitized provider callback error codes in failure logs', async () => {
+			const logs = [];
+			const handler = createHandler({
+				handleCallback: () =>
+					createWorkosCallbackRequestHandler({
+						handleCallback: async () => {
+							throw new Error('callback handler should not execute');
+						}
+					}),
+				isRedirect,
+				isHttpError,
+				authErrorSigningSecret,
+				logError: (...args) => logs.push(args)
+			});
+
+			await assert.rejects(
+				() =>
+					handler(
+						createEvent(
+							{ accept: 'application/json' },
+							'https://kaivalo.test/auth/callback?error=temporarily_unavailable'
+						)
+					),
+				(caught) => {
+					assert.ok(isHttpError(caught));
+					assert.strictEqual(caught.status, 503);
+					return true;
+				}
+			);
+
+			assert.strictEqual(logs.length, 1);
+			assert.strictEqual(logs[0][1].errorUpstreamCode, 'AUTH_ERROR');
+			assert.strictEqual(logs[0][1].errorCauseCode, 'temporarily_unavailable');
 		});
 
 		it('rejects redirect throws with external locations', async () => {
