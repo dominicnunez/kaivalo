@@ -34,10 +34,34 @@
         "type": "github"
       }
     },
+    "nodejslts-nix": {
+      "inputs": {
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1773582692,
+        "narHash": "sha256-8fD/SWZ+2UHISTD3ABebTiM1d7vXGKrX/kGmeifukmg=",
+        "owner": "dominicnunez",
+        "repo": "nodejslts-nix",
+        "rev": "0bd059af6f3cd92899956e1b22621417c3af0bbb",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dominicnunez",
+        "repo": "nodejslts-nix",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "nodejslts-nix": "nodejslts-nix"
       }
     },
     "systems": {
