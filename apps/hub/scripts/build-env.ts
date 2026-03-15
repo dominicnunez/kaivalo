@@ -7,6 +7,7 @@ import {
 import { parsePort } from '../src/lib/server/port.ts';
 import { getValidatedWorkosEnv } from '../src/lib/server/workos-security-env.ts';
 import { getHubBuildPaths, removeServerSourceMaps } from './build-artifacts.ts';
+import { assertSupportedNodeVersion } from '../../../scripts/check-node-version.ts';
 
 const DEFAULT_LOCAL_PREVIEW_HOST = 'localhost';
 const LOCAL_PREVIEW_WILDCARD_HOSTS = new Set(['0.0.0.0', '::', '[::]']);
@@ -204,17 +205,21 @@ type RunHubBuildDependencies = {
 	getBuildPaths?: typeof getHubBuildPaths;
 	removeSourceMaps?: typeof removeServerSourceMaps;
 	runStep?: typeof spawnSync;
+	assertNodeVersion?: typeof assertSupportedNodeVersion;
 };
 
 export function runHubBuildWithEnv({
 	baseEnv = process.env,
 	getBuildPaths = getHubBuildPaths,
 	removeSourceMaps = removeServerSourceMaps,
-	runStep = spawnSync
+	runStep = spawnSync,
+	assertNodeVersion = assertSupportedNodeVersion
 }: RunHubBuildDependencies = {}): void {
+	assertNodeVersion();
+
 	const steps = [
 		['vite', 'build'],
-		['node', 'scripts/prepare-runtime.ts']
+		[process.execPath, 'scripts/prepare-runtime.ts']
 	] as const;
 	const { serverDir } = getBuildPaths();
 

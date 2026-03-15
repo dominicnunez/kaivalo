@@ -3,15 +3,16 @@
 	"version": "0.0.1",
 	"private": true,
 	"scripts": {
+		"node:check": "node ../../scripts/check-node-version.ts",
 		"dev": "vite dev",
-		"build": "node scripts/build-env.ts",
-		"preview": "node scripts/preview.ts",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"pretest": "svelte-kit sync",
+		"build": "npm run node:check && node scripts/build-env.ts",
+		"preview": "npm run node:check && node scripts/preview.ts",
+		"check": "npm run node:check && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "npm run node:check && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"pretest": "npm run node:check && svelte-kit sync",
 		"test": "npm run test:unit && npm run test:build",
-		"test:unit": "vitest run --exclude src/build.test.ts",
-		"test:build": "vitest run src/build.test.ts",
+		"test:unit": "npm run node:check && vitest run --exclude src/build.test.ts",
+		"test:build": "npm run node:check && vitest run src/build.test.ts",
 		"test:watch": "vitest"
 	},
 	"devDependencies": {
