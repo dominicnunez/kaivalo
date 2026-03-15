@@ -121,6 +121,7 @@ describe('layout server load', () => {
 		delete mockEnv.DEV_AUTH_BYPASS;
 		delete mockEnv.DEV_AUTH_BYPASS_EMAIL;
 		delete mockEnv.DEV_AUTH_BYPASS_FIRST_NAME;
+		delete mockEnv.ADDRESS_HEADER;
 		delete mockEnv.NODE_ENV;
 		mockEnv.ORIGIN = 'https://kaivalo.test';
 		mockEnv.WORKOS_REDIRECT_URI = 'https://kaivalo.test/auth/callback';
@@ -296,6 +297,82 @@ describe('layout server load', () => {
 					}
 				}
 			}) as never
+		);
+
+		expect(mockGetUser).not.toHaveBeenCalled();
+		expect(result).toMatchObject({
+			user: null,
+			signInUrl: null,
+			authError: {
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
+				incidentId: expect.stringMatching(/^authlayout_/)
+			}
+		});
+		expectAuthLayoutFailureLogged(errorSpy);
+	});
+
+	it('rejects development auth bypass when ADDRESS_HEADER points at a different proxy header', async () => {
+		mockEnv.NODE_ENV = 'development';
+		mockEnv.DEV_AUTH_BYPASS = 'true';
+		mockEnv.ORIGIN = 'http://localhost:4173';
+		mockEnv.WORKOS_REDIRECT_URI = 'http://127.0.0.1:4173/auth/callback';
+		mockEnv.TRUST_X_FORWARDED_PROTO = 'true';
+		mockEnv.TRUSTED_PROXY_IPS = '127.0.0.1';
+		mockEnv.ADDRESS_HEADER = 'x-real-ip';
+
+		const result = await load(
+			createEvent(
+				'http://localhost:4173/',
+				{
+					'x-forwarded-for': '127.0.0.1',
+					'x-real-ip': '127.0.0.1'
+				},
+				'127.0.0.1',
+				{
+					req: {
+						socket: {
+							remoteAddress: '127.0.0.1'
+						}
+					}
+				}
+			) as never
+		);
+
+		expect(mockGetUser).not.toHaveBeenCalled();
+		expect(result).toMatchObject({
+			user: null,
+			signInUrl: null,
+			authError: {
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
+				incidentId: expect.stringMatching(/^authlayout_/)
+			}
+		});
+		expectAuthLayoutFailureLogged(errorSpy);
+	});
+
+	it('rejects development auth bypass when a trusted proxy forwards a malformed client chain', async () => {
+		mockEnv.NODE_ENV = 'development';
+		mockEnv.DEV_AUTH_BYPASS = 'true';
+		mockEnv.ORIGIN = 'http://localhost:4173';
+		mockEnv.WORKOS_REDIRECT_URI = 'http://127.0.0.1:4173/auth/callback';
+		mockEnv.TRUST_X_FORWARDED_PROTO = 'true';
+		mockEnv.TRUSTED_PROXY_IPS = '127.0.0.1';
+
+		const result = await load(
+			createEvent(
+				'http://localhost:4173/',
+				{ 'x-forwarded-for': '127.0.0.1, not-an-ip' },
+				'127.0.0.1',
+				{
+					req: {
+						socket: {
+							remoteAddress: '127.0.0.1'
+						}
+					}
+				}
+			) as never
 		);
 
 		expect(mockGetUser).not.toHaveBeenCalled();
