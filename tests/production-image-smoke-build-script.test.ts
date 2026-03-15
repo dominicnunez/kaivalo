@@ -140,14 +140,47 @@ function readInvocationLog(invocationLogPath: string): string[] {
 		.filter((line) => line !== '');
 }
 
-function assertCommandSequence(
+function findInvocationIndex(
 	lines: readonly string[],
-	expectedPatterns: readonly RegExp[]
+	pattern: RegExp
+): number {
+	return lines.findIndex((line) => pattern.test(line));
+}
+
+function assertHasInvocation(
+	lines: readonly string[],
+	pattern: RegExp,
+	description: string
+): { index: number; line: string } {
+	const index = findInvocationIndex(lines, pattern);
+	assert.ok(index >= 0, `expected ${description}`);
+	return {
+		index,
+		line: lines[index] ?? ''
+	};
+}
+
+function assertLacksInvocation(
+	lines: readonly string[],
+	pattern: RegExp,
+	description: string
 ): void {
-	assert.strictEqual(lines.length, expectedPatterns.length);
-	for (const [index, expectedPattern] of expectedPatterns.entries()) {
-		assert.match(lines[index] ?? '', expectedPattern);
-	}
+	assert.strictEqual(
+		findInvocationIndex(lines, pattern),
+		-1,
+		`did not expect ${description}`
+	);
+}
+
+function assertInvocationOrder(
+	earlierInvocation: { index: number },
+	laterInvocation: { index: number },
+	description: string
+): void {
+	assert.ok(
+		earlierInvocation.index < laterInvocation.index,
+		`expected ${description}`
+	);
 }
 
 function assertCommandIncludes(
@@ -188,39 +221,90 @@ describe('production image smoke build script', () => {
 		assert.strictEqual(result.exitCode, 0, result.stderr || result.stdout);
 		assert.strictEqual(result.signal, null);
 		const invocations = readInvocationLog(invocationLogPath);
-
-		assertCommandSequence(invocations, [
+		const buildInvocation = assertHasInvocation(
+			invocations,
 			/^docker build\b/,
+			'a docker build invocation when skip mode is off'
+		);
+		const runInvocation = assertHasInvocation(
+			invocations,
 			/^docker run\b/,
+			'a docker run invocation'
+		);
+		const portInvocation = assertHasInvocation(
+			invocations,
 			/^docker port\b/,
+			'a docker port lookup for the smoke container'
+		);
+		const verifyInvocation = assertHasInvocation(
+			invocations,
 			/^verify\b/,
+			'the shared deploy health verification step'
+		);
+		const containerCleanupInvocation = assertHasInvocation(
+			invocations,
 			/^docker container rm\b/,
-			/^docker image rm\b/
-		]);
-		assertCommandIncludes(invocations[0] ?? '', [
+			'container cleanup after verification'
+		);
+		const imageCleanupInvocation = assertHasInvocation(
+			invocations,
+			/^docker image rm\b/,
+			'image cleanup for a tag created by this run'
+		);
+
+		assertInvocationOrder(
+			buildInvocation,
+			runInvocation,
+			'the image should be built before the smoke container starts'
+		);
+		assertInvocationOrder(
+			runInvocation,
+			portInvocation,
+			'the smoke container should start before its published port is resolved'
+		);
+		assertInvocationOrder(
+			portInvocation,
+			verifyInvocation,
+			'the deploy verifier should run after the published port is resolved'
+		);
+		assertInvocationOrder(
+			verifyInvocation,
+			containerCleanupInvocation,
+			'the smoke container should be cleaned up after verification finishes'
+		);
+		assertInvocationOrder(
+			containerCleanupInvocation,
+			imageCleanupInvocation,
+			'the temporary image tag should be removed after the container cleanup'
+		);
+
+		assertCommandIncludes(buildInvocation.line, [
 			`--file ${REPO_DOCKERFILE_PATH}`,
 			`--tag ${SMOKE_IMAGE_TAG}`,
 			` ${ROOT}`
 		]);
-		assertCommandIncludes(invocations[1] ?? '', [
+		assertCommandIncludes(runInvocation.line, [
 			'--publish 127.0.0.1::3100',
 			`--env ORIGIN=${SMOKE_CANONICAL_ORIGIN}`,
 			`--env WORKOS_REDIRECT_URI=${SMOKE_CANONICAL_ORIGIN}/auth/callback`,
 			SMOKE_IMAGE_TAG
 		]);
-		assertCommandIncludes(invocations[2] ?? '', [
+		assertCommandIncludes(portInvocation.line, [
 			SMOKE_CONTAINER_ID,
 			'3100/tcp'
 		]);
-		assertCommandIncludes(invocations[3] ?? '', [
+		assertCommandIncludes(verifyInvocation.line, [
 			`DEPLOY_ORIGIN=${SMOKE_CANONICAL_ORIGIN}`,
 			`DEPLOY_PROBE_ORIGIN=http://127.0.0.1:${SMOKE_PUBLISHED_PORT}`
 		]);
-		assertCommandIncludes(invocations[4] ?? '', [
+		assertCommandIncludes(containerCleanupInvocation.line, [
 			'--force',
 			SMOKE_CONTAINER_ID
 		]);
-		assertCommandIncludes(invocations[5] ?? '', ['--force', SMOKE_IMAGE_TAG]);
+		assertCommandIncludes(imageCleanupInvocation.line, [
+			'--force',
+			SMOKE_IMAGE_TAG
+		]);
 	});
 
 	it('resolves the repository build context even when invoked outside the repo root', async () => {
@@ -243,14 +327,19 @@ describe('production image smoke build script', () => {
 
 		assert.strictEqual(result.exitCode, 0, result.stderr || result.stdout);
 		const invocations = readInvocationLog(invocationLogPath);
+		const buildInvocation = assertHasInvocation(
+			invocations,
+			/^docker build\b/,
+			'a docker build invocation'
+		);
 
-		assertCommandIncludes(invocations[0] ?? '', [
+		assertCommandIncludes(buildInvocation.line, [
 			`--file ${REPO_DOCKERFILE_PATH}`,
 			` ${ROOT}`
 		]);
 	});
 
-	it('removes the temporary image tag even when the docker build fails', async () => {
+	it('preserves a caller-supplied image tag when the docker build fails', async () => {
 		const { fakeDockerPath, invocationLogPath } = createFakeSmokeDependencies();
 		const result = await runSmokeBuildScript({
 			environmentOverrides: {
@@ -263,19 +352,32 @@ describe('production image smoke build script', () => {
 
 		assert.strictEqual(result.exitCode, 55, result.stderr || result.stdout);
 		const invocations = readInvocationLog(invocationLogPath);
-
-		assertCommandSequence(invocations, [
+		const buildInvocation = assertHasInvocation(
+			invocations,
 			/^docker build\b/,
-			/^docker image rm\b/
-		]);
-		assertCommandIncludes(invocations[0] ?? '', [
+			'a docker build invocation'
+		);
+
+		assertLacksInvocation(
+			invocations,
+			/^docker run\b/,
+			'a smoke container start when the image build fails'
+		);
+		assertLacksInvocation(
+			invocations,
+			/^verify\b/,
+			'deploy verification when the image build fails'
+		);
+		assertLacksInvocation(
+			invocations,
+			/^docker image rm\b/,
+			'image cleanup for a tag the script did not finish creating'
+		);
+
+		assertCommandIncludes(buildInvocation.line, [
 			`--file ${REPO_DOCKERFILE_PATH}`,
 			'--tag kaivalo-hub-smoke:test-failure',
 			` ${ROOT}`
-		]);
-		assertCommandIncludes(invocations[1] ?? '', [
-			'--force',
-			'kaivalo-hub-smoke:test-failure'
 		]);
 	});
 
@@ -295,14 +397,54 @@ describe('production image smoke build script', () => {
 		assert.strictEqual(result.exitCode, 0, result.stderr || result.stdout);
 		assert.strictEqual(result.signal, null);
 		const invocations = readInvocationLog(invocationLogPath);
-
-		assertCommandSequence(invocations, [
+		const runInvocation = assertHasInvocation(
+			invocations,
 			/^docker run\b/,
+			'a smoke container start in skip-build mode'
+		);
+		const portInvocation = assertHasInvocation(
+			invocations,
 			/^docker port\b/,
+			'a published-port lookup in skip-build mode'
+		);
+		const verifyInvocation = assertHasInvocation(
+			invocations,
 			/^verify\b/,
-			/^docker container rm\b/
-		]);
-		assertCommandIncludes(invocations[0] ?? '', [
+			'deploy verification in skip-build mode'
+		);
+		const containerCleanupInvocation = assertHasInvocation(
+			invocations,
+			/^docker container rm\b/,
+			'container cleanup in skip-build mode'
+		);
+
+		assertLacksInvocation(
+			invocations,
+			/^docker build\b/,
+			'a docker build when skip-build mode reuses a prebuilt image'
+		);
+		assertLacksInvocation(
+			invocations,
+			/^docker image rm\b/,
+			'image cleanup for a reused prebuilt image'
+		);
+		assertInvocationOrder(
+			runInvocation,
+			portInvocation,
+			'the container should start before resolving its published port'
+		);
+		assertInvocationOrder(
+			portInvocation,
+			verifyInvocation,
+			'the verifier should use the discovered published port'
+		);
+		assertInvocationOrder(
+			verifyInvocation,
+			containerCleanupInvocation,
+			'the reused container should be cleaned up after verification'
+		);
+
+		assertCommandIncludes(runInvocation.line, [
 			'--publish 127.0.0.1::3100',
 			SMOKE_IMAGE_TAG
 		]);
@@ -325,11 +467,21 @@ describe('production image smoke build script', () => {
 		assert.strictEqual(result.exitCode, 0, result.stderr || result.stdout);
 		assert.strictEqual(result.signal, null);
 		const invocations = readInvocationLog(invocationLogPath);
+		const runInvocation = assertHasInvocation(
+			invocations,
+			/^docker run\b/,
+			'a smoke container start'
+		);
+		const verifyInvocation = assertHasInvocation(
+			invocations,
+			/^verify\b/,
+			'deploy verification'
+		);
 
-		assertCommandIncludes(invocations[1] ?? '', [
+		assertCommandIncludes(runInvocation.line, [
 			`--env WORKOS_API_HOSTNAME=${workosApiHostname}`
 		]);
-		assertCommandIncludes(invocations[3] ?? '', [
+		assertCommandIncludes(verifyInvocation.line, [
 			`WORKOS_API_HOSTNAME=${workosApiHostname}`
 		]);
 	});
@@ -351,16 +503,55 @@ describe('production image smoke build script', () => {
 
 		assert.strictEqual(result.exitCode, 1, result.stderr || result.stdout);
 		const invocations = readInvocationLog(invocationLogPath);
-
-		assertCommandSequence(invocations, [
+		const runInvocation = assertHasInvocation(
+			invocations,
 			/^docker run\b/,
-			/^docker port\b/,
+			'a smoke container start in skip-build mode'
+		);
+		const verifyInvocation = assertHasInvocation(
+			invocations,
 			/^verify\b/,
+			'deploy verification in skip-build mode'
+		);
+		const logsInvocation = assertHasInvocation(
+			invocations,
 			/^docker logs\b/,
-			/^docker container rm\b/
-		]);
-		assertCommandIncludes(invocations[3] ?? '', [SMOKE_CONTAINER_ID]);
-		assertCommandIncludes(invocations[4] ?? '', [
+			'container log collection when deploy verification fails'
+		);
+		const containerCleanupInvocation = assertHasInvocation(
+			invocations,
+			/^docker container rm\b/,
+			'container cleanup after verifier failure'
+		);
+
+		assertLacksInvocation(
+			invocations,
+			/^docker build\b/,
+			'a docker build when skip-build mode reuses an image'
+		);
+		assertLacksInvocation(
+			invocations,
+			/^docker image rm\b/,
+			'image cleanup for a reused image tag'
+		);
+		assertInvocationOrder(
+			runInvocation,
+			verifyInvocation,
+			'the verifier should run after the reused container starts'
+		);
+		assertInvocationOrder(
+			verifyInvocation,
+			logsInvocation,
+			'container logs should be collected after verification fails'
+		);
+		assertInvocationOrder(
+			logsInvocation,
+			containerCleanupInvocation,
+			'the failed container should be cleaned up after logs are collected'
+		);
+		assert.match(result.stderr, /container failed to start/);
+		assertCommandIncludes(logsInvocation.line, [SMOKE_CONTAINER_ID]);
+		assertCommandIncludes(containerCleanupInvocation.line, [
 			'--force',
 			SMOKE_CONTAINER_ID
 		]);
@@ -390,21 +581,70 @@ describe('production image smoke build script', () => {
 		assert.match(result.stderr, /Production image deploy verification failed/);
 		assert.match(result.stderr, /container failed to start/);
 		const invocations = readInvocationLog(invocationLogPath);
-
-		assertCommandSequence(invocations, [
+		const buildInvocation = assertHasInvocation(
+			invocations,
 			/^docker build\b/,
+			'a docker build invocation'
+		);
+		const runInvocation = assertHasInvocation(
+			invocations,
 			/^docker run\b/,
-			/^docker port\b/,
+			'a smoke container start'
+		);
+		const verifyInvocation = assertHasInvocation(
+			invocations,
 			/^verify\b/,
+			'deploy verification'
+		);
+		const logsInvocation = assertHasInvocation(
+			invocations,
 			/^docker logs\b/,
+			'container log collection after verification failure'
+		);
+		const containerCleanupInvocation = assertHasInvocation(
+			invocations,
 			/^docker container rm\b/,
-			/^docker image rm\b/
-		]);
-		assertCommandIncludes(invocations[4] ?? '', [SMOKE_CONTAINER_ID]);
-		assertCommandIncludes(invocations[5] ?? '', [
+			'container cleanup after verification failure'
+		);
+		const imageCleanupInvocation = assertHasInvocation(
+			invocations,
+			/^docker image rm\b/,
+			'image cleanup for a tag created by this run'
+		);
+
+		assertInvocationOrder(
+			buildInvocation,
+			runInvocation,
+			'the image should be built before starting the smoke container'
+		);
+		assertInvocationOrder(
+			runInvocation,
+			verifyInvocation,
+			'the verifier should run after the smoke container starts'
+		);
+		assertInvocationOrder(
+			verifyInvocation,
+			logsInvocation,
+			'container logs should be collected after verification fails'
+		);
+		assertInvocationOrder(
+			logsInvocation,
+			containerCleanupInvocation,
+			'the failed container should be cleaned up after logs are collected'
+		);
+		assertInvocationOrder(
+			containerCleanupInvocation,
+			imageCleanupInvocation,
+			'the temporary image tag should be removed after container cleanup'
+		);
+		assertCommandIncludes(logsInvocation.line, [SMOKE_CONTAINER_ID]);
+		assertCommandIncludes(containerCleanupInvocation.line, [
 			'--force',
 			SMOKE_CONTAINER_ID
 		]);
-		assertCommandIncludes(invocations[6] ?? '', ['--force', SMOKE_IMAGE_TAG]);
+		assertCommandIncludes(imageCleanupInvocation.line, [
+			'--force',
+			SMOKE_IMAGE_TAG
+		]);
 	});
 });

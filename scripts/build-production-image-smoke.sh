@@ -97,8 +97,8 @@ run_deploy_health_verification() {
 }
 
 if ! should_skip_build; then
-	remove_image_tag='true'
 	"$DOCKER_BIN" build --file "$DOCKERFILE_PATH" --tag "$IMAGE_TAG" "$BUILD_CONTEXT"
+	remove_image_tag='true'
 fi
 
 docker_run_args=(
