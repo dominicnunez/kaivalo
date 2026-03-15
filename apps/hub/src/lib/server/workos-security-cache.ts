@@ -28,6 +28,7 @@ const ROOT_STATIC_ASSET_PATHS = new Set([
 	'/og-image.png'
 ]);
 const FONT_ASSET_PATH_PREFIX = '/fonts/';
+const AUTH_COOKIE_CACHE_PRESERVING_PATHS = new Set(['/avatar']);
 const STATIC_ASSET_RESPONSE_CONTENT_TYPE_PREFIXES = [
 	'image/',
 	'font/',
@@ -220,7 +221,21 @@ function extractCookieNames(cookieHeader: string | null): string[] {
 		.filter(Boolean);
 }
 
+function shouldIgnoreSensitiveCookies(event: RequestEvent): boolean {
+	const method = event.request?.method ?? 'GET';
+	if (method !== 'GET' && method !== 'HEAD') {
+		return false;
+	}
+
+	const pathname = event.url?.pathname ?? '/';
+	return AUTH_COOKIE_CACHE_PRESERVING_PATHS.has(pathname);
+}
+
 function hasSensitiveCookieHeader(event: RequestEvent): boolean {
+	if (shouldIgnoreSensitiveCookies(event)) {
+		return false;
+	}
+
 	const cookieHeader = event.request?.headers.get('cookie') ?? null;
 	if (!cookieHeader) {
 		return false;

@@ -966,6 +966,37 @@ describe('Security header handle behavior', () => {
 		assertVaryOmits(response.headers.get('Vary'), ['Authorization']);
 	});
 
+	it('preserves avatar cache headers for auth-cookie-bearing avatar responses', async () => {
+		const handle = createSecurityHeadersHandle();
+		const response = await handle({
+			event: {
+				request: new Request('https://kaivalo.test/avatar?u=signed', {
+					method: 'GET',
+					headers: { cookie: '__Host-wos_session=value' }
+				}),
+				url: new URL('https://kaivalo.test/avatar?u=signed')
+			},
+			resolve: async () =>
+				new Response('avatar-binary', {
+					status: 200,
+					headers: {
+						'Content-Type': 'image/png',
+						'Cache-Control':
+							'private, max-age=300, stale-while-revalidate=86400',
+						ETag: '"avatar-1"'
+					}
+				})
+		});
+
+		assert.strictEqual(
+			response.headers.get('Cache-Control'),
+			'private, max-age=300, stale-while-revalidate=86400'
+		);
+		assert.strictEqual(response.headers.get('ETag'), '"avatar-1"');
+		assertVaryOmits(response.headers.get('Vary'), ['Cookie']);
+		assertVaryOmits(response.headers.get('Vary'), ['Authorization']);
+	});
+
 	it('forces no-store caching on non-document auth-route responses', async () => {
 		const handle = createSecurityHeadersHandle();
 		const response = await handle({

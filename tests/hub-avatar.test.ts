@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { toAvatarProxyUrl } from '../apps/hub/src/lib/server/avatar-url.ts';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
+import { assertSessionCookieContract } from './helpers/session-cookie.ts';
 
 const PREVIEW_FIXTURE_IMPORT = new URL(
 	'./helpers/hub-preview-fixtures.mts',
@@ -37,6 +38,19 @@ function assertAvatarSecurityHeaders(response) {
 
 async function hitAvatar(preview, headers = {}) {
 	return httpGet(getAvatarUrl(preview.baseUrl), headers);
+}
+
+async function createSignedInSessionCookie(preview) {
+	const callbackResponse = await httpGet(
+		`${preview.baseUrl}/auth/callback?code=test-code&state=test-state`,
+		{
+			accept: 'text/html',
+			'sec-fetch-mode': 'navigate'
+		}
+	);
+
+	assert.strictEqual(callbackResponse.statusCode, 302);
+	return assertSessionCookieContract(callbackResponse.headers);
 }
 
 async function consumeAvatarQuota(preview, requestCount, headers = {}) {
@@ -98,6 +112,35 @@ describe('avatar proxy preview behavior', () => {
 			);
 			assertAvatarSecurityHeaders(response);
 			assert.strictEqual(response.headers.etag, '"avatar-1"');
+			assert.deepStrictEqual(response.body, Buffer.from('image-bytes'));
+		} finally {
+			await preview.stop();
+		}
+	});
+
+	it('keeps avatar responses cacheable when the real session cookie is present', async () => {
+		const preview = await startAvatarPreview('success', {
+			HUB_PREVIEW_CALLBACK_FIXTURE_MODE: 'signed-in'
+		});
+
+		try {
+			const sessionCookie = await createSignedInSessionCookie(preview);
+			const response = await hitAvatar(preview, {
+				cookie: sessionCookie
+			});
+
+			assert.strictEqual(response.statusCode, 200);
+			assert.strictEqual(response.headers['content-type'], 'image/png');
+			assert.strictEqual(
+				response.headers['cache-control'],
+				'private, max-age=300, stale-while-revalidate=86400'
+			);
+			assert.strictEqual(response.headers.etag, '"avatar-1"');
+			assert.strictEqual(
+				(response.headers.vary ?? '').toLowerCase().includes('cookie'),
+				false
+			);
+			assertAvatarSecurityHeaders(response);
 			assert.deepStrictEqual(response.body, Buffer.from('image-bytes'));
 		} finally {
 			await preview.stop();

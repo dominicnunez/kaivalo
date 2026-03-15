@@ -128,6 +128,35 @@ describe('static asset security policy', () => {
 		);
 		expect(response.headers.get('vary')).toBeNull();
 	});
+
+	it('preserves signed avatar cache headers when auth cookies are present', async () => {
+		const handle = createSecurityHeadersHandle();
+		const response = await handle({
+			event: {
+				request: new Request('https://kaivalo.test/avatar?sig=fixture', {
+					headers: {
+						cookie: `${AUTHKIT_COOKIE_NAME}=fixture`
+					}
+				}),
+				url: new URL('https://kaivalo.test/avatar?sig=fixture')
+			} as never,
+			resolve: async () =>
+				new Response('avatar-bytes', {
+					headers: {
+						'Content-Type': 'image/png',
+						'Cache-Control':
+							'private, max-age=300, stale-while-revalidate=86400',
+						ETag: '"avatar-fixture"'
+					}
+				})
+		});
+
+		expect(response.headers.get('cache-control')).toBe(
+			'private, max-age=300, stale-while-revalidate=86400'
+		);
+		expect(response.headers.get('etag')).toBe('"avatar-fixture"');
+		expect(response.headers.get('vary')).toBeNull();
+	});
 });
 
 describe('workos environment protocols', () => {
