@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
+import { toAvatarProxyUrl } from '$lib/server/avatar-url.ts';
 
 vi.mock('lucide-svelte', async () => {
 	const { default: IconStub } = await import('../test-support/IconStub.svelte');
@@ -23,6 +24,11 @@ const currentYear = String(new Date().getFullYear());
 const TYPEWRITER_TYPING_DELAY_MS = 100;
 const TYPEWRITER_PAUSE_FULL_MS = 2000;
 const TYPEWRITER_DELETE_DELAY_MS = 50;
+const SIGNED_AVATAR_URL =
+	toAvatarProxyUrl('https://avatars.githubusercontent.com/u/1', {
+		secret: 'cd'.repeat(32),
+		now: Date.UTC(2026, 2, 14, 12, 0, 0)
+	}) ?? '';
 
 function createMatchMediaController(matches = false) {
 	const listeners = new Set<EventListenerOrEventListenerObject>();
@@ -226,8 +232,7 @@ describe('home page content', () => {
 			user: {
 				firstName: 'Kai',
 				email: 'kai@example.com',
-				profilePictureUrl:
-					'/avatar?source=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F1'
+				profilePictureUrl: SIGNED_AVATAR_URL
 			}
 		});
 
@@ -244,9 +249,7 @@ describe('home page content', () => {
 			within(controls as HTMLElement)
 				.getByRole('img', { name: 'Kai' })
 				.getAttribute('src')
-		).toBe(
-			'/avatar?source=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F1'
-		);
+		).toBe(SIGNED_AVATAR_URL);
 		expect(within(controls as HTMLElement).getByText('Kai')).toBeTruthy();
 		expect(
 			within(controls as HTMLElement)

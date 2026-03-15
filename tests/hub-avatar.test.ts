@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { toAvatarProxyUrl } from '../apps/hub/src/lib/server/avatar-url.ts';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 
 const PREVIEW_FIXTURE_IMPORT = new URL(
@@ -8,11 +9,17 @@ const PREVIEW_FIXTURE_IMPORT = new URL(
 ).href;
 const AVATAR_SOURCE =
 	'https://avatars.githubusercontent.com/u/1?token=signed&size=96';
+const AVATAR_PROXY_SECRET = 'cd'.repeat(32);
 const PEER_ADDRESS_OVERRIDE_HEADER = 'x-kaivalo-preview-peer-address';
 const PRIVATE_NO_STORE_CACHE_CONTROL = 'private, no-store';
 
 function getAvatarUrl(baseUrl) {
-	return `${baseUrl}/avatar?source=${encodeURIComponent(AVATAR_SOURCE)}`;
+	const avatarPath = toAvatarProxyUrl(AVATAR_SOURCE, {
+		secret: AVATAR_PROXY_SECRET,
+		now: Date.now()
+	});
+	assert.ok(avatarPath, 'expected a signed avatar proxy url');
+	return new URL(avatarPath, baseUrl).toString();
 }
 
 function assertAvatarSecurityHeaders(response) {
@@ -87,7 +94,7 @@ describe('avatar proxy preview behavior', () => {
 			assert.strictEqual(response.headers['content-type'], 'image/png');
 			assert.strictEqual(
 				response.headers['cache-control'],
-				'public, max-age=300, stale-while-revalidate=86400'
+				'private, max-age=300, stale-while-revalidate=86400'
 			);
 			assertAvatarSecurityHeaders(response);
 			assert.strictEqual(response.headers.etag, '"avatar-1"');

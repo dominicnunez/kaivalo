@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildAuthErrorRedirectQuery } from '$lib/auth/auth-error-query.ts';
+import { readVerifiedAvatarProxySource } from '$lib/server/avatar-url.ts';
 
 const { mockEnv, mockGetUser, mockGetValidatedWorkosEnv } = vi.hoisted(() => ({
 	mockEnv: {
@@ -78,6 +79,31 @@ function expectAuthLayoutFailureLogged(
 			incidentId: expect.stringMatching(/^authlayout_/)
 		})
 	);
+}
+
+function expectAvatarProxySource(
+	profilePictureUrl: string | null | undefined,
+	expectedSource: string
+): void {
+	expect(profilePictureUrl).toEqual(expect.any(String));
+	const parsed = new URL(profilePictureUrl ?? '', 'https://kaivalo.test');
+	expect(parsed.pathname).toBe('/avatar');
+	expect(
+		readVerifiedAvatarProxySource(parsed.searchParams, {
+			secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
+			now: Date.now()
+		})
+	).toBe(expectedSource);
+}
+
+function readAvatarProfilePictureUrl(result: unknown): string | null {
+	const record = result as {
+		user?: {
+			profilePictureUrl?: string | null;
+		} | null;
+	};
+
+	return record.user?.profilePictureUrl ?? null;
 }
 
 describe('layout server load', () => {
@@ -291,16 +317,18 @@ describe('layout server load', () => {
 			setHeaders
 		} as never);
 
-		expect(result).toEqual({
+		expect(result).toMatchObject({
 			user: {
 				firstName: 'Kai',
-				email: 'kai@example.com',
-				profilePictureUrl:
-					'/avatar?source=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F1'
+				email: 'kai@example.com'
 			},
 			signInUrl: null,
 			authError: null
 		});
+		expectAvatarProxySource(
+			readAvatarProfilePictureUrl(result),
+			'https://avatars.githubusercontent.com/u/1'
+		);
 		expect(setHeaders).not.toHaveBeenCalled();
 	});
 
@@ -313,16 +341,18 @@ describe('layout server load', () => {
 
 		const result = await load(baseEvent as never);
 
-		expect(result).toEqual({
+		expect(result).toMatchObject({
 			user: {
 				firstName: 'Kai',
-				email: 'kai@example.com',
-				profilePictureUrl:
-					'/avatar?source=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F1'
+				email: 'kai@example.com'
 			},
 			signInUrl: null,
 			authError: null
 		});
+		expectAvatarProxySource(
+			readAvatarProfilePictureUrl(result),
+			'https://avatars.githubusercontent.com/u/1'
+		);
 	});
 
 	it('strips query strings from trusted avatar urls', async () => {
@@ -335,16 +365,18 @@ describe('layout server load', () => {
 
 		const result = await load(baseEvent as never);
 
-		expect(result).toEqual({
+		expect(result).toMatchObject({
 			user: {
 				firstName: 'Kai',
-				email: 'kai@example.com',
-				profilePictureUrl:
-					'/avatar?source=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F1'
+				email: 'kai@example.com'
 			},
 			signInUrl: null,
 			authError: null
 		});
+		expectAvatarProxySource(
+			readAvatarProfilePictureUrl(result),
+			'https://avatars.githubusercontent.com/u/1'
+		);
 	});
 
 	it('rejects trusted avatar urls that include fragments', async () => {
@@ -652,16 +684,18 @@ describe('layout server load', () => {
 			setHeaders
 		} as never);
 
-		expect(result).toEqual({
+		expect(result).toMatchObject({
 			user: {
 				firstName: 'Kai',
-				email: 'kai@example.com',
-				profilePictureUrl:
-					'/avatar?source=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F1'
+				email: 'kai@example.com'
 			},
 			signInUrl: null,
 			authError: null
 		});
+		expectAvatarProxySource(
+			readAvatarProfilePictureUrl(result),
+			'https://avatars.githubusercontent.com/u/1'
+		);
 		expect(setHeaders).not.toHaveBeenCalled();
 	});
 

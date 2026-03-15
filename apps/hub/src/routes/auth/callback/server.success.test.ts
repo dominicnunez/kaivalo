@@ -10,6 +10,7 @@ import {
 	vi
 } from 'vitest';
 import { AUTHKIT_COOKIE_NAME } from '$lib/server/authkit-config.ts';
+import { readVerifiedAvatarProxySource } from '$lib/server/avatar-url.ts';
 import { assertSessionCookieContract } from '../../../../../../tests/helpers/session-cookie.ts';
 import { createSign, generateKeyPairSync, type KeyObject } from 'node:crypto';
 
@@ -72,6 +73,16 @@ function createEvent(
 		}),
 		url: new URL(requestUrl)
 	} as never;
+}
+
+function readLayoutAvatarProfilePictureUrl(layoutData: unknown): string | null {
+	const record = layoutData as {
+		user?: {
+			profilePictureUrl?: string | null;
+		} | null;
+	};
+
+	return record.user?.profilePictureUrl ?? null;
 }
 
 function buildReturnToState(returnPathname: string): string {
@@ -249,16 +260,26 @@ describe('auth callback success path', () => {
 			plannedServices: Array<{ id: string }>;
 		};
 
-		expect(layoutData).toEqual({
+		expect(layoutData).toMatchObject({
 			user: {
 				firstName: 'Kai',
-				email: 'kai@example.com',
-				profilePictureUrl:
-					'/avatar?source=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F1'
+				email: 'kai@example.com'
 			},
 			signInUrl: null,
 			authError: null
 		});
+		expect(
+			readVerifiedAvatarProxySource(
+				new URL(
+					readLayoutAvatarProfilePictureUrl(layoutData) ?? '',
+					'https://kaivalo.test'
+				).searchParams,
+				{
+					secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
+					now: Date.now()
+				}
+			)
+		).toBe('https://avatars.githubusercontent.com/u/1');
 		expect(servicesData.activeServices.map((service) => service.id)).toEqual([
 			'sweep'
 		]);

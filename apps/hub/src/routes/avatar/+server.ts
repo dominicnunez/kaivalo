@@ -10,7 +10,7 @@ import {
 	cancelResponseBody,
 	readAvatarBody
 } from '$lib/server/avatar-body.ts';
-import { sanitizeAvatarUrl } from '$lib/server/avatar-url.ts';
+import { readVerifiedAvatarProxySource } from '$lib/server/avatar-url.ts';
 import {
 	getErrorLogContext,
 	shouldIncludeErrorMessage
@@ -26,7 +26,7 @@ import { getTrustedClientAddress } from '$lib/server/trusted-client-address.ts';
 import { getRequestPeerAddress } from '$lib/server/request-peer-address.ts';
 import { getProxyTrustConfiguration } from '$lib/server/workos-security.ts';
 
-const AVATAR_CACHE_CONTROL = 'public';
+const AVATAR_CACHE_CONTROL = 'private';
 const AVATAR_CACHE_MAX_AGE_SECONDS = 300;
 const AVATAR_CACHE_STALE_WHILE_REVALIDATE_SECONDS = 86400;
 const AVATAR_RATE_LIMIT_MAX_REQUESTS = 30;
@@ -263,7 +263,7 @@ function buildAvatarCacheControl(
 	}
 
 	if (directives.has('no-cache')) {
-		return 'public, max-age=0, must-revalidate';
+		return `${AVATAR_CACHE_CONTROL}, max-age=0, must-revalidate`;
 	}
 
 	const browserMaxAge = getIntegerDirective(directives, 'max-age');
@@ -372,7 +372,9 @@ export function _createAvatarGetHandler({
 
 	return async (event) => {
 		const { request, url, fetch } = event;
-		const source = sanitizeAvatarUrl(url.searchParams.get('source'));
+		const source = readVerifiedAvatarProxySource(url.searchParams, {
+			secret: env.AUTH_ERROR_SIGNING_SECRET ?? ''
+		});
 		if (!source) {
 			return createGatewayErrorResponse(404, 'Not found');
 		}

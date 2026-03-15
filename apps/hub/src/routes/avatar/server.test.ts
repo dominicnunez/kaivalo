@@ -5,14 +5,37 @@ import {
 	AVATAR_MAX_RESPONSE_BYTES
 } from '$lib/server/avatar-proxy.ts';
 import {
+	AVATAR_PROXY_TOKEN_QUERY_NAME,
+	AVATAR_PROXY_TOKEN_TTL_MS,
+	toAvatarProxyUrl
+} from '$lib/server/avatar-url.ts';
+import {
 	createSlidingWindowRateLimiter,
 	type SlidingWindowRateLimiter
 } from '$lib/server/request-rate-limit.ts';
+
+const { mockEnv } = vi.hoisted(() => ({
+	mockEnv: {
+		AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
+		ORIGIN: 'https://kaivalo.test'
+	} as Record<string, string>
+}));
+
+vi.mock('$env/dynamic/private', () => ({
+	env: mockEnv
+}));
+
 import { _createAvatarGetHandler } from './+server';
 
 let GET: ReturnType<typeof _createAvatarGetHandler>;
+const AVATAR_PROXY_SECRET = 'cd'.repeat(32);
+const TRUSTED_AVATAR_SOURCE = 'https://avatars.githubusercontent.com/u/1';
 
 beforeEach(() => {
+	mockEnv.AUTH_ERROR_SIGNING_SECRET = AVATAR_PROXY_SECRET;
+	mockEnv.ORIGIN = 'https://kaivalo.test';
+	delete mockEnv.TRUST_X_FORWARDED_PROTO;
+	delete mockEnv.TRUSTED_PROXY_IPS;
 	GET = _createAvatarGetHandler();
 });
 
@@ -43,7 +66,7 @@ function createTrackedUpstreamResponse(
 
 function createAvatarEvent(
 	fetch: typeof globalThis.fetch,
-	requestUrl = 'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1',
+	requestUrl = createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE),
 	headers: HeadersInit = {},
 	clientAddress = '203.0.113.10'
 ) {
@@ -55,23 +78,65 @@ function createAvatarEvent(
 	} as never;
 }
 
-function createAvatarProxyRequestUrl(sourceUrl: string): string {
-	return `https://kaivalo.test/avatar?source=${encodeURIComponent(sourceUrl)}`;
+function createAvatarProxyRequestUrl(
+	sourceUrl: string,
+	now = Date.now()
+): string {
+	const proxyPath = toAvatarProxyUrl(sourceUrl, {
+		secret: AVATAR_PROXY_SECRET,
+		now
+	});
+	expect(proxyPath).not.toBeNull();
+	return new URL(proxyPath ?? '', 'https://kaivalo.test').toString();
+}
+
+function createTamperedAvatarProxyRequestUrl(
+	sourceUrl: string,
+	now = Date.now()
+): string {
+	const proxyUrl = new URL(createAvatarProxyRequestUrl(sourceUrl, now));
+	const token = proxyUrl.searchParams.get(AVATAR_PROXY_TOKEN_QUERY_NAME);
+	expect(token).not.toBeNull();
+
+	const decoded = JSON.parse(
+		Buffer.from(token ?? '', 'base64url').toString('utf8')
+	) as {
+		source: string;
+		timestamp: string;
+		signature: string;
+	};
+	decoded.source = 'https://avatars.githubusercontent.com/u/2';
+	proxyUrl.searchParams.set(
+		AVATAR_PROXY_TOKEN_QUERY_NAME,
+		Buffer.from(JSON.stringify(decoded), 'utf8').toString('base64url')
+	);
+	return proxyUrl.toString();
 }
 
 describe('avatar proxy route', () => {
-	it('rejects untrusted avatar sources before fetching', async () => {
+	it('rejects avatar requests that omit the signed proxy token before fetching', async () => {
 		const fetch = vi.fn();
 
-		const response = await GET({
-			request: new Request(
-				'https://kaivalo.test/avatar?source=https://attacker.test/a.png'
-			),
-			url: new URL(
-				'https://kaivalo.test/avatar?source=https://attacker.test/a.png'
-			),
-			fetch
-		} as never);
+		const response = await GET(
+			createAvatarEvent(
+				fetch,
+				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+			)
+		);
+
+		expect(response.status).toBe(404);
+		expect(fetch).not.toHaveBeenCalled();
+	});
+
+	it('rejects tampered avatar proxy tokens before fetching', async () => {
+		const fetch = vi.fn();
+
+		const response = await GET(
+			createAvatarEvent(
+				fetch,
+				createTamperedAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE)
+			)
+		);
 
 		expect(response.status).toBe(404);
 		expect(fetch).not.toHaveBeenCalled();
@@ -115,20 +180,21 @@ describe('avatar proxy route', () => {
 		expect(response.headers.get('content-type')).toBe('image/png');
 		expect(await response.text()).toBe('image-bytes');
 		expect(response.headers.get('cache-control')).toBe(
-			'public, max-age=300, stale-while-revalidate=86400'
+			'private, max-age=300, stale-while-revalidate=86400'
 		);
 		expect(response.headers.get('x-content-type-options')).toBe('nosniff');
 		expect(response.headers.get('etag')).toBe('"avatar-1"');
 	});
 
-	it('rejects trusted avatar urls that include fragments', async () => {
+	it('rejects expired avatar proxy tokens before fetching', async () => {
 		const fetch = vi.fn();
 
 		const response = await GET(
 			createAvatarEvent(
 				fetch,
 				createAvatarProxyRequestUrl(
-					'https://avatars.githubusercontent.com/u/1?token=signed#tracker'
+					TRUSTED_AVATAR_SOURCE,
+					Date.now() - AVATAR_PROXY_TOKEN_TTL_MS - 1
 				)
 			)
 		);
@@ -159,7 +225,7 @@ describe('avatar proxy route', () => {
 		{
 			name: 'preserves a zero browser lifetime instead of widening it from s-maxage',
 			upstreamCacheControl: 'public, max-age=0, s-maxage=600',
-			expectedCacheControl: 'public, max-age=0'
+			expectedCacheControl: 'private, max-age=0'
 		},
 		{
 			name: 'does not synthesize browser caching from a shared-cache-only lifetime',
@@ -202,7 +268,7 @@ describe('avatar proxy route', () => {
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('cache-control')).toBe(
-			'public, max-age=60, stale-while-revalidate=30'
+			'private, max-age=60, stale-while-revalidate=30'
 		);
 	});
 
@@ -223,7 +289,7 @@ describe('avatar proxy route', () => {
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('cache-control')).toBe(
-			'public, max-age=0, must-revalidate'
+			'private, max-age=0, must-revalidate'
 		);
 	});
 
@@ -244,7 +310,7 @@ describe('avatar proxy route', () => {
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('cache-control')).toBe(
-			'public, max-age=300, must-revalidate'
+			'private, max-age=300, must-revalidate'
 		);
 	});
 
@@ -372,46 +438,31 @@ describe('avatar proxy route', () => {
 	});
 
 	it('omits upstream error messages from avatar failure logs in production', async () => {
-		vi.resetModules();
-		vi.doMock('$env/dynamic/private', () => ({
-			env: {
-				NODE_ENV: 'production',
-				ORIGIN: 'http://kaivalo.test'
-			}
-		}));
-		const { _createAvatarGetHandler: createAvatarGetHandler } =
-			await import('./+server');
+		mockEnv.NODE_ENV = 'production';
 		const fetch = vi.fn(async () => {
 			throw new Error('socket hang up');
 		});
 		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-		try {
-			const response = await createAvatarGetHandler()(createAvatarEvent(fetch));
+		const response = await _createAvatarGetHandler()(createAvatarEvent(fetch));
 
-			expect(response.status).toBe(502);
-			expect(errorSpy).toHaveBeenCalledWith(
-				'Avatar proxy request failed',
-				expect.objectContaining({
-					incidentId: expect.stringMatching(/^avatar_[0-9a-f-]+$/),
-					requestId: 'missing',
-					pathname: '/avatar',
-					method: 'GET',
-					sourceHost: 'avatars.githubusercontent.com',
-					failureClass: 'fetch',
-					responseStatus: 502,
-					errorCode: 'AVATAR_PROXY_FAILURE',
-					errorName: 'Error'
-				})
-			);
-			expect(errorSpy.mock.calls[0]?.[1]).not.toHaveProperty('errorMessage');
-			expect(errorSpy.mock.calls[0]?.[1]).not.toHaveProperty(
-				'errorCauseMessage'
-			);
-		} finally {
-			vi.doUnmock('$env/dynamic/private');
-			vi.resetModules();
-		}
+		expect(response.status).toBe(502);
+		expect(errorSpy).toHaveBeenCalledWith(
+			'Avatar proxy request failed',
+			expect.objectContaining({
+				incidentId: expect.stringMatching(/^avatar_[0-9a-f-]+$/),
+				requestId: 'missing',
+				pathname: '/avatar',
+				method: 'GET',
+				sourceHost: 'avatars.githubusercontent.com',
+				failureClass: 'fetch',
+				responseStatus: 502,
+				errorCode: 'AVATAR_PROXY_FAILURE',
+				errorName: 'Error'
+			})
+		);
+		expect(errorSpy.mock.calls[0]?.[1]).not.toHaveProperty('errorMessage');
+		expect(errorSpy.mock.calls[0]?.[1]).not.toHaveProperty('errorCauseMessage');
 	});
 
 	it('fails fast when the upstream avatar fetch exceeds the timeout', async () => {
@@ -482,8 +533,7 @@ describe('avatar proxy route', () => {
 				failureClass: 'stream',
 				responseStatus: 504,
 				errorCode: 'AVATAR_PROXY_FAILURE',
-				errorName: 'TimeoutError',
-				errorMessage: 'Timed out'
+				errorName: 'TimeoutError'
 			})
 		);
 	});
@@ -520,7 +570,7 @@ describe('avatar proxy route', () => {
 		);
 		expect(response.status).toBe(304);
 		expect(response.headers.get('cache-control')).toBe(
-			'public, max-age=60, stale-while-revalidate=30'
+			'private, max-age=60, stale-while-revalidate=30'
 		);
 		expect(response.headers.get('etag')).toBe('"avatar-2"');
 	});
@@ -628,8 +678,7 @@ describe('avatar proxy route', () => {
 				failureClass: 'size',
 				responseStatus: 502,
 				errorCode: 'AVATAR_PROXY_FAILURE',
-				errorName: 'AvatarResponseSizeError',
-				errorMessage: 'Avatar response exceeds maximum allowed size'
+				errorName: 'AvatarResponseSizeError'
 			})
 		);
 	});
@@ -656,12 +705,8 @@ describe('avatar proxy route', () => {
 				})
 		);
 		const event = {
-			request: new Request(
-				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
-			),
-			url: new URL(
-				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
-			),
+			request: new Request(createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE)),
+			url: new URL(createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE)),
 			fetch,
 			getClientAddress: () => '203.0.113.10'
 		} as never;
@@ -711,11 +756,9 @@ describe('avatar proxy route', () => {
 		const createEvent = (clientAddress: string) =>
 			({
 				request: new Request(
-					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+					createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE)
 				),
-				url: new URL(
-					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
-				),
+				url: new URL(createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE)),
 				fetch,
 				getClientAddress: () => clientAddress
 			}) as never;
@@ -777,17 +820,12 @@ describe('avatar proxy route', () => {
 
 		await GET(createAvatarEvent(fetch));
 		await GET({
-			request: new Request(
-				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1',
-				{
-					headers: {
-						'x-forwarded-for': '198.51.100.10, 203.0.113.1'
-					}
+			request: new Request(createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE), {
+				headers: {
+					'x-forwarded-for': '198.51.100.10, 203.0.113.1'
 				}
-			),
-			url: new URL(
-				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
-			),
+			}),
+			url: new URL(createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE)),
 			fetch,
 			getClientAddress: () => '203.0.113.2'
 		} as never);
@@ -820,11 +858,9 @@ describe('avatar proxy route', () => {
 		const createEvent = (clientAddress: string) =>
 			({
 				request: new Request(
-					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+					createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE)
 				),
-				url: new URL(
-					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
-				),
+				url: new URL(createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE)),
 				fetch,
 				getClientAddress: () => clientAddress
 			}) as never;
@@ -866,11 +902,9 @@ describe('avatar proxy route', () => {
 		const createEvent = (clientAddress: string) =>
 			({
 				request: new Request(
-					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+					createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE)
 				),
-				url: new URL(
-					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
-				),
+				url: new URL(createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE)),
 				fetch,
 				getClientAddress: () => clientAddress
 			}) as never;
@@ -911,11 +945,9 @@ describe('avatar proxy route', () => {
 		const createEvent = (clientAddress: string) =>
 			({
 				request: new Request(
-					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
+					createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE)
 				),
-				url: new URL(
-					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
-				),
+				url: new URL(createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE)),
 				fetch,
 				getClientAddress: () => clientAddress
 			}) as never;
@@ -927,8 +959,8 @@ describe('avatar proxy route', () => {
 	});
 
 	it('rate limits proxied avatar requests by the trusted forwarded client address', async () => {
-		vi.stubEnv('TRUST_X_FORWARDED_PROTO', 'true');
-		vi.stubEnv('TRUSTED_PROXY_IPS', '203.0.113.1,203.0.113.2');
+		mockEnv.TRUST_X_FORWARDED_PROTO = 'true';
+		mockEnv.TRUSTED_PROXY_IPS = '203.0.113.1,203.0.113.2';
 
 		let now = 1_000;
 		const GET = _createAvatarGetHandler({
@@ -954,16 +986,14 @@ describe('avatar proxy route', () => {
 		const createEvent = (forwardedFor: string) =>
 			({
 				request: new Request(
-					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1',
+					createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE),
 					{
 						headers: {
 							'x-forwarded-for': forwardedFor
 						}
 					}
 				),
-				url: new URL(
-					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
-				),
+				url: new URL(createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE)),
 				fetch,
 				getClientAddress: () => '203.0.113.2'
 			}) as never;
@@ -1008,16 +1038,14 @@ describe('avatar proxy route', () => {
 		const createEvent = (forwardedFor: string) =>
 			({
 				request: new Request(
-					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1',
+					createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE),
 					{
 						headers: {
 							'x-forwarded-for': forwardedFor
 						}
 					}
 				),
-				url: new URL(
-					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
-				),
+				url: new URL(createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE)),
 				fetch,
 				getClientAddress: () => '203.0.113.2'
 			}) as never;
@@ -1026,8 +1054,8 @@ describe('avatar proxy route', () => {
 			200
 		);
 
-		vi.stubEnv('TRUST_X_FORWARDED_PROTO', 'true');
-		vi.stubEnv('TRUSTED_PROXY_IPS', ' ');
+		mockEnv.TRUST_X_FORWARDED_PROTO = 'true';
+		mockEnv.TRUSTED_PROXY_IPS = ' ';
 
 		expect((await GET(createEvent('198.51.100.11, 203.0.113.1'))).status).toBe(
 			200
@@ -1049,12 +1077,8 @@ describe('avatar proxy route', () => {
 		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
 		const response = await GET({
-			request: new Request(
-				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
-			),
-			url: new URL(
-				'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
-			),
+			request: new Request(createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE)),
+			url: new URL(createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE)),
 			fetch
 		} as never);
 
@@ -1078,8 +1102,8 @@ describe('avatar proxy route', () => {
 	});
 
 	it('falls back to the direct proxy peer when trusted forwarding headers are malformed', async () => {
-		vi.stubEnv('TRUST_X_FORWARDED_PROTO', 'true');
-		vi.stubEnv('TRUSTED_PROXY_IPS', '203.0.113.1,203.0.113.2');
+		mockEnv.TRUST_X_FORWARDED_PROTO = 'true';
+		mockEnv.TRUSTED_PROXY_IPS = '203.0.113.1,203.0.113.2';
 
 		let now = 1_000;
 		const GET = _createAvatarGetHandler({
@@ -1105,16 +1129,14 @@ describe('avatar proxy route', () => {
 		const createEvent = (proxyIp: string) =>
 			({
 				request: new Request(
-					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1',
+					createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE),
 					{
 						headers: {
 							'x-forwarded-for': '198.51.100.10, garbage'
 						}
 					}
 				),
-				url: new URL(
-					'https://kaivalo.test/avatar?source=https://avatars.githubusercontent.com/u/1'
-				),
+				url: new URL(createAvatarProxyRequestUrl(TRUSTED_AVATAR_SOURCE)),
 				fetch,
 				getClientAddress: () => proxyIp
 			}) as never;

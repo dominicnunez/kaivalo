@@ -10,6 +10,7 @@ import {
 	readVerifiedAuthError
 } from '$lib/auth/auth-error-query.ts';
 import { AUTHKIT_COOKIE_NAME } from '$lib/server/authkit-config.ts';
+import { readVerifiedAvatarProxySource } from '$lib/server/avatar-url.ts';
 import { assertSessionCookieContract } from '../../../../../../tests/helpers/session-cookie.ts';
 
 const SESSION_COOKIE_PAIR = `${AUTHKIT_COOKIE_NAME}=callback-session`;
@@ -79,6 +80,16 @@ function createEvent(
 		}),
 		url: new URL(requestUrl)
 	} as never;
+}
+
+function readLayoutAvatarProfilePictureUrl(layoutData: unknown): string | null {
+	const record = layoutData as {
+		user?: {
+			profilePictureUrl?: string | null;
+		} | null;
+	};
+
+	return record.user?.profilePictureUrl ?? null;
 }
 
 describe('auth callback route', () => {
@@ -193,16 +204,26 @@ describe('auth callback route', () => {
 		};
 
 		expect(mockGetUser).toHaveBeenCalledOnce();
-		expect(layoutData).toEqual({
+		expect(layoutData).toMatchObject({
 			user: {
 				firstName: 'Kai',
-				email: 'kai@example.com',
-				profilePictureUrl:
-					'/avatar?source=https%3A%2F%2Favatars.githubusercontent.com%2Fu%2F1'
+				email: 'kai@example.com'
 			},
 			signInUrl: null,
 			authError: null
 		});
+		expect(
+			readVerifiedAvatarProxySource(
+				new URL(
+					readLayoutAvatarProfilePictureUrl(layoutData) ?? '',
+					'https://kaivalo.test'
+				).searchParams,
+				{
+					secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
+					now: Date.now()
+				}
+			)
+		).toBe('https://avatars.githubusercontent.com/u/1');
 		expect(servicesData.activeServices.map((service) => service.id)).toEqual([
 			'sweep'
 		]);

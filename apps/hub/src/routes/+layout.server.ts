@@ -249,7 +249,9 @@ export const load: LayoutServerLoad = async (event) => {
 				? {
 						firstName: user.firstName,
 						email: user.email,
-						profilePictureUrl: toAvatarProxyUrl(user.profilePictureUrl)
+						profilePictureUrl: toAvatarProxyUrl(user.profilePictureUrl, {
+							secret: env.AUTH_ERROR_SIGNING_SECRET ?? ''
+						})
 					}
 				: null,
 			signInUrl: user ? null : signInUrl,
