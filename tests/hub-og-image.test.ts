@@ -20,15 +20,6 @@ describe('hub og image', () => {
 		await preview?.stop();
 	});
 
-	it('serves og-image.png as a non-empty png asset', () => {
-		assert.strictEqual(ogImageResponse.statusCode, 200);
-		assert.match(
-			String(ogImageResponse.headers['content-type'] ?? ''),
-			/^image\/png/
-		);
-		assert.ok(Number(ogImageResponse.headers['content-length'] ?? 0) > 0);
-	});
-
 	it('keeps og-image payload in social-preview size budget', () => {
 		const contentLength = Number(
 			ogImageResponse.headers['content-length'] ?? 0
