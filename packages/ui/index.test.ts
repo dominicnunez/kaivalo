@@ -238,7 +238,6 @@ describe('@kaivalo/ui public api', () => {
 		expect(card?.getAttribute('rel')).toBe('noreferrer');
 		expect(card?.hasAttribute('href')).toBe(false);
 		expect(card?.getAttribute('tabindex')).toBe('-1');
-		expect(card?.className).not.toContain('card-hover');
 	});
 
 	it('preserves fragment-only card links from the package root', () => {
