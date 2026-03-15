@@ -14,6 +14,7 @@ const PRODUCTION_IMAGE_SMOKE_BUILD_SCRIPT_PATH = path.join(
 const SMOKE_IMAGE_TAG = 'kaivalo-hub-smoke:test';
 const SMOKE_CONTAINER_ID = 'container-smoke-123';
 const SMOKE_PUBLISHED_PORT = '41234';
+const SMOKE_CANONICAL_ORIGIN = 'http://127.0.0.1:3100';
 
 type ScriptResult = {
 	exitCode: number | null;
@@ -24,12 +25,15 @@ type ScriptResult = {
 
 const tempDirectories = new Set<string>();
 
-function createFakeDocker() {
+function createFakeSmokeDependencies() {
 	const tempDirectory = mkdtempSync(
 		path.join(os.tmpdir(), 'kaivalo-production-image-smoke-')
 	);
 	const fakeDockerPath = path.join(tempDirectory, 'docker');
-	const fakeCurlPath = path.join(tempDirectory, 'curl');
+	const fakeVerifyDeployHealthPath = path.join(
+		tempDirectory,
+		'verify-deploy-health.sh'
+	);
 	const invocationLogPath = path.join(tempDirectory, 'docker.log');
 
 	tempDirectories.add(tempDirectory);
@@ -73,13 +77,15 @@ function createFakeDocker() {
 		}
 	);
 	writeFileSync(
-		fakeCurlPath,
+		fakeVerifyDeployHealthPath,
 		[
 			'#!/usr/bin/env bash',
 			'set -euo pipefail',
-			'printf "curl %s\\n" "$*" >> "$FAKE_DOCKER_LOG"',
-			'printf "%s" "${FAKE_CURL_RESPONSE_BODY:-ok}"',
-			'exit "${FAKE_CURL_EXIT_CODE:-0}"'
+			'printf "verify DEPLOY_ORIGIN=%s DEPLOY_PROBE_ORIGIN=%s WORKOS_API_HOSTNAME=%s\\n" "$DEPLOY_ORIGIN" "$DEPLOY_PROBE_ORIGIN" "${WORKOS_API_HOSTNAME:-}" >> "$FAKE_DOCKER_LOG"',
+			'if [[ -n "${FAKE_VERIFY_DEPLOY_HEALTH_STDERR:-}" ]]; then',
+			'	printf "%s\\n" "$FAKE_VERIFY_DEPLOY_HEALTH_STDERR" >&2',
+			'fi',
+			'exit "${FAKE_VERIFY_DEPLOY_HEALTH_EXIT_CODE:-0}"'
 		].join('\n'),
 		{
 			mode: 0o755
@@ -88,7 +94,7 @@ function createFakeDocker() {
 
 	return {
 		fakeDockerPath,
-		fakeCurlPath,
+		fakeVerifyDeployHealthPath,
 		invocationLogPath
 	};
 }
@@ -164,14 +170,14 @@ afterEach(() => {
 });
 
 describe('production image smoke build script', () => {
-	it('builds the production Dockerfile, probes the container health, and removes the temporary resources', async () => {
-		const { fakeCurlPath, fakeDockerPath, invocationLogPath } =
-			createFakeDocker();
+	it('builds the production Dockerfile, verifies the deployed container contract, and removes the temporary resources', async () => {
+		const { fakeDockerPath, fakeVerifyDeployHealthPath, invocationLogPath } =
+			createFakeSmokeDependencies();
 		const result = await runSmokeBuildScript({
 			environmentOverrides: {
-				CURL_BIN: fakeCurlPath,
 				DOCKER_BIN: fakeDockerPath,
 				FAKE_DOCKER_LOG: invocationLogPath,
+				PRODUCTION_IMAGE_SMOKE_DEPLOY_HEALTH_SCRIPT: fakeVerifyDeployHealthPath,
 				PRODUCTION_IMAGE_SMOKE_TAG: SMOKE_IMAGE_TAG
 			}
 		});
@@ -184,7 +190,7 @@ describe('production image smoke build script', () => {
 			/^docker build\b/,
 			/^docker run\b/,
 			/^docker port\b/,
-			/^curl\b/,
+			/^verify\b/,
 			/^docker container rm\b/,
 			/^docker image rm\b/
 		]);
@@ -195,6 +201,8 @@ describe('production image smoke build script', () => {
 		]);
 		assertCommandIncludes(invocations[1] ?? '', [
 			'--publish 127.0.0.1::3100',
+			`--env ORIGIN=${SMOKE_CANONICAL_ORIGIN}`,
+			`--env WORKOS_REDIRECT_URI=${SMOKE_CANONICAL_ORIGIN}/auth/callback`,
 			SMOKE_IMAGE_TAG
 		]);
 		assertCommandIncludes(invocations[2] ?? '', [
@@ -202,7 +210,8 @@ describe('production image smoke build script', () => {
 			'3100/tcp'
 		]);
 		assertCommandIncludes(invocations[3] ?? '', [
-			`http://127.0.0.1:${SMOKE_PUBLISHED_PORT}/healthz`
+			`DEPLOY_ORIGIN=${SMOKE_CANONICAL_ORIGIN}`,
+			`DEPLOY_PROBE_ORIGIN=http://127.0.0.1:${SMOKE_PUBLISHED_PORT}`
 		]);
 		assertCommandIncludes(invocations[4] ?? '', [
 			'--force',
@@ -212,7 +221,7 @@ describe('production image smoke build script', () => {
 	});
 
 	it('removes the temporary image tag even when the docker build fails', async () => {
-		const { fakeDockerPath, invocationLogPath } = createFakeDocker();
+		const { fakeDockerPath, invocationLogPath } = createFakeSmokeDependencies();
 		const result = await runSmokeBuildScript({
 			environmentOverrides: {
 				DOCKER_BIN: fakeDockerPath,
@@ -241,13 +250,13 @@ describe('production image smoke build script', () => {
 	});
 
 	it('reuses a prebuilt image when smoke-build skip mode is enabled', async () => {
-		const { fakeCurlPath, fakeDockerPath, invocationLogPath } =
-			createFakeDocker();
+		const { fakeDockerPath, fakeVerifyDeployHealthPath, invocationLogPath } =
+			createFakeSmokeDependencies();
 		const result = await runSmokeBuildScript({
 			environmentOverrides: {
-				CURL_BIN: fakeCurlPath,
 				DOCKER_BIN: fakeDockerPath,
 				FAKE_DOCKER_LOG: invocationLogPath,
+				PRODUCTION_IMAGE_SMOKE_DEPLOY_HEALTH_SCRIPT: fakeVerifyDeployHealthPath,
 				PRODUCTION_IMAGE_SMOKE_SKIP_BUILD: 'true',
 				PRODUCTION_IMAGE_SMOKE_TAG: SMOKE_IMAGE_TAG
 			}
@@ -260,7 +269,7 @@ describe('production image smoke build script', () => {
 		assertCommandSequence(invocations, [
 			/^docker run\b/,
 			/^docker port\b/,
-			/^curl\b/,
+			/^verify\b/,
 			/^docker container rm\b/
 		]);
 		assertCommandIncludes(invocations[0] ?? '', [
@@ -270,16 +279,16 @@ describe('production image smoke build script', () => {
 	});
 
 	it('keeps a reused image tag when skip mode fails after the container starts', async () => {
-		const { fakeCurlPath, fakeDockerPath, invocationLogPath } =
-			createFakeDocker();
+		const { fakeDockerPath, fakeVerifyDeployHealthPath, invocationLogPath } =
+			createFakeSmokeDependencies();
 		const result = await runSmokeBuildScript({
 			environmentOverrides: {
-				CURL_BIN: fakeCurlPath,
 				DOCKER_BIN: fakeDockerPath,
-				FAKE_CURL_RESPONSE_BODY: 'degraded',
 				FAKE_DOCKER_LOG: invocationLogPath,
 				FAKE_DOCKER_LOGS_OUTPUT: 'container failed to start',
+				FAKE_VERIFY_DEPLOY_HEALTH_EXIT_CODE: '1',
 				PRODUCTION_IMAGE_SMOKE_SKIP_BUILD: 'true',
+				PRODUCTION_IMAGE_SMOKE_DEPLOY_HEALTH_SCRIPT: fakeVerifyDeployHealthPath,
 				PRODUCTION_IMAGE_SMOKE_TAG: SMOKE_IMAGE_TAG
 			}
 		});
@@ -290,7 +299,7 @@ describe('production image smoke build script', () => {
 		assertCommandSequence(invocations, [
 			/^docker run\b/,
 			/^docker port\b/,
-			/^curl\b/,
+			/^verify\b/,
 			/^docker logs\b/,
 			/^docker container rm\b/
 		]);
@@ -301,16 +310,18 @@ describe('production image smoke build script', () => {
 		]);
 	});
 
-	it('prints container logs and removes temporary resources when the health probe body is unhealthy', async () => {
-		const { fakeCurlPath, fakeDockerPath, invocationLogPath } =
-			createFakeDocker();
+	it('prints container logs and removes temporary resources when deploy verification fails', async () => {
+		const { fakeDockerPath, fakeVerifyDeployHealthPath, invocationLogPath } =
+			createFakeSmokeDependencies();
 		const result = await runSmokeBuildScript({
 			environmentOverrides: {
-				CURL_BIN: fakeCurlPath,
 				DOCKER_BIN: fakeDockerPath,
-				FAKE_CURL_RESPONSE_BODY: 'degraded',
 				FAKE_DOCKER_LOG: invocationLogPath,
 				FAKE_DOCKER_LOGS_OUTPUT: 'container failed to start',
+				FAKE_VERIFY_DEPLOY_HEALTH_EXIT_CODE: '1',
+				FAKE_VERIFY_DEPLOY_HEALTH_STDERR:
+					'Expected /services to include cache-control: private, no-store',
+				PRODUCTION_IMAGE_SMOKE_DEPLOY_HEALTH_SCRIPT: fakeVerifyDeployHealthPath,
 				PRODUCTION_IMAGE_SMOKE_TAG: SMOKE_IMAGE_TAG
 			}
 		});
@@ -318,8 +329,9 @@ describe('production image smoke build script', () => {
 		assert.strictEqual(result.exitCode, 1, result.stderr || result.stdout);
 		assert.match(
 			result.stderr,
-			/Expected \/healthz to return ok, received: degraded/
+			/Expected \/services to include cache-control: private, no-store/
 		);
+		assert.match(result.stderr, /Production image deploy verification failed/);
 		assert.match(result.stderr, /container failed to start/);
 		const invocations = readInvocationLog(invocationLogPath);
 
@@ -327,7 +339,7 @@ describe('production image smoke build script', () => {
 			/^docker build\b/,
 			/^docker run\b/,
 			/^docker port\b/,
-			/^curl\b/,
+			/^verify\b/,
 			/^docker logs\b/,
 			/^docker container rm\b/,
 			/^docker image rm\b/

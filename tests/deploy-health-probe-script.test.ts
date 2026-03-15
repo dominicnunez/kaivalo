@@ -9,6 +9,7 @@ import {
 	readVerifiedAuthError
 } from '../apps/hub/src/lib/auth/auth-error-query.ts';
 import { getTrustedWorkosAuthOrigin } from '../apps/hub/src/lib/server/auth-origin-policy.ts';
+import { canListenOnLoopback } from './helpers/runtime-capabilities.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DEPLOY_HEALTH_SCRIPT_PATH = path.join(
@@ -24,6 +25,7 @@ const TRUSTED_AUTH_ORIGIN = getTrustedWorkosAuthOrigin({
 	apiHostname: WORKOS_API_HOSTNAME
 });
 const AUTH_AUTHORIZE_PATH = '/user_management/authorize';
+const LOOPBACK_LISTEN_SUPPORTED = await canListenOnLoopback();
 const AUTH_ERROR_INCIDENT_ID = 'authcb_123e4567-e89b-12d3-a456-426614174000';
 const SECURITY_HEADERS = {
 	'x-frame-options': 'DENY',
@@ -102,10 +104,12 @@ function closeServer(server: http.Server): Promise<void> {
 }
 
 function createHealthyHandler(
-	overrides: Partial<Record<string, RouteHandler>> = {}
+	overrides: Partial<Record<string, RouteHandler>> = {},
+	responseOrigin?: string
 ): RouteHandler {
 	return (request) => {
 		const requestOrigin = `http://${request.headers.host ?? '127.0.0.1'}`;
+		const trustedResponseOrigin = responseOrigin ?? requestOrigin;
 		const requestUrl = new URL(request.url ?? '/', requestOrigin);
 		const pathname = requestUrl.pathname;
 		const override = overrides[pathname];
@@ -157,7 +161,7 @@ function createHealthyHandler(
 				);
 				location.searchParams.set(
 					'redirect_uri',
-					`${requestOrigin}${CALLBACK_PATH}`
+					`${trustedResponseOrigin}${CALLBACK_PATH}`
 				);
 				location.searchParams.set('screen_hint', 'sign-up');
 				return {
@@ -178,7 +182,7 @@ function createHealthyHandler(
 						location: buildAuthErrorLandingRedirectLocation({
 							incidentId: AUTH_ERROR_INCIDENT_ID,
 							secret: AUTH_ERROR_SIGNING_SECRET,
-							origin: requestOrigin,
+							origin: trustedResponseOrigin,
 							now: Date.now()
 						})
 					}
@@ -234,259 +238,280 @@ afterEach(async () => {
 	}
 });
 
-describe('deploy health probe script', () => {
-	it('accepts the expected healthy deployment responses', async () => {
-		const server = await startFixtureServer(createHealthyHandler());
-		const result = await runDeployHealthScript(server.origin);
+describe(
+	'deploy health probe script',
+	{ skip: !LOOPBACK_LISTEN_SUPPORTED },
+	() => {
+		it('accepts the expected healthy deployment responses', async () => {
+			const server = await startFixtureServer(createHealthyHandler());
+			const result = await runDeployHealthScript(server.origin);
 
-		assert.strictEqual(result.exitCode, 0, result.stderr || result.stdout);
-		assert.strictEqual(result.signal, null);
-	});
-
-	it('rejects insecure non-loopback deploy origins before probing', async () => {
-		const result = await runDeployHealthScript('http://not-loopback.invalid', {
-			DEPLOY_HEALTH_CONNECT_TIMEOUT_SECONDS: '1',
-			DEPLOY_HEALTH_MAX_TIME_SECONDS: '1'
+			assert.strictEqual(result.exitCode, 0, result.stderr || result.stdout);
+			assert.strictEqual(result.signal, null);
 		});
 
-		assert.notStrictEqual(result.exitCode, 0);
-		assert.match(
-			result.stderr,
-			/DEPLOY_ORIGIN must use https unless it targets a loopback host/
-		);
-	});
+		it('accepts a distinct probe origin while validating the canonical deploy origin', async () => {
+			const canonicalOrigin = 'http://127.0.0.1:3100';
+			const server = await startFixtureServer(
+				createHealthyHandler({}, canonicalOrigin)
+			);
+			const result = await runDeployHealthScript(canonicalOrigin, {
+				DEPLOY_PROBE_ORIGIN: server.origin
+			});
 
-	it('fails when a no-redirect probe returns a redirect response', async () => {
-		const server = await startFixtureServer(
-			createHealthyHandler({
-				'/healthz': () => ({
-					statusCode: 303,
-					headers: {
-						location: '/maintenance'
-					}
+			assert.strictEqual(result.exitCode, 0, result.stderr || result.stdout);
+			assert.strictEqual(result.signal, null);
+		});
+
+		it('rejects insecure non-loopback deploy origins before probing', async () => {
+			const result = await runDeployHealthScript(
+				'http://not-loopback.invalid',
+				{
+					DEPLOY_HEALTH_CONNECT_TIMEOUT_SECONDS: '1',
+					DEPLOY_HEALTH_MAX_TIME_SECONDS: '1'
+				}
+			);
+
+			assert.notStrictEqual(result.exitCode, 0);
+			assert.match(
+				result.stderr,
+				/DEPLOY_ORIGIN must use https unless it targets a loopback host/
+			);
+		});
+
+		it('fails when a no-redirect probe returns a redirect response', async () => {
+			const server = await startFixtureServer(
+				createHealthyHandler({
+					'/healthz': () => ({
+						statusCode: 303,
+						headers: {
+							location: '/maintenance'
+						}
+					})
 				})
-			})
-		);
-		const result = await runDeployHealthScript(server.origin);
+			);
+			const result = await runDeployHealthScript(server.origin);
 
-		assert.notStrictEqual(result.exitCode, 0);
-		assert.match(
-			result.stderr,
-			/Expected http:\/\/127\.0\.0\.1:\d+\/healthz to return 200, received 303/
-		);
-	});
+			assert.notStrictEqual(result.exitCode, 0);
+			assert.match(
+				result.stderr,
+				/Expected http:\/\/127\.0\.0\.1:\d+\/healthz to return 200, received 303/
+			);
+		});
 
-	it('fails when the protected route does not redirect unauthenticated users', async () => {
-		const server = await startFixtureServer(
-			createHealthyHandler({
-				'/services': () => ({
-					statusCode: 503,
-					body: 'auth unavailable'
+		it('fails when the protected route does not redirect unauthenticated users', async () => {
+			const server = await startFixtureServer(
+				createHealthyHandler({
+					'/services': () => ({
+						statusCode: 503,
+						body: 'auth unavailable'
+					})
 				})
-			})
-		);
-		const result = await runDeployHealthScript(server.origin);
+			);
+			const result = await runDeployHealthScript(server.origin);
 
-		assert.notStrictEqual(result.exitCode, 0);
-		assert.match(
-			result.stderr,
-			/Expected http:\/\/127\.0\.0\.1:\d+\/services to return 303, received 503/
-		);
-	});
+			assert.notStrictEqual(result.exitCode, 0);
+			assert.match(
+				result.stderr,
+				/Expected http:\/\/127\.0\.0\.1:\d+\/services to return 303, received 503/
+			);
+		});
 
-	it('fails when the protected route redirects away from the local sign-in path', async () => {
-		const server = await startFixtureServer(
-			createHealthyHandler({
-				'/services': () => ({
-					statusCode: 303,
-					headers: {
-						...SECURITY_HEADERS,
-						'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL,
-						location: 'https://evil.example.test/login'
-					}
-				})
-			})
-		);
-		const result = await runDeployHealthScript(server.origin);
-
-		assert.notStrictEqual(result.exitCode, 0);
-		assert.match(
-			result.stderr,
-			/Expected services redirect to stay on http:\/\/127\.0\.0\.1:\d+, received https:\/\/evil\.example\.test/
-		);
-	});
-
-	it('fails when the local sign-in route does not redirect to the hosted auth flow', async () => {
-		const server = await startFixtureServer(
-			createHealthyHandler({
-				'/auth/sign-in': () => ({
-					statusCode: 500,
-					body: 'broken sign-in'
-				})
-			})
-		);
-		const result = await runDeployHealthScript(server.origin);
-
-		assert.notStrictEqual(result.exitCode, 0);
-		assert.match(
-			result.stderr,
-			/Expected http:\/\/127\.0\.0\.1:\d+\/auth\/sign-in to return 303, received 500/
-		);
-	});
-
-	it('fails when the callback redirects away from the canonical origin', async () => {
-		const server = await startFixtureServer(
-			createHealthyHandler({
-				'/auth/callback': () => ({
-					statusCode: 303,
-					headers: {
-						...SECURITY_HEADERS,
-						'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL,
-						location: 'https://evil.example.test/?welcome=1'
-					}
-				})
-			})
-		);
-		const result = await runDeployHealthScript(server.origin);
-
-		assert.notStrictEqual(result.exitCode, 0);
-		assert.match(
-			result.stderr,
-			/Expected callback redirect to stay on http:\/\/127\.0\.0\.1:\d+, received https:\/\/evil\.example\.test/
-		);
-	});
-
-	it('fails when the callback redirect does not include the auth error redirect contract', async () => {
-		const server = await startFixtureServer(
-			createHealthyHandler({
-				'/auth/callback': () => ({
-					statusCode: 303,
-					headers: {
-						...SECURITY_HEADERS,
-						'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL,
-						location: '/?error=auth&incident=not-an-incident-id&ts=123&sig=abc'
-					}
-				})
-			})
-		);
-		const result = await runDeployHealthScript(server.origin);
-
-		assert.notStrictEqual(result.exitCode, 0);
-		assert.match(
-			result.stderr,
-			/Expected callback redirect to include the auth error redirect contract/
-		);
-	});
-
-	it('fails when the callback redirect uses a forged auth error signature', async () => {
-		const server = await startFixtureServer(
-			createHealthyHandler({
-				'/auth/callback': (request) => {
-					const requestOrigin = `http://${request.headers.host ?? '127.0.0.1'}`;
-					const location = new URL(
-						buildAuthErrorLandingRedirectLocation({
-							incidentId: AUTH_ERROR_INCIDENT_ID,
-							secret: AUTH_ERROR_SIGNING_SECRET,
-							origin: requestOrigin,
-							now: Date.now()
-						})
-					);
-					location.searchParams.set('sig', 'forgedsig');
-					return {
+		it('fails when the protected route redirects away from the local sign-in path', async () => {
+			const server = await startFixtureServer(
+				createHealthyHandler({
+					'/services': () => ({
 						statusCode: 303,
 						headers: {
 							...SECURITY_HEADERS,
 							'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL,
-							location: location.toString()
+							location: 'https://evil.example.test/login'
 						}
-					};
-				}
-			})
-		);
-		const result = await runDeployHealthScript(server.origin);
+					})
+				})
+			);
+			const result = await runDeployHealthScript(server.origin);
 
-		assert.notStrictEqual(result.exitCode, 0);
-		assert.match(
-			result.stderr,
-			/Expected callback landing page to render the verified auth error banner/
-		);
-	});
+			assert.notStrictEqual(result.exitCode, 0);
+			assert.match(
+				result.stderr,
+				/Expected services redirect to stay on http:\/\/127\.0\.0\.1:\d+, received https:\/\/evil\.example\.test/
+			);
+		});
 
-	it('fails when the root document omits a security header', async () => {
-		const server = await startFixtureServer(
-			createHealthyHandler({
-				'/': (request) => {
-					const result = createHealthyHandler()(request);
-					return {
-						...result,
+		it('fails when the local sign-in route does not redirect to the hosted auth flow', async () => {
+			const server = await startFixtureServer(
+				createHealthyHandler({
+					'/auth/sign-in': () => ({
+						statusCode: 500,
+						body: 'broken sign-in'
+					})
+				})
+			);
+			const result = await runDeployHealthScript(server.origin);
+
+			assert.notStrictEqual(result.exitCode, 0);
+			assert.match(
+				result.stderr,
+				/Expected http:\/\/127\.0\.0\.1:\d+\/auth\/sign-in to return 303, received 500/
+			);
+		});
+
+		it('fails when the callback redirects away from the canonical origin', async () => {
+			const server = await startFixtureServer(
+				createHealthyHandler({
+					'/auth/callback': () => ({
+						statusCode: 303,
 						headers: {
-							...result.headers,
-							'x-frame-options': 'SAMEORIGIN'
+							...SECURITY_HEADERS,
+							'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL,
+							location: 'https://evil.example.test/?welcome=1'
 						}
-					};
-				}
-			})
-		);
-		const result = await runDeployHealthScript(server.origin);
+					})
+				})
+			);
+			const result = await runDeployHealthScript(server.origin);
 
-		assert.notStrictEqual(result.exitCode, 0);
-		assert.match(
-			result.stderr,
-			/Expected \/ to include x-frame-options: DENY, received SAMEORIGIN/
-		);
-	});
+			assert.notStrictEqual(result.exitCode, 0);
+			assert.match(
+				result.stderr,
+				/Expected callback redirect to stay on http:\/\/127\.0\.0\.1:\d+, received https:\/\/evil\.example\.test/
+			);
+		});
 
-	it('fails when the protected redirect becomes publicly cacheable', async () => {
-		const server = await startFixtureServer(
-			createHealthyHandler({
-				'/services': () => ({
-					statusCode: 303,
-					headers: {
-						...SECURITY_HEADERS,
-						'cache-control': PUBLIC_DOCUMENT_CACHE_CONTROL,
-						location: LOCAL_SIGN_IN_PATH
+		it('fails when the callback redirect does not include the auth error redirect contract', async () => {
+			const server = await startFixtureServer(
+				createHealthyHandler({
+					'/auth/callback': () => ({
+						statusCode: 303,
+						headers: {
+							...SECURITY_HEADERS,
+							'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL,
+							location:
+								'/?error=auth&incident=not-an-incident-id&ts=123&sig=abc'
+						}
+					})
+				})
+			);
+			const result = await runDeployHealthScript(server.origin);
+
+			assert.notStrictEqual(result.exitCode, 0);
+			assert.match(
+				result.stderr,
+				/Expected callback redirect to include the auth error redirect contract/
+			);
+		});
+
+		it('fails when the callback redirect uses a forged auth error signature', async () => {
+			const server = await startFixtureServer(
+				createHealthyHandler({
+					'/auth/callback': (request) => {
+						const requestOrigin = `http://${request.headers.host ?? '127.0.0.1'}`;
+						const location = new URL(
+							buildAuthErrorLandingRedirectLocation({
+								incidentId: AUTH_ERROR_INCIDENT_ID,
+								secret: AUTH_ERROR_SIGNING_SECRET,
+								origin: requestOrigin,
+								now: Date.now()
+							})
+						);
+						location.searchParams.set('sig', 'forgedsig');
+						return {
+							statusCode: 303,
+							headers: {
+								...SECURITY_HEADERS,
+								'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL,
+								location: location.toString()
+							}
+						};
 					}
 				})
-			})
-		);
-		const result = await runDeployHealthScript(server.origin);
+			);
+			const result = await runDeployHealthScript(server.origin);
 
-		assert.notStrictEqual(result.exitCode, 0);
-		assert.match(
-			result.stderr,
-			/Expected \/services to include cache-control: private, no-store, received public, max-age=300, stale-while-revalidate=60/
-		);
-	});
+			assert.notStrictEqual(result.exitCode, 0);
+			assert.match(
+				result.stderr,
+				/Expected callback landing page to render the verified auth error banner/
+			);
+		});
 
-	it('fails when the auth-error landing page loses its no-store policy', async () => {
-		const server = await startFixtureServer(
-			createHealthyHandler({
-				'/': (request) => {
-					const requestOrigin = `http://${request.headers.host ?? '127.0.0.1'}`;
-					const requestUrl = new URL(request.url ?? '/', requestOrigin);
-					const authError = readVerifiedAuthError(requestUrl.searchParams, {
-						secret: AUTH_ERROR_SIGNING_SECRET
-					});
-					return {
-						statusCode: 200,
+		it('fails when the root document omits a security header', async () => {
+			const server = await startFixtureServer(
+				createHealthyHandler({
+					'/': (request) => {
+						const result = createHealthyHandler()(request);
+						return {
+							...result,
+							headers: {
+								...result.headers,
+								'x-frame-options': 'SAMEORIGIN'
+							}
+						};
+					}
+				})
+			);
+			const result = await runDeployHealthScript(server.origin);
+
+			assert.notStrictEqual(result.exitCode, 0);
+			assert.match(
+				result.stderr,
+				/Expected \/ to include x-frame-options: DENY, received SAMEORIGIN/
+			);
+		});
+
+		it('fails when the protected redirect becomes publicly cacheable', async () => {
+			const server = await startFixtureServer(
+				createHealthyHandler({
+					'/services': () => ({
+						statusCode: 303,
 						headers: {
 							...SECURITY_HEADERS,
 							'cache-control': PUBLIC_DOCUMENT_CACHE_CONTROL,
-							'content-type': 'text/html; charset=utf-8'
-						},
-						body: authError
-							? `<!doctype html><title>ok</title><div>${AUTH_ERROR_MESSAGE}</div><div>${authError.incidentId}</div>`
-							: '<!doctype html><title>ok</title>'
-					};
-				}
-			})
-		);
-		const result = await runDeployHealthScript(server.origin);
+							location: LOCAL_SIGN_IN_PATH
+						}
+					})
+				})
+			);
+			const result = await runDeployHealthScript(server.origin);
 
-		assert.notStrictEqual(result.exitCode, 0);
-		assert.match(
-			result.stderr,
-			/Expected callback landing page to include cache-control: private, no-store, received public, max-age=300, stale-while-revalidate=60/
-		);
-	});
-});
+			assert.notStrictEqual(result.exitCode, 0);
+			assert.match(
+				result.stderr,
+				/Expected \/services to include cache-control: private, no-store, received public, max-age=300, stale-while-revalidate=60/
+			);
+		});
+
+		it('fails when the auth-error landing page loses its no-store policy', async () => {
+			const server = await startFixtureServer(
+				createHealthyHandler({
+					'/': (request) => {
+						const requestOrigin = `http://${request.headers.host ?? '127.0.0.1'}`;
+						const requestUrl = new URL(request.url ?? '/', requestOrigin);
+						const authError = readVerifiedAuthError(requestUrl.searchParams, {
+							secret: AUTH_ERROR_SIGNING_SECRET
+						});
+						return {
+							statusCode: 200,
+							headers: {
+								...SECURITY_HEADERS,
+								'cache-control': PUBLIC_DOCUMENT_CACHE_CONTROL,
+								'content-type': 'text/html; charset=utf-8'
+							},
+							body: authError
+								? `<!doctype html><title>ok</title><div>${AUTH_ERROR_MESSAGE}</div><div>${authError.incidentId}</div>`
+								: '<!doctype html><title>ok</title>'
+						};
+					}
+				})
+			);
+			const result = await runDeployHealthScript(server.origin);
+
+			assert.notStrictEqual(result.exitCode, 0);
+			assert.match(
+				result.stderr,
+				/Expected callback landing page to include cache-control: private, no-store, received public, max-age=300, stale-while-revalidate=60/
+			);
+		});
+	}
+);

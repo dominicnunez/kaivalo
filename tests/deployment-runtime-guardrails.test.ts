@@ -448,7 +448,13 @@ describe('deployment runtime guardrails', () => {
 
 	it('smoke tests the built production image before deployment', () => {
 		const workflow = readWorkflow(DEPLOY_WORKFLOW_PATH);
+		const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
+		const pinnedNodeVersion = getPinnedNodeVersionFromDockerfile(dockerfile);
 		const runCommands = getWorkflowRunCommands(workflow, 'smoke_test');
+		const smokeSteps = getWorkflowSteps(workflow, 'smoke_test');
+		const setupNodeIndex = smokeSteps.findIndex((step) =>
+			step.uses?.startsWith('actions/setup-node@')
+		);
 		const smokeProbeStep = findWorkflowStep(
 			workflow,
 			'smoke_test',
@@ -464,6 +470,13 @@ describe('deployment runtime guardrails', () => {
 			(step) => step.uses?.startsWith('docker/login-action@') ?? false,
 			'the registry login step for smoke testing the built image'
 		);
+		const smokeProbeIndex = smokeSteps.findIndex((step) =>
+			normalizeShellScript(step.run ?? '').includes(
+				'./scripts/build-production-image-smoke.sh'
+			)
+		);
+		const setupNodeStep =
+			setupNodeIndex === -1 ? undefined : smokeSteps[setupNodeIndex];
 
 		assert.deepStrictEqual(getWorkflowJobNeeds(workflow, 'build'), ['test']);
 		assert.deepStrictEqual(getWorkflowJobNeeds(workflow, 'smoke_test'), [
@@ -486,6 +499,11 @@ describe('deployment runtime guardrails', () => {
 		assert.strictEqual(loginStep.with.registry, 'ghcr.io');
 		assert.strictEqual(loginStep.with.username, '${{ github.actor }}');
 		assert.strictEqual(loginStep.with.password, '${{ secrets.GITHUB_TOKEN }}');
+		assert.ok(
+			setupNodeIndex >= 0 && setupNodeIndex < smokeProbeIndex,
+			'smoke test job should configure Node.js before running the shared smoke verifier'
+		);
+		assert.strictEqual(setupNodeStep?.with['node-version'], pinnedNodeVersion);
 		assert.strictEqual(
 			smokeProbeStep.env.PRODUCTION_IMAGE_SMOKE_SKIP_BUILD,
 			'true'
@@ -499,6 +517,11 @@ describe('deployment runtime guardrails', () => {
 				'#!/usr/bin/env bash'
 			),
 			'production image smoke build should be implemented in the shared script'
+		);
+		assert.match(
+			readFileSync(PRODUCTION_IMAGE_SMOKE_BUILD_SCRIPT_PATH, 'utf8'),
+			/verify-deploy-health\.sh/,
+			'production image smoke build should reuse the shared deploy health verification script'
 		);
 	});
 
@@ -615,7 +638,20 @@ describe('deployment runtime guardrails', () => {
 
 	it('smoke builds the production image on daily full-suite runs', () => {
 		const workflow = readWorkflow(DAILY_FULL_SUITE_WORKFLOW_PATH);
+		const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
+		const pinnedNodeVersion = getPinnedNodeVersionFromDockerfile(dockerfile);
 		const runCommands = getWorkflowRunCommands(workflow, 'docker_smoke');
+		const smokeSteps = getWorkflowSteps(workflow, 'docker_smoke');
+		const setupNodeIndex = smokeSteps.findIndex((step) =>
+			step.uses?.startsWith('actions/setup-node@')
+		);
+		const smokeBuildIndex = smokeSteps.findIndex((step) =>
+			normalizeShellScript(step.run ?? '').includes(
+				'./scripts/build-production-image-smoke.sh'
+			)
+		);
+		const setupNodeStep =
+			setupNodeIndex === -1 ? undefined : smokeSteps[setupNodeIndex];
 
 		assert.deepStrictEqual(getWorkflowJobNeeds(workflow, 'docker_smoke'), [
 			'verify'
@@ -623,6 +659,11 @@ describe('deployment runtime guardrails', () => {
 		assert.ok(
 			runCommands.includes('./scripts/build-production-image-smoke.sh')
 		);
+		assert.ok(
+			setupNodeIndex >= 0 && setupNodeIndex < smokeBuildIndex,
+			'daily docker smoke job should configure Node.js before running the shared smoke verifier'
+		);
+		assert.strictEqual(setupNodeStep?.with['node-version'], pinnedNodeVersion);
 	});
 
 	it('keeps workflow permissions scoped to the minimum required access', () => {

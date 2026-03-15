@@ -9,7 +9,9 @@ readonly REPO_ROOT="$(
 	cd -- "$SCRIPT_DIR/.." && pwd
 )"
 readonly NODE_BIN="${NODE_BIN:-node}"
+readonly CURL_BIN="${CURL_BIN:-curl}"
 readonly DEPLOY_ORIGIN_VALUE="${DEPLOY_ORIGIN:-}"
+readonly DEPLOY_PROBE_ORIGIN_VALUE="${DEPLOY_PROBE_ORIGIN:-$DEPLOY_ORIGIN_VALUE}"
 readonly WORKOS_API_HOSTNAME_VALUE="${WORKOS_API_HOSTNAME:-}"
 readonly ROOT_PATH='/'
 readonly HEALTH_PATH='/healthz'
@@ -55,23 +57,24 @@ fi
 
 canonicalize_origin() {
 	local origin="$1"
+	local field_name="${2:-DEPLOY_ORIGIN}"
 
 	"$NODE_BIN" --input-type=module -e '
 		import { normalizeConfiguredOrigin } from "./apps/hub/src/lib/auth/request-policy.ts";
 		import { isLoopbackHostname } from "./apps/hub/src/lib/server/ip-address.ts";
 
-		const candidate = normalizeConfiguredOrigin(process.argv[1], "DEPLOY_ORIGIN");
+		const candidate = normalizeConfiguredOrigin(process.argv[1], process.argv[2]);
 		const parsed = new URL(candidate);
 		if (
 			parsed.protocol !== "https:" &&
 			!(parsed.protocol === "http:" && isLoopbackHostname(parsed.hostname))
 		) {
 			throw new Error(
-				"DEPLOY_ORIGIN must use https unless it targets a loopback host"
+				`${process.argv[2]} must use https unless it targets a loopback host`
 			);
 		}
 		process.stdout.write(candidate);
-	' "$origin"
+	' "$origin" "$field_name"
 }
 
 resolve_expected_auth_origin() {
@@ -116,13 +119,22 @@ validate_callback_redirect() {
 	' "$expected_origin" "$location"
 }
 
-resolve_absolute_url() {
+resolve_probe_url() {
 	local expected_origin="$1"
-	local location="$2"
+	local probe_origin="$2"
+	local location="$3"
 
 	"$NODE_BIN" --input-type=module -e '
-		process.stdout.write(new URL(process.argv[2], process.argv[1]).toString());
-	' "$expected_origin" "$location"
+		const expectedOrigin = process.argv[1];
+		const probeOrigin = process.argv[2];
+		const location = process.argv[3];
+		const canonical = new URL(location, expectedOrigin);
+		const probe = new URL(
+			`${canonical.pathname}${canonical.search}${canonical.hash}`,
+			probeOrigin
+		);
+		process.stdout.write(probe.toString());
+	' "$expected_origin" "$probe_origin" "$location"
 }
 
 read_callback_incident_id() {
@@ -217,7 +229,7 @@ run_probe() {
 	local header_file
 	local probe_output
 	local -a curl_args=(
-		curl
+		"$CURL_BIN"
 		--silent
 		--show-error
 		--retry "$PROBE_RETRY_COUNT"
@@ -340,22 +352,23 @@ assert_browser_navigation_redirect_probe() {
 
 assert_callback_landing_probe() {
 	local expected_origin="$1"
-	local location="$2"
-	local landing_url
+	local probe_origin="$2"
+	local location="$3"
+	local probe_url
 	local incident_id
 
-	landing_url="$(resolve_absolute_url "$expected_origin" "$location")"
+	probe_url="$(resolve_probe_url "$expected_origin" "$probe_origin" "$location")"
 	incident_id="$(read_callback_incident_id "$expected_origin" "$location")"
 
-	run_probe "$landing_url" "${BROWSER_NAVIGATION_PROBE_HEADERS[@]}"
+	run_probe "$probe_url" "${BROWSER_NAVIGATION_PROBE_HEADERS[@]}"
 
 	if [[ "$PROBE_STATUS" != "200" ]]; then
-		echo "Expected callback landing page $landing_url to return 200, received $PROBE_STATUS" >&2
+		echo "Expected callback landing page $probe_url to return 200, received $PROBE_STATUS" >&2
 		exit 1
 	fi
 
-	if [[ "$PROBE_EFFECTIVE_URL" != "$landing_url" ]]; then
-		echo "Expected callback landing page to stay on $landing_url, received $PROBE_EFFECTIVE_URL" >&2
+	if [[ "$PROBE_EFFECTIVE_URL" != "$probe_url" ]]; then
+		echo "Expected callback landing page to stay on $probe_url, received $PROBE_EFFECTIVE_URL" >&2
 		exit 1
 	fi
 
@@ -403,11 +416,12 @@ assert_no_redirect_probe() {
 	assert_security_headers "$pathname" "$expected_origin"
 }
 
-expected_origin="$(canonicalize_origin "$DEPLOY_ORIGIN_VALUE")"
+expected_origin="$(canonicalize_origin "$DEPLOY_ORIGIN_VALUE" 'DEPLOY_ORIGIN')"
+probe_origin="$(canonicalize_origin "$DEPLOY_PROBE_ORIGIN_VALUE" 'DEPLOY_PROBE_ORIGIN')"
 expected_auth_origin="$(resolve_expected_auth_origin "$WORKOS_API_HOSTNAME_VALUE")"
 expected_callback_url="$(request_url "$expected_origin" "$CALLBACK_PATH")"
 
-root_url="$(request_url "$expected_origin" "$ROOT_PATH")"
+root_url="$(request_url "$probe_origin" "$ROOT_PATH")"
 assert_no_redirect_probe "$root_url" "200" "$ROOT_PATH" "$expected_origin"
 assert_probe_header \
 	"$ROOT_PATH" \
@@ -415,7 +429,7 @@ assert_probe_header \
 	"$PROBE_CACHE_CONTROL" \
 	"$PUBLIC_DOCUMENT_CACHE_CONTROL"
 
-health_url="$(request_url "$expected_origin" "$HEALTH_PATH")"
+health_url="$(request_url "$probe_origin" "$HEALTH_PATH")"
 assert_no_redirect_probe "$health_url" "200" "$HEALTH_PATH" "$expected_origin"
 assert_probe_header \
 	"$HEALTH_PATH" \
@@ -427,7 +441,7 @@ if [[ "$PROBE_BODY" != "$EXPECTED_HEALTH_BODY" ]]; then
 	exit 1
 fi
 
-services_url="$(request_url "$expected_origin" "$SERVICES_PATH")"
+services_url="$(request_url "$probe_origin" "$SERVICES_PATH")"
 assert_browser_navigation_redirect_probe \
 	"$services_url" \
 	"$SERVICES_PATH" \
@@ -439,7 +453,7 @@ assert_probe_header \
 	"$PRIVATE_NO_STORE_CACHE_CONTROL"
 validate_services_redirect "$expected_origin" "$PROBE_LOCATION" "$SIGN_IN_PATH"
 
-sign_in_url="$(request_url "$expected_origin" "$SIGN_IN_PATH")"
+sign_in_url="$(request_url "$probe_origin" "$SIGN_IN_PATH")"
 assert_browser_navigation_redirect_probe \
 	"$sign_in_url" \
 	"$SIGN_IN_PATH" \
@@ -456,7 +470,7 @@ validate_sign_in_redirect \
 	"$WORKOS_AUTHORIZE_PATH" \
 	"$PROBE_LOCATION"
 
-callback_url="$(request_url "$expected_origin" "$CALLBACK_PATH")"
+callback_url="$(request_url "$probe_origin" "$CALLBACK_PATH")"
 assert_browser_navigation_redirect_probe \
 	"$callback_url" \
 	"$CALLBACK_PATH" \
@@ -471,4 +485,5 @@ validate_callback_redirect \
 	"$PROBE_LOCATION"
 assert_callback_landing_probe \
 	"$expected_origin" \
+	"$probe_origin" \
 	"$PROBE_LOCATION"
