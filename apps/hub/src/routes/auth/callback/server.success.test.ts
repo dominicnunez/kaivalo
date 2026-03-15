@@ -9,9 +9,17 @@ import {
 	it,
 	vi
 } from 'vitest';
+import {
+	AUTH_ERROR_INCIDENT_QUERY_NAME,
+	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
+	readVerifiedAuthError
+} from '../../../lib/auth/auth-error-query.ts';
 import { AUTHKIT_COOKIE_NAME } from '$lib/server/authkit-config.ts';
 import { readVerifiedAvatarProxySource } from '$lib/server/avatar-url.ts';
-import { assertSessionCookieContract } from '../../../../../../tests/helpers/session-cookie.ts';
+import {
+	assertSessionCookieContract,
+	getSetCookieHeaders
+} from '../../../../../../tests/helpers/session-cookie.ts';
 import { createSign, generateKeyPairSync, type KeyObject } from 'node:crypto';
 
 const WORKOS_AUTHENTICATE_URL =
@@ -300,5 +308,105 @@ describe('auth callback success path', () => {
 			'podstudio'
 		]);
 		expect(fetchSpy).toHaveBeenCalledTimes(2);
+	});
+
+	it('rejects hostile return targets in the real callback route', async () => {
+		const accessToken = await createAccessToken();
+		const fetchSpy = vi.fn(
+			async (input: RequestInfo | URL, init?: RequestInit) => {
+				const request =
+					input instanceof Request ? input : new Request(String(input), init);
+				const requestUrl = request.url;
+
+				if (requestUrl === WORKOS_AUTHENTICATE_URL) {
+					expect(request.method).toBe('POST');
+					expect(await request.json()).toMatchObject({
+						grant_type: 'authorization_code',
+						client_id: mockEnv.WORKOS_CLIENT_ID,
+						client_secret: mockEnv.WORKOS_API_KEY,
+						code: 'valid-code'
+					});
+
+					return jsonResponse({
+						access_token: accessToken,
+						refresh_token: 'refresh_token_123',
+						user: AUTHENTICATED_USER_RESPONSE
+					});
+				}
+
+				if (requestUrl === WORKOS_JWKS_URL) {
+					return jsonResponse({
+						keys: [publicJwk]
+					});
+				}
+
+				throw new Error(
+					`Unexpected fetch request: ${request.method} ${requestUrl}`
+				);
+			}
+		);
+		vi.stubGlobal('fetch', fetchSpy);
+
+		const { authKit, configureAuthKit } =
+			await import('@workos/authkit-sveltekit');
+		configureAuthKit({
+			clientId: mockEnv.WORKOS_CLIENT_ID,
+			apiKey: mockEnv.WORKOS_API_KEY,
+			redirectUri: mockEnv.WORKOS_REDIRECT_URI,
+			cookiePassword: mockEnv.WORKOS_COOKIE_PASSWORD,
+			cookieName: AUTHKIT_COOKIE_NAME
+		});
+
+		const { GET } = await import('./+server');
+		const callbackUrl = `https://kaivalo.test/auth/callback?code=valid-code&state=${buildReturnToState('https://evil.example.test/phish')}`;
+		const upstreamResponse = await authKit.handleCallback()(
+			createEvent(
+				{
+					accept: 'text/html',
+					'sec-fetch-mode': 'navigate'
+				},
+				callbackUrl
+			)
+		);
+
+		expect(upstreamResponse.status).toBe(302);
+		expect(upstreamResponse.headers.get('location')).toBe(
+			'https://evil.example.test/phish'
+		);
+		expect(getSetCookieHeaders(upstreamResponse.headers)).toHaveLength(1);
+
+		try {
+			await GET(
+				createEvent(
+					{
+						accept: 'text/html',
+						'sec-fetch-mode': 'navigate'
+					},
+					callbackUrl
+				)
+			);
+			throw new Error('expected callback route to redirect');
+		} catch (caught) {
+			const redirectLike = caught as { status: number; location: string };
+			expect(redirectLike).toMatchObject({
+				status: 303,
+				location: expect.stringMatching(/^https:\/\/kaivalo\.test\/\?/)
+			});
+			expect(redirectLike).not.toHaveProperty('headers');
+
+			const location = new URL(redirectLike.location);
+			expect(
+				readVerifiedAuthError(location.searchParams, {
+					secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
+					now:
+						Number(location.searchParams.get(AUTH_ERROR_TIMESTAMP_QUERY_NAME)) +
+						1
+				})
+			).toEqual({
+				message:
+					'Sign-in is temporarily unavailable. Please try again shortly.',
+				incidentId: location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME)
+			});
+		}
 	});
 });
