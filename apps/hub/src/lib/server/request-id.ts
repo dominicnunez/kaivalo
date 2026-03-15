@@ -21,5 +21,5 @@ export function normalizeRequestId(requestId: string | null): string {
 	const normalized = trimmed
 		.replace(/[^A-Za-z0-9_-]/g, '_')
 		.slice(0, REQUEST_ID_MAX_LENGTH);
-	return normalized || 'invalid';
+	return normalized;
 }
