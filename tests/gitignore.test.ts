@@ -19,6 +19,16 @@ function isIgnored(path) {
 		if (
 			error &&
 			typeof error === 'object' &&
+			'code' in error &&
+			error.code === 'EPERM' &&
+			'status' in error &&
+			error.status === 0
+		) {
+			return true;
+		}
+		if (
+			error &&
+			typeof error === 'object' &&
 			'status' in error &&
 			error.status === 1
 		) {
