@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { canonicalizeIpAddress } from './ip-address.ts';
 import {
 	getErrorDiagnostics,
@@ -15,6 +15,8 @@ import {
 
 const PRODUCTION_NODE_ENV = 'production';
 const UNKNOWN_ADDRESS = 'unknown';
+const REDACTED_NETWORK_IDENTIFIER_LENGTH = 16;
+const NETWORK_LOG_REDACTION_KEY = randomBytes(32);
 
 type Env = Record<string, string | undefined>;
 
@@ -27,6 +29,22 @@ type SecureRequestEvaluation = {
 
 function shouldIncludeSensitiveErrorDetails(env: Env): boolean {
 	return env.NODE_ENV?.trim().toLowerCase() !== PRODUCTION_NODE_ENV;
+}
+
+export function redactLoggedNetworkIdentifier(
+	value: string | undefined | null
+): string {
+	const normalized = canonicalizeIpAddress(value);
+	if (!normalized) {
+		return UNKNOWN_ADDRESS;
+	}
+
+	const family = normalized.includes(':') ? 'ipv6' : 'ipv4';
+	const fingerprint = createHmac('sha256', NETWORK_LOG_REDACTION_KEY)
+		.update(normalized)
+		.digest('hex')
+		.slice(0, REDACTED_NETWORK_IDENTIFIER_LENGTH);
+	return `${family}_${fingerprint}`;
 }
 
 function readSingleHeaderValue(
@@ -138,8 +156,8 @@ export function buildRequestFailureLog(
 		requestId: normalizeRequestId(
 			readSingleHeaderValue(req.headers?.['x-request-id'])
 		),
-		clientAddress,
-		remoteAddress,
+		clientAddress: redactLoggedNetworkIdentifier(clientAddress),
+		remoteAddress: redactLoggedNetworkIdentifier(remoteAddress),
 		error: getErrorDiagnostics(error, {
 			includeSensitiveDetails: shouldIncludeSensitiveErrorDetails(env)
 		})

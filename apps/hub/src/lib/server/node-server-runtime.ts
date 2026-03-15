@@ -16,7 +16,8 @@ import {
 import {
 	buildRequestFailureLog,
 	evaluateSecureRequest,
-	getRequestPathname
+	getRequestPathname,
+	redactLoggedNetworkIdentifier
 } from './node-server-request.ts';
 import { parsePort } from './port.ts';
 
@@ -336,13 +337,16 @@ export function createHubServer(options: HubServerOptions): {
 			}
 
 			if (secureRequest.ignoredForwardedProto) {
-				const warningKey = `${secureRequest.remoteAddress || 'unknown'}|${secureRequest.forwardedProto || 'unknown'}`;
+				const redactedRemoteAddress = redactLoggedNetworkIdentifier(
+					secureRequest.remoteAddress
+				);
+				const warningKey = `${redactedRemoteAddress}|${secureRequest.forwardedProto || 'unknown'}`;
 				if (shouldLogForwardedProtoWarning(warningKey)) {
 					logger.warn(
 						'Ignoring x-forwarded-proto from untrusted proxy address',
 						{
 							pathname,
-							remoteAddress: secureRequest.remoteAddress || 'unknown',
+							remoteAddress: redactedRemoteAddress,
 							forwardedProto: secureRequest.forwardedProto || 'unknown'
 						}
 					);

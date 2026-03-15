@@ -14,6 +14,7 @@ import {
 	LOOPBACK_PROXY_TRUST_ERROR_MESSAGE
 } from '../apps/hub/src/lib/server/workos-security.ts';
 import { reserveLocalPort } from './helpers/network.ts';
+import { canListenOnLoopback } from './helpers/runtime-capabilities.ts';
 
 const baseEnv = {
 	NODE_ENV: 'test',
@@ -22,6 +23,7 @@ const baseEnv = {
 	WORKOS_REDIRECT_URI: 'http://127.0.0.1:3100/auth/callback',
 	WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
 	AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
+	AVATAR_PROXY_SIGNING_SECRET: 'ef'.repeat(32),
 	ORIGIN: 'http://127.0.0.1:3100'
 };
 const SOCKET_CLOSE_TIMEOUT_MS = 1_500;
@@ -36,6 +38,8 @@ const PARTIAL_BODY_REQUEST =
 	'POST /favicon.svg HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 4\r\n\r\n12';
 const KEEP_ALIVE_REQUEST =
 	'GET /favicon.svg HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\n\r\n';
+const REDACTED_NETWORK_IDENTIFIER_PATTERN = /^(?:ipv4|ipv6)_[a-f0-9]{16}$/;
+const LOOPBACK_LISTEN_SUPPORTED = await canListenOnLoopback();
 
 /**
  * @param {http.Server} server
@@ -321,8 +325,10 @@ describe('node server diagnostics', () => {
 		assert.strictEqual(logRecord.pathname, '/auth/callback');
 		assert.strictEqual(logRecord.method, 'GET');
 		assert.strictEqual(logRecord.requestId, 'bad_request_id___trace');
-		assert.strictEqual(logRecord.clientAddress, '203.0.113.10');
-		assert.strictEqual(logRecord.remoteAddress, '203.0.113.10');
+		assert.match(logRecord.clientAddress, REDACTED_NETWORK_IDENTIFIER_PATTERN);
+		assert.match(logRecord.remoteAddress, REDACTED_NETWORK_IDENTIFIER_PATTERN);
+		assert.strictEqual(logRecord.clientAddress, logRecord.remoteAddress);
+		assert.notStrictEqual(logRecord.clientAddress, '203.0.113.10');
 		assert.strictEqual(logRecord.error.type, 'Error');
 		assert.ok(!('message' in logRecord.error));
 		assert.ok(!('stack' in logRecord.error));
@@ -369,207 +375,226 @@ describe('node server diagnostics', () => {
 			TRUSTED_PROXY_IPS: '203.0.113.10,203.0.113.11'
 		});
 
-		assert.strictEqual(logRecord.clientAddress, '198.51.100.10');
-		assert.strictEqual(logRecord.remoteAddress, '203.0.113.11');
+		assert.match(logRecord.clientAddress, REDACTED_NETWORK_IDENTIFIER_PATTERN);
+		assert.match(logRecord.remoteAddress, REDACTED_NETWORK_IDENTIFIER_PATTERN);
+		assert.notStrictEqual(logRecord.clientAddress, logRecord.remoteAddress);
+		assert.notStrictEqual(logRecord.clientAddress, '198.51.100.10');
+		assert.notStrictEqual(logRecord.remoteAddress, '203.0.113.11');
 	});
 });
 
-describe('node server proxy trust handling', () => {
-	it('warns once when x-forwarded-proto comes from untrusted proxy hops', async () => {
-		const warnings = [];
-		const logger = {
-			log: () => {},
-			warn: /** @param {string} message */ (message) => warnings.push(message),
-			error: () => {}
-		};
-		const { server } = createHubServer({
-			handler: (_req, res) => {
-				res.statusCode = 200;
-				res.end('ok');
-			},
-			env: {
-				...baseEnv,
-				TRUST_X_FORWARDED_PROTO: 'true',
-				TRUSTED_PROXY_IPS: '203.0.113.9'
-			},
-			logger
+describe(
+	'node server proxy trust handling',
+	{ skip: !LOOPBACK_LISTEN_SUPPORTED },
+	() => {
+		it('warns once when x-forwarded-proto comes from untrusted proxy hops', async () => {
+			const warnings = [];
+			const logger = {
+				log: () => {},
+				warn: /** @param {string} message */ (message, context) =>
+					warnings.push({ message, context }),
+				error: () => {}
+			};
+			const { server } = createHubServer({
+				handler: (_req, res) => {
+					res.statusCode = 200;
+					res.end('ok');
+				},
+				env: {
+					...baseEnv,
+					TRUST_X_FORWARDED_PROTO: 'true',
+					TRUSTED_PROXY_IPS: '203.0.113.9'
+				},
+				logger
+			});
+			servers.push(server);
+
+			const port = await listenOnEphemeralPort(server);
+			await httpGet(port, { 'x-forwarded-proto': 'https' });
+			await httpGet(port, { 'x-forwarded-proto': 'https' });
+
+			assert.strictEqual(warnings.length, 1);
+			assert.strictEqual(
+				warnings[0].message,
+				'Ignoring x-forwarded-proto from untrusted proxy address'
+			);
+			assert.match(
+				warnings[0].context.remoteAddress,
+				REDACTED_NETWORK_IDENTIFIER_PATTERN
+			);
+			assert.strictEqual(warnings[0].context.forwardedProto, 'https');
+			assert.notStrictEqual(warnings[0].context.remoteAddress, '127.0.0.1');
 		});
-		servers.push(server);
 
-		const port = await listenOnEphemeralPort(server);
-		await httpGet(port, { 'x-forwarded-proto': 'https' });
-		await httpGet(port, { 'x-forwarded-proto': 'https' });
+		it('returns a 500 response when async request handlers reject', async () => {
+			const errors = [];
+			const logger = {
+				log: () => {},
+				warn: () => {},
+				error: (message, context) => errors.push([message, context])
+			};
+			const { server } = createHubServer({
+				handler: async () => {
+					throw new Error('async failure');
+				},
+				env: {
+					...baseEnv
+				},
+				logger
+			});
+			servers.push(server);
 
-		assert.deepStrictEqual(warnings, [
-			'Ignoring x-forwarded-proto from untrusted proxy address'
-		]);
-	});
+			const port = await listenOnEphemeralPort(server);
+			const response = await httpGet(port);
 
-	it('returns a 500 response when async request handlers reject', async () => {
-		const errors = [];
-		const logger = {
-			log: () => {},
-			warn: () => {},
-			error: (message, context) => errors.push([message, context])
-		};
-		const { server } = createHubServer({
-			handler: async () => {
-				throw new Error('async failure');
-			},
-			env: {
-				...baseEnv
-			},
-			logger
+			assert.strictEqual(response.statusCode, 500);
+			assert.match(
+				response.body,
+				/^Internal Server Error\. Reference: [0-9a-f-]{36}$/i
+			);
+			assert.match(
+				String(response.headers['x-incident-id'] ?? ''),
+				/^[0-9a-f-]{36}$/i
+			);
+			assert.strictEqual(
+				response.headers['cache-control'],
+				'private, no-store'
+			);
+			assert.strictEqual(response.headers['x-frame-options'], 'DENY');
+			assert.strictEqual(response.headers['x-content-type-options'], 'nosniff');
+			assert.strictEqual(
+				response.headers['referrer-policy'],
+				'strict-origin-when-cross-origin'
+			);
+			assert.strictEqual(
+				response.headers['permissions-policy'],
+				'camera=(), microphone=(), geolocation=()'
+			);
+			assert.strictEqual(errors.length, 1);
+			assert.strictEqual(errors[0][0], 'Request handler failed');
+			assert.strictEqual(
+				response.headers['x-incident-id'],
+				errors[0][1].incidentId
+			);
+			assert.ok(response.body.endsWith(errors[0][1].incidentId));
 		});
-		servers.push(server);
 
-		const port = await listenOnEphemeralPort(server);
-		const response = await httpGet(port);
+		it('aborts partially-written responses without appending an error body', async () => {
+			const errors = [];
+			const logger = {
+				log: () => {},
+				warn: () => {},
+				error: /** @param {string} message */ (message) => errors.push(message)
+			};
+			const { server } = createHubServer({
+				handler: async (_req, res) => {
+					res.statusCode = 200;
+					res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+					res.write('partial ');
+					throw new Error('failed after writing response bytes');
+				},
+				env: {
+					...baseEnv
+				},
+				logger
+			});
+			servers.push(server);
 
-		assert.strictEqual(response.statusCode, 500);
-		assert.match(
-			response.body,
-			/^Internal Server Error\. Reference: [0-9a-f-]{36}$/i
-		);
-		assert.match(
-			String(response.headers['x-incident-id'] ?? ''),
-			/^[0-9a-f-]{36}$/i
-		);
-		assert.strictEqual(response.headers['cache-control'], 'private, no-store');
-		assert.strictEqual(response.headers['x-frame-options'], 'DENY');
-		assert.strictEqual(response.headers['x-content-type-options'], 'nosniff');
-		assert.strictEqual(
-			response.headers['referrer-policy'],
-			'strict-origin-when-cross-origin'
-		);
-		assert.strictEqual(
-			response.headers['permissions-policy'],
-			'camera=(), microphone=(), geolocation=()'
-		);
-		assert.strictEqual(errors.length, 1);
-		assert.strictEqual(errors[0][0], 'Request handler failed');
-		assert.strictEqual(
-			response.headers['x-incident-id'],
-			errors[0][1].incidentId
-		);
-		assert.ok(response.body.endsWith(errors[0][1].incidentId));
-	});
+			const port = await listenOnEphemeralPort(server);
+			const response = await httpGetWithAbortObservation(
+				port,
+				{},
+				'/partial-response'
+			);
 
-	it('aborts partially-written responses without appending an error body', async () => {
-		const errors = [];
-		const logger = {
-			log: () => {},
-			warn: () => {},
-			error: /** @param {string} message */ (message) => errors.push(message)
-		};
-		const { server } = createHubServer({
-			handler: async (_req, res) => {
-				res.statusCode = 200;
-				res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-				res.write('partial ');
-				throw new Error('failed after writing response bytes');
-			},
-			env: {
-				...baseEnv
-			},
-			logger
+			assert.strictEqual(
+				response.statusCode,
+				200,
+				'committed status code should remain intact after a late failure'
+			);
+			assert.strictEqual(response.aborted, true);
+			assert.strictEqual(response.body, 'partial ');
+			assert.strictEqual(
+				response.headers['content-type'],
+				'text/plain; charset=utf-8'
+			);
+			assert.strictEqual(response.headers['cache-control'], undefined);
+			assert.ok(
+				typeof response.headers['x-content-type-options'] === 'string',
+				'security headers should still be present on committed partial responses'
+			);
+			assert.deepStrictEqual(errors, ['Request handler failed']);
 		});
-		servers.push(server);
 
-		const port = await listenOnEphemeralPort(server);
-		const response = await httpGetWithAbortObservation(
-			port,
-			{},
-			'/partial-response'
-		);
+		it('accepts trusted proxy x-forwarded-proto values', () => {
+			const trusted = evaluateSecureRequest(
+				{
+					headers: { 'x-forwarded-proto': 'https' },
+					socket: { remoteAddress: '::ffff:127.0.0.1', encrypted: undefined }
+				},
+				true,
+				new Set(['127.0.0.1'])
+			);
+			const untrusted = evaluateSecureRequest(
+				{
+					headers: { 'x-forwarded-proto': 'https' },
+					socket: { remoteAddress: '198.51.100.20', encrypted: undefined }
+				},
+				true,
+				new Set(['127.0.0.1'])
+			);
 
-		assert.strictEqual(
-			response.statusCode,
-			200,
-			'committed status code should remain intact after a late failure'
-		);
-		assert.strictEqual(response.aborted, true);
-		assert.strictEqual(response.body, 'partial ');
-		assert.strictEqual(
-			response.headers['content-type'],
-			'text/plain; charset=utf-8'
-		);
-		assert.strictEqual(response.headers['cache-control'], undefined);
-		assert.ok(
-			typeof response.headers['x-content-type-options'] === 'string',
-			'security headers should still be present on committed partial responses'
-		);
-		assert.deepStrictEqual(errors, ['Request handler failed']);
-	});
+			assert.strictEqual(trusted.isSecure, true);
+			assert.strictEqual(trusted.ignoredForwardedProto, false);
+			assert.strictEqual(untrusted.isSecure, false);
+			assert.strictEqual(untrusted.ignoredForwardedProto, true);
+		});
 
-	it('accepts trusted proxy x-forwarded-proto values', () => {
-		const trusted = evaluateSecureRequest(
-			{
-				headers: { 'x-forwarded-proto': 'https' },
-				socket: { remoteAddress: '::ffff:127.0.0.1', encrypted: undefined }
-			},
-			true,
-			new Set(['127.0.0.1'])
-		);
-		const untrusted = evaluateSecureRequest(
-			{
-				headers: { 'x-forwarded-proto': 'https' },
-				socket: { remoteAddress: '198.51.100.20', encrypted: undefined }
-			},
-			true,
-			new Set(['127.0.0.1'])
-		);
+		it('uses the proxy-controlled proto nearest the app for comma-separated values', () => {
+			const trustedHttpsHop = evaluateSecureRequest(
+				{
+					headers: { 'x-forwarded-proto': 'http, https' },
+					socket: { remoteAddress: '::ffff:127.0.0.1', encrypted: undefined }
+				},
+				true,
+				new Set(['127.0.0.1'])
+			);
+			const trustedHttpHop = evaluateSecureRequest(
+				{
+					headers: { 'x-forwarded-proto': 'https, http' },
+					socket: { remoteAddress: '::ffff:127.0.0.1', encrypted: undefined }
+				},
+				true,
+				new Set(['127.0.0.1'])
+			);
 
-		assert.strictEqual(trusted.isSecure, true);
-		assert.strictEqual(trusted.ignoredForwardedProto, false);
-		assert.strictEqual(untrusted.isSecure, false);
-		assert.strictEqual(untrusted.ignoredForwardedProto, true);
-	});
+			assert.strictEqual(trustedHttpsHop.isSecure, true);
+			assert.strictEqual(trustedHttpHop.isSecure, false);
+		});
 
-	it('uses the proxy-controlled proto nearest the app for comma-separated values', () => {
-		const trustedHttpsHop = evaluateSecureRequest(
-			{
-				headers: { 'x-forwarded-proto': 'http, https' },
-				socket: { remoteAddress: '::ffff:127.0.0.1', encrypted: undefined }
-			},
-			true,
-			new Set(['127.0.0.1'])
-		);
-		const trustedHttpHop = evaluateSecureRequest(
-			{
-				headers: { 'x-forwarded-proto': 'https, http' },
-				socket: { remoteAddress: '::ffff:127.0.0.1', encrypted: undefined }
-			},
-			true,
-			new Set(['127.0.0.1'])
-		);
-
-		assert.strictEqual(trustedHttpsHop.isSecure, true);
-		assert.strictEqual(trustedHttpHop.isSecure, false);
-	});
-
-	it('fails fast when loopback-only trusted proxies are used for production https origins', () => {
-		assert.throws(
-			() =>
-				getProxyTrustConfiguration(
-					{
-						NODE_ENV: 'production',
-						TRUST_X_FORWARDED_PROTO: 'true',
-						TRUSTED_PROXY_IPS: '127.0.0.1,::1'
-					},
-					'https://kaivalo.test'
-				),
-			new RegExp(
-				LOOPBACK_PROXY_TRUST_ERROR_MESSAGE.replace(
-					/[.*+?^${}()|[\]\\]/g,
-					'\\$&'
+		it('fails fast when loopback-only trusted proxies are used for production https origins', () => {
+			assert.throws(
+				() =>
+					getProxyTrustConfiguration(
+						{
+							NODE_ENV: 'production',
+							TRUST_X_FORWARDED_PROTO: 'true',
+							TRUSTED_PROXY_IPS: '127.0.0.1,::1'
+						},
+						'https://kaivalo.test'
+					),
+				new RegExp(
+					LOOPBACK_PROXY_TRUST_ERROR_MESSAGE.replace(
+						/[.*+?^${}()|[\]\\]/g,
+						'\\$&'
+					)
 				)
-			)
-		);
-	});
-});
+			);
+		});
+	}
+);
 
-describe('node server lifecycle', () => {
+describe('node server lifecycle', { skip: !LOOPBACK_LISTEN_SUPPORTED }, () => {
 	it('configures bounded request, header, and keep-alive timeouts', () => {
 		const { server } = createHubServer({
 			handler: (_req, res) => res.end('ok'),
