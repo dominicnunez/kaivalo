@@ -219,6 +219,14 @@ When forwarded data is malformed, the code falls back to the shared empty-key bu
 `npm --prefix apps/hub run build` runs `vite build` before `node scripts/prepare-runtime.ts`, and the real build clears `apps/hub/build` before the runtime helper copy step.
 Seeding `apps/hub/build/runtime/server/__audit_stale_helper__.ts` and then running `HUB_BUILD_ALLOW_PLACEHOLDERS=true npm --prefix apps/hub run build` removed the stale file, so the obsolete helper does not persist into the artifact later copied by `Dockerfile`.
 
+### Loopback-IP HTTP auth flows can never persist the WorkOS cookies
+
+**Location:** `apps/hub/src/lib/server/workos-auth.ts:124` and `apps/hub/src/lib/server/workos-security-env.ts:240`
+
+**Reason:** The audit's browser-behavior claim is wrong.
+Direct validation with headless Chromium 145.0.7632.116 showed both the `__Secure-wos_callback_state` cookie and the `__Host-wos_session` cookie were accepted and sent back over plain `http://127.0.0.1` and `http://[::1]`.
+The repo's allowed loopback-IP auth flows therefore do not "can never persist" these cookies in the current browser runtime.
+
 ### Exact Node patch pinning blocks newer Node 24 patch releases
 
 **Location:** `scripts/check-node-version.ts:42` — runtime preflight compared against the repo-pinned Docker/CI patch version
