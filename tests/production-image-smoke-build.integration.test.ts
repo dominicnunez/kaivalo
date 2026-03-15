@@ -25,6 +25,14 @@ function hasDocker(): boolean {
 	);
 }
 
+function removeImageTag(imageTag: string): void {
+	spawnSync('docker', ['image', 'rm', '--force', imageTag], {
+		cwd: ROOT,
+		encoding: 'utf8',
+		stdio: 'pipe'
+	});
+}
+
 function runSmokeBuildScript(
 	environmentOverrides: Record<string, string> = {}
 ): Promise<ScriptResult> {
@@ -55,6 +63,43 @@ function runSmokeBuildScript(
 }
 
 describe('production image smoke build integration', () => {
+	it(
+		'builds the repository Dockerfile from the real repository context',
+		{ skip: !hasDocker() },
+		() => {
+			const buildImageTag = `kaivalo-hub-build-context:${Date.now()}-${process.pid}`;
+
+			try {
+				const buildResult = spawnSync(
+					'docker',
+					[
+						'build',
+						'--file',
+						'./Dockerfile',
+						'--target',
+						'build',
+						'--tag',
+						buildImageTag,
+						'.'
+					],
+					{
+						cwd: ROOT,
+						encoding: 'utf8',
+						stdio: 'pipe'
+					}
+				);
+
+				assert.strictEqual(
+					buildResult.status,
+					0,
+					buildResult.stderr || buildResult.stdout
+				);
+			} finally {
+				removeImageTag(buildImageTag);
+			}
+		}
+	);
+
 	it(
 		'runs the real smoke-build script and removes the temporary image',
 		{ skip: !hasDocker() },
@@ -129,11 +174,7 @@ describe('production image smoke build integration', () => {
 					`expected smoke-build script to keep reused image ${smokeImageTag}`
 				);
 			} finally {
-				spawnSync('docker', ['image', 'rm', '--force', smokeImageTag], {
-					cwd: ROOT,
-					encoding: 'utf8',
-					stdio: 'pipe'
-				});
+				removeImageTag(smokeImageTag);
 			}
 		}
 	);
