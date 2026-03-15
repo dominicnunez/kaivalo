@@ -444,36 +444,74 @@ export function runAudit({
 	);
 }
 
+function setProcessExitCode(code) {
+	process.exitCode = code;
+}
+
+type CliDependencies = {
+	readAllowlistImpl?: typeof readAllowlist;
+	runAuditImpl?: typeof runAudit;
+	collectAuditAdvisoriesImpl?: typeof collectAuditAdvisories;
+	findUnallowlistedAdvisoriesImpl?: typeof findUnallowlistedAdvisories;
+	writeStdout?: (message: string) => void;
+	writeStderr?: (message: string) => void;
+	setExitCode?: (code: number) => void;
+};
+
 export function main() {
-	const allowlist = readAllowlist();
-	const advisories = collectAuditAdvisories(runAudit());
-	const unallowlistedAdvisories = findUnallowlistedAdvisories(
+	return mainWithDependencies();
+}
+
+export function mainWithDependencies({
+	readAllowlistImpl = readAllowlist,
+	runAuditImpl = runAudit,
+	collectAuditAdvisoriesImpl = collectAuditAdvisories,
+	findUnallowlistedAdvisoriesImpl = findUnallowlistedAdvisories,
+	writeStdout = console.log,
+	writeStderr = console.error,
+	setExitCode = setProcessExitCode
+}: CliDependencies = {}) {
+	const allowlist = readAllowlistImpl();
+	const advisories = collectAuditAdvisoriesImpl(runAuditImpl());
+	const unallowlistedAdvisories = findUnallowlistedAdvisoriesImpl(
 		advisories,
 		allowlist
 	);
 
 	if (unallowlistedAdvisories.length === 0) {
-		console.log(
+		writeStdout(
 			`npm audit passed with ${advisories.length} allowlisted advisories`
 		);
 		return;
 	}
 
-	console.error(
+	writeStderr(
 		`npm audit reported unallowlisted advisories:\n${formatAdvisories(unallowlistedAdvisories)}`
 	);
-	process.exitCode = 1;
+	setExitCode(1);
 }
 
-function reportCliFailure(error: unknown): void {
+export function reportCliFailure(
+	error: unknown,
+	{
+		writeStderr = console.error,
+		setExitCode = setProcessExitCode
+	}: Pick<CliDependencies, 'writeStderr' | 'setExitCode'> = {}
+): void {
 	const message =
 		error instanceof Error ? error.message : 'npm audit failed unexpectedly';
-	console.error(message);
-	process.exitCode = 1;
+	writeStderr(message);
+	setExitCode(1);
+}
+
+export function runCli(options: CliDependencies = {}) {
+	try {
+		mainWithDependencies(options);
+	} catch (error) {
+		reportCliFailure(error, options);
+	}
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-	Promise.resolve()
-		.then(() => main())
-		.catch(reportCliFailure);
+	runCli();
 }

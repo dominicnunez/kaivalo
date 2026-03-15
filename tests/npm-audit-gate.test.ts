@@ -11,6 +11,7 @@ import {
 	collectAuditAdvisories,
 	findUnallowlistedAdvisories,
 	readAllowlist,
+	runCli,
 	runAudit
 } from '../scripts/check-npm-audit.ts';
 
@@ -386,7 +387,33 @@ describe('npm audit gate', () => {
 		);
 	});
 
-	it('reports top-level cli failures without an uncaught stack trace', () => {
+	it('reports direct cli failures without an uncaught stack trace', () => {
+		const stderr: string[] = [];
+		const stdout: string[] = [];
+		let exitCode = 0;
+
+		runCli({
+			runAuditImpl: () => {
+				throw new Error('npm audit failed: spawnSync npm ENOENT');
+			},
+			writeStdout: (message: string) => {
+				stdout.push(message);
+			},
+			writeStderr: (message: string) => {
+				stderr.push(message);
+			},
+			setExitCode: (code: number) => {
+				exitCode = code;
+			}
+		});
+
+		assert.strictEqual(exitCode, 1);
+		assert.deepStrictEqual(stdout, []);
+		assert.deepStrictEqual(stderr, ['npm audit failed: spawnSync npm ENOENT']);
+		assert.doesNotMatch(stderr[0] ?? '', /^\s+at /m);
+	});
+
+	it('reports top-level cli failures without an uncaught stack trace', (t) => {
 		const result = spawnSync(process.execPath, ['scripts/check-npm-audit.ts'], {
 			cwd: ROOT,
 			env: {
@@ -395,6 +422,11 @@ describe('npm audit gate', () => {
 			},
 			encoding: 'utf8'
 		});
+
+		if (result.error?.code === 'EPERM') {
+			t.skip('sandbox blocks child process spawning');
+			return;
+		}
 
 		assert.strictEqual(result.status, 1);
 		assert.match(result.stderr, /npm audit failed: spawnSync npm ENOENT/);
