@@ -533,6 +533,10 @@ describe('deployment runtime guardrails', () => {
 			smokeProbeStep.env.PRODUCTION_IMAGE_SMOKE_TAG,
 			'${{ needs.build.outputs.image_ref }}'
 		);
+		assert.strictEqual(
+			smokeProbeStep.env.WORKOS_API_HOSTNAME,
+			'${{ vars.WORKOS_API_HOSTNAME }}'
+		);
 		assert.ok(
 			readFileSync(PRODUCTION_IMAGE_SMOKE_BUILD_SCRIPT_PATH, 'utf8').startsWith(
 				'#!/usr/bin/env bash'

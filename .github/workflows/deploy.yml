@@ -113,6 +113,7 @@ jobs:
         env:
           PRODUCTION_IMAGE_SMOKE_SKIP_BUILD: 'true'
           PRODUCTION_IMAGE_SMOKE_TAG: ${{ needs.build.outputs.image_ref }}
+          WORKOS_API_HOSTNAME: ${{ vars.WORKOS_API_HOSTNAME }}
         shell: bash
         run: ./scripts/build-production-image-smoke.sh
 

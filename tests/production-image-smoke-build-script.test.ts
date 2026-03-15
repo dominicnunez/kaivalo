@@ -308,6 +308,32 @@ describe('production image smoke build script', () => {
 		]);
 	});
 
+	it('forwards a configured WorkOS auth hostname to the smoke container and deploy verifier', async () => {
+		const { fakeDockerPath, fakeVerifyDeployHealthPath, invocationLogPath } =
+			createFakeSmokeDependencies();
+		const workosApiHostname = 'auth.kaivalo-login.com';
+		const result = await runSmokeBuildScript({
+			environmentOverrides: {
+				DOCKER_BIN: fakeDockerPath,
+				FAKE_DOCKER_LOG: invocationLogPath,
+				PRODUCTION_IMAGE_SMOKE_DEPLOY_HEALTH_SCRIPT: fakeVerifyDeployHealthPath,
+				PRODUCTION_IMAGE_SMOKE_TAG: SMOKE_IMAGE_TAG,
+				WORKOS_API_HOSTNAME: workosApiHostname
+			}
+		});
+
+		assert.strictEqual(result.exitCode, 0, result.stderr || result.stdout);
+		assert.strictEqual(result.signal, null);
+		const invocations = readInvocationLog(invocationLogPath);
+
+		assertCommandIncludes(invocations[1] ?? '', [
+			`--env WORKOS_API_HOSTNAME=${workosApiHostname}`
+		]);
+		assertCommandIncludes(invocations[3] ?? '', [
+			`WORKOS_API_HOSTNAME=${workosApiHostname}`
+		]);
+	});
+
 	it('keeps a reused image tag when skip mode fails after the container starts', async () => {
 		const { fakeDockerPath, fakeVerifyDeployHealthPath, invocationLogPath } =
 			createFakeSmokeDependencies();
