@@ -33,7 +33,7 @@ const PRODUCTION_NODE_ENV = 'production';
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
 type Env = Record<string, string | undefined>;
 
-type FatalReason = 'startup-error' | 'shutdown-timeout';
+type FatalReason = 'startup-error' | 'shutdown-error' | 'shutdown-timeout';
 
 type FatalDetails = {
 	exitCode: number;
@@ -459,14 +459,28 @@ export function createHubServer(options: HubServerOptions): {
 				return;
 			}
 			shutdownComplete = true;
+			if (shutdownTimer) {
+				clearTimeout(shutdownTimer);
+			}
 			resolveShutdown?.(exitCode);
 		};
 
-		server.close(() => {
+		server.close((error) => {
+			if (error) {
+				notifyFatal({
+					exitCode: 1,
+					reason: 'shutdown-error',
+					activeRequests,
+					error: getFatalErrorDiagnostics(error, options.env)
+				});
+				completeShutdown(1);
+				return;
+			}
+
 			completeShutdown(0);
 		});
 
-		setTimeout(() => {
+		const shutdownTimer = setTimeout(() => {
 			if (activeSockets.size > 0) {
 				for (const socket of activeSockets) {
 					socket.destroy();

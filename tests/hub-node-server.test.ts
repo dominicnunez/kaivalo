@@ -706,7 +706,7 @@ describe('node server lifecycle', { skip: !LOOPBACK_LISTEN_SUPPORTED }, () => {
 	it('returns non-zero shutdown status when in-flight requests exceed shutdown timeout', async () => {
 		/** @type {Array<{
 		 *   exitCode: number;
-		 *   reason: 'startup-error' | 'shutdown-timeout';
+		 *   reason: 'startup-error' | 'shutdown-error' | 'shutdown-timeout';
 		 *   activeRequests?: number;
 		 *   shutdownTimeoutMs?: number;
 		 * }>} */
@@ -765,15 +765,46 @@ describe('node server lifecycle', { skip: !LOOPBACK_LISTEN_SUPPORTED }, () => {
 			}
 		});
 		servers.push(server);
+		await listenOnEphemeralPort(server);
 
 		const shutdownExitCode = await beginShutdown();
 		assert.strictEqual(shutdownExitCode, 0);
 	});
 
+	it('returns non-zero shutdown status when the server was never listening', async () => {
+		/** @type {Array<{
+		 *   exitCode: number;
+		 *   reason: 'startup-error' | 'shutdown-error' | 'shutdown-timeout';
+		 *   activeRequests?: number;
+		 *   shutdownTimeoutMs?: number;
+		 *   error?: {
+		 *     type: string;
+		 *     code?: string;
+		 *   };
+		 * }>} */
+		const fatalEvents = [];
+		const { server, beginShutdown } = createHubServer({
+			handler: (_req, res) => res.end('ok'),
+			env: baseEnv,
+			onFatal: (details) => fatalEvents.push(details)
+		});
+		servers.push(server);
+
+		const shutdownExitCode = await beginShutdown();
+
+		assert.strictEqual(shutdownExitCode, 1);
+		assert.strictEqual(fatalEvents.length, 1);
+		assert.strictEqual(fatalEvents[0].exitCode, 1);
+		assert.strictEqual(fatalEvents[0].reason, 'shutdown-error');
+		assert.strictEqual(fatalEvents[0].activeRequests, 0);
+		assert.strictEqual(fatalEvents[0].error?.type, 'Error');
+		assert.strictEqual(fatalEvents[0].error?.code, 'ERR_SERVER_NOT_RUNNING');
+	});
+
 	it('forces timeout shutdown for half-open sockets without active requests', async () => {
 		/** @type {Array<{
 		 *   exitCode: number;
-		 *   reason: 'startup-error' | 'shutdown-timeout';
+		 *   reason: 'startup-error' | 'shutdown-error' | 'shutdown-timeout';
 		 *   activeRequests?: number;
 		 *   shutdownTimeoutMs?: number;
 		 * }>} */
