@@ -88,7 +88,8 @@ describe('services page load', () => {
 		).rejects.toMatchObject({
 			status: 503,
 			body: {
-				message: AUTH_ERROR_MESSAGE
+				message: AUTH_ERROR_MESSAGE,
+				incidentId: 'authlayout_test-incident'
 			}
 		});
 

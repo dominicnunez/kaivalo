@@ -26,7 +26,13 @@ function createState(
 	};
 }
 
-function expectServiceError(callback: () => unknown, expectedMessage: string) {
+function expectServiceError(
+	callback: () => unknown,
+	expectedBody: {
+		message: string;
+		incidentId?: string;
+	}
+) {
 	try {
 		callback();
 		expect.unreachable('expected service error');
@@ -37,9 +43,7 @@ function expectServiceError(callback: () => unknown, expectedMessage: string) {
 		}
 
 		expect(caught.status).toBe(503);
-		expect(caught.body).toEqual({
-			message: expectedMessage
-		});
+		expect(caught.body).toEqual(expectedBody);
 	}
 }
 
@@ -89,7 +93,10 @@ describe('requireAuthenticatedLayoutUser', () => {
 						signInUrl: '/auth/sign-in'
 					})
 				),
-			'Sign-in is temporarily unavailable.'
+			{
+				message: 'Sign-in is temporarily unavailable.',
+				incidentId: 'authlayout_123'
+			}
 		);
 	});
 
@@ -110,9 +117,8 @@ describe('requireAuthenticatedLayoutUser', () => {
 	});
 
 	it('fails closed when neither a user nor a sign-in redirect is available', () => {
-		expectServiceError(
-			() => requireAuthenticatedLayoutUser(createState()),
-			AUTH_ERROR_MESSAGE
-		);
+		expectServiceError(() => requireAuthenticatedLayoutUser(createState()), {
+			message: AUTH_ERROR_MESSAGE
+		});
 	});
 });

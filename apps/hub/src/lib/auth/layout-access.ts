@@ -27,7 +27,12 @@ export function requireAuthenticatedLayoutUser<User>(
 	}
 
 	if (state.authError) {
-		throw error(503, state.authError.message);
+		throw error(503, {
+			message: state.authError.message,
+			...(state.authError.incidentId === null
+				? {}
+				: { incidentId: state.authError.incidentId })
+		});
 	}
 
 	if (state.signInUrl) {
