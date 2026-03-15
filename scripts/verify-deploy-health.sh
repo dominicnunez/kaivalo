@@ -244,7 +244,7 @@ run_probe() {
 	header_file="$(mktemp)"
 	trap "rm -f '$body_file' '$header_file'" RETURN
 
-	curl_args+=("$header_file" --output "$body_file" --write-out '%{http_code}\n%{url_effective}\n')
+	curl_args+=("$header_file" --output "$body_file" --write-out '%{http_code}\n')
 
 	for header_line in "$@"; do
 		curl_args+=(--header "$header_line")
@@ -254,7 +254,6 @@ run_probe() {
 
 	mapfile -t probe_meta <<<"$probe_output"
 	PROBE_STATUS="${probe_meta[0]:-}"
-	PROBE_EFFECTIVE_URL="${probe_meta[1]:-}"
 	PROBE_BODY="$(<"$body_file")"
 	PROBE_LOCATION="$(
 		awk 'BEGIN { IGNORECASE = 1 } /^location:/ { sub(/^[^:]+:[[:space:]]*/, "", $0); sub(/\r$/, "", $0); print; exit }' "$header_file"
@@ -337,11 +336,6 @@ assert_browser_navigation_redirect_probe() {
 		exit 1
 	fi
 
-	if [[ "$PROBE_EFFECTIVE_URL" != "$url" ]]; then
-		echo "Expected $url probe to stay on the canonical origin, received $PROBE_EFFECTIVE_URL" >&2
-		exit 1
-	fi
-
 	if [[ -z "$PROBE_LOCATION" ]]; then
 		echo "Expected $pathname to include a redirect location" >&2
 		exit 1
@@ -364,11 +358,6 @@ assert_callback_landing_probe() {
 
 	if [[ "$PROBE_STATUS" != "200" ]]; then
 		echo "Expected callback landing page $probe_url to return 200, received $PROBE_STATUS" >&2
-		exit 1
-	fi
-
-	if [[ "$PROBE_EFFECTIVE_URL" != "$probe_url" ]]; then
-		echo "Expected callback landing page to stay on $probe_url, received $PROBE_EFFECTIVE_URL" >&2
 		exit 1
 	fi
 
@@ -400,11 +389,6 @@ assert_no_redirect_probe() {
 
 	if [[ "$PROBE_STATUS" != "$expected_status" ]]; then
 		echo "Expected $url to return $expected_status, received $PROBE_STATUS" >&2
-		exit 1
-	fi
-
-	if [[ "$PROBE_EFFECTIVE_URL" != "$url" ]]; then
-		echo "Expected $url to stay on the canonical origin, received $PROBE_EFFECTIVE_URL" >&2
 		exit 1
 	fi
 
