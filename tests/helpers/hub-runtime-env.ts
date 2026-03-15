@@ -108,6 +108,7 @@ export function createHubPreviewEnv({
 			WORKOS_REDIRECT_URI: `${origin}/auth/callback`,
 			WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
 			AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
+			AVATAR_PROXY_SIGNING_SECRET: 'ef'.repeat(32),
 			ORIGIN: origin,
 			...envOverrides
 		}
@@ -134,6 +135,7 @@ export function createHubBuiltRuntimeEnv({
 			WORKOS_REDIRECT_URI: `${origin}/auth/callback`,
 			WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
 			AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
+			AVATAR_PROXY_SIGNING_SECRET: 'ef'.repeat(32),
 			ORIGIN: origin,
 			...envOverrides
 		}

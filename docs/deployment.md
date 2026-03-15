@@ -56,8 +56,9 @@ auth callback error landing contract after the host deploy command returns.
 Set `WORKOS_API_HOSTNAME` only when production uses a custom hosted WorkOS auth
 hostname; otherwise the workflow defaults to `api.workos.com`. Deployment
 health verification rejects non-HTTPS origins unless they target a loopback host
-for local test fixtures. Keep `AUTH_ERROR_SIGNING_SECRET` only on the runtime
-environment where the app signs and verifies auth-error redirects.
+for local test fixtures. Keep `AUTH_ERROR_SIGNING_SECRET` and
+`AVATAR_PROXY_SIGNING_SECRET` only on the runtime environment where the app
+signs auth-error redirects and avatar proxy tokens.
 
 Recommended:
 

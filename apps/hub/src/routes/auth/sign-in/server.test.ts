@@ -14,6 +14,7 @@ const { mockEnv, mockGetSignInUrl } = vi.hoisted(() => ({
 		WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback',
 		WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
 		AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
+		AVATAR_PROXY_SIGNING_SECRET: 'ef'.repeat(32),
 		WORKOS_API_HOSTNAME: 'auth.kaivalo-login.com',
 		ORIGIN: 'https://kaivalo.test',
 		NODE_ENV: 'production'
@@ -54,6 +55,7 @@ describe('auth sign-in route', () => {
 		mockEnv.WORKOS_REDIRECT_URI = 'https://kaivalo.test/auth/callback';
 		mockEnv.WORKOS_COOKIE_PASSWORD = 'ab'.repeat(32);
 		mockEnv.AUTH_ERROR_SIGNING_SECRET = 'cd'.repeat(32);
+		mockEnv.AVATAR_PROXY_SIGNING_SECRET = 'ef'.repeat(32);
 		mockEnv.WORKOS_API_HOSTNAME = 'auth.kaivalo-login.com';
 		mockEnv.ORIGIN = 'https://kaivalo.test';
 		mockEnv.NODE_ENV = 'production';

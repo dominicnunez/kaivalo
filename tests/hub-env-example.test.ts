@@ -76,7 +76,8 @@ describe('apps/hub/.env.example behavior', () => {
 		WORKOS_CLIENT_ID: 'client_fixture',
 		WORKOS_API_KEY: 'sk_fixture',
 		WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
-		AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32)
+		AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
+		AVATAR_PROXY_SIGNING_SECRET: 'ef'.repeat(32)
 	};
 
 	it('documents a local development configuration that validates with real secrets', () => {
@@ -195,6 +196,10 @@ describe('apps/hub/.env.example behavior', () => {
 		assert.match(runtimeEnvExample.WORKOS_COOKIE_PASSWORD, /^[a-f0-9]{64}$/i);
 		assert.match(
 			runtimeEnvExample.AUTH_ERROR_SIGNING_SECRET,
+			/^[a-f0-9]{64}$/i
+		);
+		assert.match(
+			runtimeEnvExample.AVATAR_PROXY_SIGNING_SECRET,
 			/^[a-f0-9]{64}$/i
 		);
 	});

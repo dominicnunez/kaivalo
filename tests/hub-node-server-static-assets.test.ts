@@ -2,6 +2,7 @@ import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert';
 import http from 'node:http';
 import { createHubServer } from '../apps/hub/src/lib/server/node-server.ts';
+import { canListenOnLoopback } from './helpers/runtime-capabilities.ts';
 
 const baseEnv = {
 	NODE_ENV: 'test',
@@ -10,6 +11,7 @@ const baseEnv = {
 	WORKOS_REDIRECT_URI: 'http://127.0.0.1:3100/auth/callback',
 	WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
 	AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
+	AVATAR_PROXY_SIGNING_SECRET: 'ef'.repeat(32),
 	ORIGIN: 'http://127.0.0.1:3100'
 };
 
@@ -63,6 +65,7 @@ function httpGet(port, path) {
 	});
 }
 
+const LOOPBACK_LISTEN_SUPPORTED = await canListenOnLoopback();
 const servers = [];
 afterEach(async () => {
 	for (const server of servers.splice(0)) {
@@ -70,208 +73,212 @@ afterEach(async () => {
 	}
 });
 
-describe('node server static asset classification', () => {
-	it('does not apply static cache headers to extension-shaped dynamic routes', async () => {
-		const { server } = createHubServer({
-			handler: (_req, res) => {
-				res.statusCode = 200;
-				res.setHeader('Content-Type', 'application/json; charset=utf-8');
-				res.end('{"ok":true}');
-			},
-			env: baseEnv
-		});
-		servers.push(server);
-		const port = await listenOnEphemeralPort(server);
-
-		const dynamicResponse = await httpGet(port, '/health.json');
-		const staticResponse = await httpGet(port, '/favicon.svg');
-
-		assert.strictEqual(dynamicResponse.statusCode, 200);
-		assert.strictEqual(dynamicResponse.headers['cache-control'], undefined);
-		assert.strictEqual(dynamicResponse.headers['x-frame-options'], 'DENY');
-		assert.strictEqual(
-			dynamicResponse.headers['x-content-type-options'],
-			'nosniff'
-		);
-		assert.strictEqual(
-			dynamicResponse.headers['referrer-policy'],
-			'strict-origin-when-cross-origin'
-		);
-		assert.strictEqual(
-			dynamicResponse.headers['permissions-policy'],
-			'camera=(), microphone=(), geolocation=()'
-		);
-		assert.strictEqual(staticResponse.headers['cache-control'], undefined);
-		assert.strictEqual(
-			staticResponse.headers['x-content-type-options'],
-			'nosniff'
-		);
-		assert.strictEqual(dynamicResponse.body, '{"ok":true}');
-		assert.strictEqual(staticResponse.body, '{"ok":true}');
-	});
-
-	it('applies static cache headers only after the response proves it is an asset', async () => {
-		const { server } = createHubServer({
-			handler: (req, res) => {
-				res.statusCode = 200;
-				if (req.url === '/favicon.svg') {
-					res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
-				} else {
+describe(
+	'node server static asset classification',
+	{ skip: !LOOPBACK_LISTEN_SUPPORTED },
+	() => {
+		it('does not apply static cache headers to extension-shaped dynamic routes', async () => {
+			const { server } = createHubServer({
+				handler: (_req, res) => {
+					res.statusCode = 200;
 					res.setHeader('Content-Type', 'application/json; charset=utf-8');
-				}
-				res.end(req.url === '/favicon.svg' ? '<svg />' : '{"ok":true}');
-			},
-			env: baseEnv
+					res.end('{"ok":true}');
+				},
+				env: baseEnv
+			});
+			servers.push(server);
+			const port = await listenOnEphemeralPort(server);
+
+			const dynamicResponse = await httpGet(port, '/health.json');
+			const staticResponse = await httpGet(port, '/favicon.svg');
+
+			assert.strictEqual(dynamicResponse.statusCode, 200);
+			assert.strictEqual(dynamicResponse.headers['cache-control'], undefined);
+			assert.strictEqual(dynamicResponse.headers['x-frame-options'], 'DENY');
+			assert.strictEqual(
+				dynamicResponse.headers['x-content-type-options'],
+				'nosniff'
+			);
+			assert.strictEqual(
+				dynamicResponse.headers['referrer-policy'],
+				'strict-origin-when-cross-origin'
+			);
+			assert.strictEqual(
+				dynamicResponse.headers['permissions-policy'],
+				'camera=(), microphone=(), geolocation=()'
+			);
+			assert.strictEqual(staticResponse.headers['cache-control'], undefined);
+			assert.strictEqual(
+				staticResponse.headers['x-content-type-options'],
+				'nosniff'
+			);
+			assert.strictEqual(dynamicResponse.body, '{"ok":true}');
+			assert.strictEqual(staticResponse.body, '{"ok":true}');
 		});
-		servers.push(server);
-		const port = await listenOnEphemeralPort(server);
 
-		const staticResponse = await httpGet(port, '/favicon.svg');
-		const dynamicResponse = await httpGet(port, '/favicon.json');
+		it('applies static cache headers only after the response proves it is an asset', async () => {
+			const { server } = createHubServer({
+				handler: (req, res) => {
+					res.statusCode = 200;
+					if (req.url === '/favicon.svg') {
+						res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+					} else {
+						res.setHeader('Content-Type', 'application/json; charset=utf-8');
+					}
+					res.end(req.url === '/favicon.svg' ? '<svg />' : '{"ok":true}');
+				},
+				env: baseEnv
+			});
+			servers.push(server);
+			const port = await listenOnEphemeralPort(server);
 
-		assert.strictEqual(
-			staticResponse.headers['cache-control'],
-			'public, max-age=86400, stale-while-revalidate=600'
-		);
-		assert.strictEqual(dynamicResponse.headers['cache-control'], undefined);
-	});
+			const staticResponse = await httpGet(port, '/favicon.svg');
+			const dynamicResponse = await httpGet(port, '/favicon.json');
 
-	it('does not apply public cache headers to cookie-setting asset responses', async () => {
-		const { server } = createHubServer({
-			handler: (_req, res) => {
-				res.writeHead(200, {
-					'Content-Type': 'image/svg+xml; charset=utf-8',
-					'Set-Cookie': 'asset-session=fixture; Path=/; HttpOnly; Secure'
-				});
-				res.end('<svg />');
-			},
-			env: baseEnv
+			assert.strictEqual(
+				staticResponse.headers['cache-control'],
+				'public, max-age=86400, stale-while-revalidate=600'
+			);
+			assert.strictEqual(dynamicResponse.headers['cache-control'], undefined);
 		});
-		servers.push(server);
-		const port = await listenOnEphemeralPort(server);
 
-		const response = await httpGet(port, '/favicon.svg');
+		it('does not apply public cache headers to cookie-setting asset responses', async () => {
+			const { server } = createHubServer({
+				handler: (_req, res) => {
+					res.writeHead(200, {
+						'Content-Type': 'image/svg+xml; charset=utf-8',
+						'Set-Cookie': 'asset-session=fixture; Path=/; HttpOnly; Secure'
+					});
+					res.end('<svg />');
+				},
+				env: baseEnv
+			});
+			servers.push(server);
+			const port = await listenOnEphemeralPort(server);
 
-		assert.strictEqual(response.statusCode, 200);
-		assert.strictEqual(response.headers['cache-control'], undefined);
-		assert.match(
-			String(response.headers['set-cookie']),
-			/asset-session=fixture/
-		);
-		assert.strictEqual(response.body, '<svg />');
-	});
+			const response = await httpGet(port, '/favicon.svg');
 
-	it('applies static cache headers when streamed asset responses commit inline headers', async () => {
-		const { server } = createHubServer({
-			handler: (_req, res) => {
-				res.writeHead(200, {
-					'Content-Type': 'image/svg+xml; charset=utf-8'
-				});
-				res.write('<svg');
-				res.end(' />');
-			},
-			env: baseEnv
+			assert.strictEqual(response.statusCode, 200);
+			assert.strictEqual(response.headers['cache-control'], undefined);
+			assert.match(
+				String(response.headers['set-cookie']),
+				/asset-session=fixture/
+			);
+			assert.strictEqual(response.body, '<svg />');
 		});
-		servers.push(server);
-		const port = await listenOnEphemeralPort(server);
 
-		const response = await httpGet(port, '/favicon.svg');
+		it('applies static cache headers when streamed asset responses commit inline headers', async () => {
+			const { server } = createHubServer({
+				handler: (_req, res) => {
+					res.writeHead(200, {
+						'Content-Type': 'image/svg+xml; charset=utf-8'
+					});
+					res.write('<svg');
+					res.end(' />');
+				},
+				env: baseEnv
+			});
+			servers.push(server);
+			const port = await listenOnEphemeralPort(server);
 
-		assert.strictEqual(response.statusCode, 200);
-		assert.strictEqual(
-			response.headers['cache-control'],
-			'public, max-age=86400, stale-while-revalidate=600'
-		);
-		assert.strictEqual(response.body, '<svg />');
-	});
+			const response = await httpGet(port, '/favicon.svg');
 
-	it('applies static cache headers when asset responses use writeHead header arrays', async () => {
-		const { server } = createHubServer({
-			handler: (_req, res) => {
-				res.writeHead(200, ['Content-Type', 'image/svg+xml; charset=utf-8']);
-				res.end('<svg />');
-			},
-			env: baseEnv
+			assert.strictEqual(response.statusCode, 200);
+			assert.strictEqual(
+				response.headers['cache-control'],
+				'public, max-age=86400, stale-while-revalidate=600'
+			);
+			assert.strictEqual(response.body, '<svg />');
 		});
-		servers.push(server);
-		const port = await listenOnEphemeralPort(server);
 
-		const response = await httpGet(port, '/favicon.svg');
+		it('applies static cache headers when asset responses use writeHead header arrays', async () => {
+			const { server } = createHubServer({
+				handler: (_req, res) => {
+					res.writeHead(200, ['Content-Type', 'image/svg+xml; charset=utf-8']);
+					res.end('<svg />');
+				},
+				env: baseEnv
+			});
+			servers.push(server);
+			const port = await listenOnEphemeralPort(server);
 
-		assert.strictEqual(response.statusCode, 200);
-		assert.strictEqual(
-			response.headers['cache-control'],
-			'public, max-age=86400, stale-while-revalidate=600'
-		);
-		assert.strictEqual(response.body, '<svg />');
-	});
+			const response = await httpGet(port, '/favicon.svg');
 
-	it('applies static cache headers when asset responses flush headers before streaming', async () => {
-		const { server } = createHubServer({
-			handler: (_req, res) => {
-				res.statusCode = 200;
-				res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
-				res.flushHeaders?.();
-				res.write('<svg');
-				res.end(' />');
-			},
-			env: baseEnv
+			assert.strictEqual(response.statusCode, 200);
+			assert.strictEqual(
+				response.headers['cache-control'],
+				'public, max-age=86400, stale-while-revalidate=600'
+			);
+			assert.strictEqual(response.body, '<svg />');
 		});
-		servers.push(server);
-		const port = await listenOnEphemeralPort(server);
 
-		const response = await httpGet(port, '/favicon.svg');
+		it('applies static cache headers when asset responses flush headers before streaming', async () => {
+			const { server } = createHubServer({
+				handler: (_req, res) => {
+					res.statusCode = 200;
+					res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+					res.flushHeaders?.();
+					res.write('<svg');
+					res.end(' />');
+				},
+				env: baseEnv
+			});
+			servers.push(server);
+			const port = await listenOnEphemeralPort(server);
 
-		assert.strictEqual(response.statusCode, 200);
-		assert.strictEqual(
-			response.headers['cache-control'],
-			'public, max-age=86400, stale-while-revalidate=600'
-		);
-		assert.strictEqual(response.body, '<svg />');
-	});
+			const response = await httpGet(port, '/favicon.svg');
 
-	it('does not apply static cache headers to streamed non-success asset responses', async () => {
-		const { server } = createHubServer({
-			handler: (_req, res) => {
-				res.writeHead(404, {
-					'Content-Type': 'image/svg+xml; charset=utf-8'
-				});
-				res.write('<svg');
-				res.end(' />');
-			},
-			env: baseEnv
+			assert.strictEqual(response.statusCode, 200);
+			assert.strictEqual(
+				response.headers['cache-control'],
+				'public, max-age=86400, stale-while-revalidate=600'
+			);
+			assert.strictEqual(response.body, '<svg />');
 		});
-		servers.push(server);
-		const port = await listenOnEphemeralPort(server);
 
-		const response = await httpGet(port, '/favicon.svg');
+		it('does not apply static cache headers to streamed non-success asset responses', async () => {
+			const { server } = createHubServer({
+				handler: (_req, res) => {
+					res.writeHead(404, {
+						'Content-Type': 'image/svg+xml; charset=utf-8'
+					});
+					res.write('<svg');
+					res.end(' />');
+				},
+				env: baseEnv
+			});
+			servers.push(server);
+			const port = await listenOnEphemeralPort(server);
 
-		assert.strictEqual(response.statusCode, 404);
-		assert.strictEqual(response.headers['cache-control'], undefined);
-		assert.strictEqual(response.body, '<svg />');
-	});
+			const response = await httpGet(port, '/favicon.svg');
 
-	it('preserves static cache headers on 304 asset revalidation responses', async () => {
-		const { server } = createHubServer({
-			handler: (_req, res) => {
-				res.writeHead(304);
-				res.end();
-			},
-			env: baseEnv
+			assert.strictEqual(response.statusCode, 404);
+			assert.strictEqual(response.headers['cache-control'], undefined);
+			assert.strictEqual(response.body, '<svg />');
 		});
-		servers.push(server);
-		const port = await listenOnEphemeralPort(server);
 
-		const response = await httpGet(
-			port,
-			'/_app/immutable/chunks/index.abc123.js'
-		);
+		it('preserves static cache headers on 304 asset revalidation responses', async () => {
+			const { server } = createHubServer({
+				handler: (_req, res) => {
+					res.writeHead(304);
+					res.end();
+				},
+				env: baseEnv
+			});
+			servers.push(server);
+			const port = await listenOnEphemeralPort(server);
 
-		assert.strictEqual(response.statusCode, 304);
-		assert.strictEqual(
-			response.headers['cache-control'],
-			'public, max-age=31536000, immutable'
-		);
-		assert.strictEqual(response.body, '');
-	});
-});
+			const response = await httpGet(
+				port,
+				'/_app/immutable/chunks/index.abc123.js'
+			);
+
+			assert.strictEqual(response.statusCode, 304);
+			assert.strictEqual(
+				response.headers['cache-control'],
+				'public, max-age=31536000, immutable'
+			);
+			assert.strictEqual(response.body, '');
+		});
+	}
+);

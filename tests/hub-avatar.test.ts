@@ -9,7 +9,7 @@ const PREVIEW_FIXTURE_IMPORT = new URL(
 ).href;
 const AVATAR_SOURCE =
 	'https://avatars.githubusercontent.com/u/1?token=signed&size=96';
-const AVATAR_PROXY_SECRET = 'cd'.repeat(32);
+const AVATAR_PROXY_SECRET = 'ef'.repeat(32);
 const PEER_ADDRESS_OVERRIDE_HEADER = 'x-kaivalo-preview-peer-address';
 const PRIVATE_NO_STORE_CACHE_CONTROL = 'private, no-store';
 

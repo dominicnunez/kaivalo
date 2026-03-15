@@ -41,6 +41,7 @@ const { mockEnv } = vi.hoisted(() => ({
 		WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback',
 		WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
 		AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
+		AVATAR_PROXY_SIGNING_SECRET: 'ef'.repeat(32),
 		ORIGIN: 'https://kaivalo.test',
 		NODE_ENV: 'production'
 	} as Record<string, string>
@@ -275,11 +276,23 @@ describe('auth callback success path', () => {
 					'https://kaivalo.test'
 				).searchParams,
 				{
-					secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
+					secret: mockEnv.AVATAR_PROXY_SIGNING_SECRET,
 					now: Date.now()
 				}
 			)
 		).toBe('https://avatars.githubusercontent.com/u/1');
+		expect(
+			readVerifiedAvatarProxySource(
+				new URL(
+					readLayoutAvatarProfilePictureUrl(layoutData) ?? '',
+					'https://kaivalo.test'
+				).searchParams,
+				{
+					secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
+					now: Date.now()
+				}
+			)
+		).toBeNull();
 		expect(servicesData.activeServices.map((service) => service.id)).toEqual([
 			'sweep'
 		]);

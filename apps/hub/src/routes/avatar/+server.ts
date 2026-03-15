@@ -373,7 +373,7 @@ export function _createAvatarGetHandler({
 	return async (event) => {
 		const { request, url, fetch } = event;
 		const source = readVerifiedAvatarProxySource(url.searchParams, {
-			secret: env.AUTH_ERROR_SIGNING_SECRET ?? ''
+			secret: env.AVATAR_PROXY_SIGNING_SECRET ?? ''
 		});
 		if (!source) {
 			return createGatewayErrorResponse(404, 'Not found');

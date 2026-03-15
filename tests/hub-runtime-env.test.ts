@@ -16,6 +16,7 @@ describe('hub runtime env helpers', () => {
 		const inheritedEnv = {
 			ADDRESS_HEADER: 'x-forwarded-for',
 			AUTH_ERROR_SIGNING_SECRET: 'bad-secret',
+			AVATAR_PROXY_SIGNING_SECRET: 'bad-avatar-secret',
 			HOST: '0.0.0.0',
 			NODE_ENV: 'development',
 			NODE_OPTIONS: '--inspect',
@@ -45,6 +46,7 @@ describe('hub runtime env helpers', () => {
 		assert.strictEqual(previewEnv.TRUSTED_PROXY_IPS, undefined);
 		assert.strictEqual(previewEnv.XFF_DEPTH, undefined);
 		assert.strictEqual(previewEnv.AUTH_ERROR_SIGNING_SECRET, 'cd'.repeat(32));
+		assert.strictEqual(previewEnv.AVATAR_PROXY_SIGNING_SECRET, 'ef'.repeat(32));
 		assert.strictEqual(previewEnv.WORKOS_API_KEY, 'sk_test_fixture');
 		assert.strictEqual(previewEnv.WORKOS_CLIENT_ID, 'client_test_fixture');
 		assert.strictEqual(previewEnv.WORKOS_COOKIE_PASSWORD, 'ab'.repeat(32));
@@ -64,6 +66,7 @@ describe('hub runtime env helpers', () => {
 		assert.strictEqual(builtEnv.TRUSTED_PROXY_IPS, undefined);
 		assert.strictEqual(builtEnv.XFF_DEPTH, undefined);
 		assert.strictEqual(builtEnv.AUTH_ERROR_SIGNING_SECRET, 'cd'.repeat(32));
+		assert.strictEqual(builtEnv.AVATAR_PROXY_SIGNING_SECRET, 'ef'.repeat(32));
 		assert.strictEqual(builtEnv.WORKOS_API_KEY, 'sk_test_fixture');
 		assert.strictEqual(builtEnv.WORKOS_CLIENT_ID, 'client_test_fixture');
 		assert.strictEqual(builtEnv.WORKOS_COOKIE_PASSWORD, 'ab'.repeat(32));
@@ -93,6 +96,7 @@ describe('hub runtime env helpers', () => {
 			WORKOS_API_KEY: 'sk_old',
 			WORKOS_COOKIE_PASSWORD: 'old-cookie',
 			AUTH_ERROR_SIGNING_SECRET: 'old-secret',
+			AVATAR_PROXY_SIGNING_SECRET: 'old-avatar-secret',
 			UNRELATED: 'keep'
 		};
 
@@ -117,6 +121,7 @@ describe('hub runtime env helpers', () => {
 	it('selects only preview-allowed input env for preview child processes', () => {
 		const previewBaseEnv = getHubPreviewBaseEnv({
 			AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
+			AVATAR_PROXY_SIGNING_SECRET: 'ef'.repeat(32),
 			HOST: '127.0.0.1',
 			NODE_ENV: 'development',
 			NODE_OPTIONS: '--inspect',
@@ -133,6 +138,7 @@ describe('hub runtime env helpers', () => {
 
 		assert.deepStrictEqual(previewBaseEnv, {
 			AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
+			AVATAR_PROXY_SIGNING_SECRET: 'ef'.repeat(32),
 			HOST: '127.0.0.1',
 			NODE_ENV: 'development',
 			ORIGIN: 'http://127.0.0.1:4173',

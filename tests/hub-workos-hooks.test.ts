@@ -17,6 +17,7 @@ const validEnv = {
 	WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback',
 	WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
 	AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
+	AVATAR_PROXY_SIGNING_SECRET: 'ef'.repeat(32),
 	ORIGIN: 'https://kaivalo.test'
 };
 const PREVIEW_FIXTURE_IMPORT = new URL(

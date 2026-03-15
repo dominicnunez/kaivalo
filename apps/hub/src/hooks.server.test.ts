@@ -51,6 +51,7 @@ function setRequiredWorkosEnv() {
 	privateEnv.WORKOS_REDIRECT_URI = 'https://kaivalo.test/auth/callback';
 	privateEnv.WORKOS_COOKIE_PASSWORD = 'ab'.repeat(32);
 	privateEnv.AUTH_ERROR_SIGNING_SECRET = 'cd'.repeat(32);
+	privateEnv.AVATAR_PROXY_SIGNING_SECRET = 'ef'.repeat(32);
 	privateEnv.ORIGIN = 'https://kaivalo.test';
 	privateEnv.TRUST_X_FORWARDED_PROTO = 'true';
 	privateEnv.TRUSTED_PROXY_IPS = '203.0.113.10';

@@ -10,7 +10,8 @@ const REQUIRED_ENV_VARS = [
 	'WORKOS_API_KEY',
 	'WORKOS_REDIRECT_URI',
 	'WORKOS_COOKIE_PASSWORD',
-	'AUTH_ERROR_SIGNING_SECRET'
+	'AUTH_ERROR_SIGNING_SECRET',
+	'AVATAR_PROXY_SIGNING_SECRET'
 ];
 const HEX_64_PATTERN = /^[a-f0-9]{64}$/i;
 const WORKOS_REDIRECT_PATHNAME = '/auth/callback';
@@ -29,6 +30,7 @@ type WorkosEnv = {
 	redirectUri: string;
 	cookiePassword: string;
 	authErrorSigningSecret: string;
+	avatarProxySigningSecret: string;
 	origin: string;
 	apiHostname: string;
 };
@@ -212,6 +214,10 @@ export function getValidatedWorkosEnv(env: Env): WorkosEnv {
 		env,
 		'AUTH_ERROR_SIGNING_SECRET'
 	);
+	const avatarProxySigningSecret = readRequiredTrimmedEnvValue(
+		env,
+		'AVATAR_PROXY_SIGNING_SECRET'
+	);
 	const apiHostname = normalizeWorkosApiHostname(env.WORKOS_API_HOSTNAME);
 
 	if (!HEX_64_PATTERN.test(cookiePassword)) {
@@ -222,6 +228,11 @@ export function getValidatedWorkosEnv(env: Env): WorkosEnv {
 	if (!HEX_64_PATTERN.test(authErrorSigningSecret)) {
 		throw new Error(
 			'AUTH_ERROR_SIGNING_SECRET must be 64 hex characters (openssl rand -hex 32)'
+		);
+	}
+	if (!HEX_64_PATTERN.test(avatarProxySigningSecret)) {
+		throw new Error(
+			'AVATAR_PROXY_SIGNING_SECRET must be 64 hex characters (openssl rand -hex 32)'
 		);
 	}
 
@@ -247,6 +258,7 @@ export function getValidatedWorkosEnv(env: Env): WorkosEnv {
 			redirectUri: redirectUrl.toString(),
 			cookiePassword,
 			authErrorSigningSecret,
+			avatarProxySigningSecret,
 			origin: localOrigin,
 			apiHostname
 		};
@@ -267,6 +279,7 @@ export function getValidatedWorkosEnv(env: Env): WorkosEnv {
 		redirectUri: redirectUrl.toString(),
 		cookiePassword,
 		authErrorSigningSecret,
+		avatarProxySigningSecret,
 		origin: originUrl.origin,
 		apiHostname
 	};

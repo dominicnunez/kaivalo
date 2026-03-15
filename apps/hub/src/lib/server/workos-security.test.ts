@@ -15,6 +15,7 @@ const validLocalEnv = {
 	WORKOS_REDIRECT_URI: 'http://localhost:3100/auth/callback',
 	WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
 	AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
+	AVATAR_PROXY_SIGNING_SECRET: 'ef'.repeat(32),
 	ORIGIN: 'http://localhost:3100'
 };
 
@@ -185,6 +186,26 @@ describe('workos environment protocols', () => {
 				AUTH_ERROR_SIGNING_SECRET: 'not-hex'
 			})
 		).toThrow(/AUTH_ERROR_SIGNING_SECRET must be 64 hex characters/);
+	});
+
+	it('requires a dedicated avatar proxy signing secret', () => {
+		expect(() =>
+			getValidatedWorkosEnv({
+				...validLocalEnv,
+				AVATAR_PROXY_SIGNING_SECRET: ''
+			})
+		).toThrow(
+			/Missing required environment variable: AVATAR_PROXY_SIGNING_SECRET/
+		);
+	});
+
+	it('rejects malformed avatar proxy signing secrets', () => {
+		expect(() =>
+			getValidatedWorkosEnv({
+				...validLocalEnv,
+				AVATAR_PROXY_SIGNING_SECRET: 'not-hex'
+			})
+		).toThrow(/AVATAR_PROXY_SIGNING_SECRET must be 64 hex characters/);
 	});
 
 	it('rejects malformed WorkOS api hostnames', () => {

@@ -36,6 +36,7 @@ const PREVIEW_FIXTURE_IMPORT = new URL(
 ).href;
 const AUTHKIT_COOKIE_NAME = '__Host-wos_session';
 const PREVIEW_AUTH_ERROR_SIGNING_SECRET = 'cd'.repeat(32);
+const PREVIEW_AVATAR_PROXY_SIGNING_SECRET = 'ef'.repeat(32);
 const PREVIEW_POLLUTION_ENV = {
 	TRUST_X_FORWARDED_PROTO: 'true'
 } as const;
@@ -565,7 +566,8 @@ describe('hub preview script', () => {
 				ORIGIN: 'https://kaivalo.test',
 				WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback',
 				WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
-				AUTH_ERROR_SIGNING_SECRET: PREVIEW_AUTH_ERROR_SIGNING_SECRET
+				AUTH_ERROR_SIGNING_SECRET: PREVIEW_AUTH_ERROR_SIGNING_SECRET,
+				AVATAR_PROXY_SIGNING_SECRET: PREVIEW_AVATAR_PROXY_SIGNING_SECRET
 			},
 			imports: [PREVIEW_FIXTURE_IMPORT]
 		});

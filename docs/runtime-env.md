@@ -43,6 +43,12 @@ server process or container, not to the build step.
   Used only to sign browser-facing auth failure redirect queries.
   Keep it only in the runtime app environment, not in build or deployment jobs.
 
+- `AVATAR_PROXY_SIGNING_SECRET`
+  Must be exactly 64 hex characters.
+  Generate with `openssl rand -hex 32`.
+  Used only to sign avatar proxy tokens.
+  Keep it only in the runtime app environment, not in build or deployment jobs.
+
 ### Origin
 
 - `ORIGIN`
@@ -112,6 +118,7 @@ WORKOS_API_KEY=sk_...
 # WORKOS_API_HOSTNAME=auth.kaivalo.com
 WORKOS_COOKIE_PASSWORD=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 AUTH_ERROR_SIGNING_SECRET=fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
+AVATAR_PROXY_SIGNING_SECRET=89abcdef0123456789abcdef0123456789abcdef0123456789abcdef01234567
 TRUST_X_FORWARDED_PROTO=true
 TRUSTED_PROXY_IPS=203.0.113.10,2001:db8::10
 ADDRESS_HEADER=x-forwarded-for

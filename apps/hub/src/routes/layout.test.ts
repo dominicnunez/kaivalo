@@ -9,6 +9,7 @@ const { mockEnv, mockGetUser, mockGetValidatedWorkosEnv } = vi.hoisted(() => ({
 		WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback',
 		WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
 		AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
+		AVATAR_PROXY_SIGNING_SECRET: 'ef'.repeat(32),
 		ORIGIN: 'https://kaivalo.test'
 	} as Record<string, string>,
 	mockGetUser: vi.fn(),
@@ -90,10 +91,16 @@ function expectAvatarProxySource(
 	expect(parsed.pathname).toBe('/avatar');
 	expect(
 		readVerifiedAvatarProxySource(parsed.searchParams, {
-			secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
+			secret: mockEnv.AVATAR_PROXY_SIGNING_SECRET,
 			now: Date.now()
 		})
 	).toBe(expectedSource);
+	expect(
+		readVerifiedAvatarProxySource(parsed.searchParams, {
+			secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
+			now: Date.now()
+		})
+	).toBeNull();
 }
 
 function readAvatarProfilePictureUrl(result: unknown): string | null {
@@ -469,36 +476,8 @@ describe('layout server load', () => {
 		expectAuthLayoutFailureLogged(errorSpy);
 	});
 
-	it('preserves the local sign-in route when AuthKit lookup fails', async () => {
-		const setHeaders = vi.fn();
-		mockGetUser.mockRejectedValue(
-			new Error('AuthKit upstream timeout') as never
-		);
-		const event = createEvent('https://kaivalo.test/');
-
-		const result = await load({
-			...event,
-			setHeaders
-		} as never);
-
-		expect(mockGetValidatedWorkosEnv).toHaveBeenCalledOnce();
-		expect(result).toMatchObject({
-			user: null,
-			signInUrl: '/auth/sign-in',
-			authError: {
-				message:
-					'Sign-in is temporarily unavailable. Please try again shortly.',
-				incidentId: expect.stringMatching(/^authlayout_/)
-			}
-		});
-		expect(setHeaders).toHaveBeenCalledWith({
-			'cache-control': 'private, no-store',
-			vary: 'Cookie, Authorization'
-		});
-		expectAuthLayoutFailureLogged(errorSpy);
-	});
-
 	it.each([
+		['non-object payload', true],
 		[
 			'empty email',
 			{

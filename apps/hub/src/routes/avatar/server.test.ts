@@ -17,6 +17,7 @@ import {
 const { mockEnv } = vi.hoisted(() => ({
 	mockEnv: {
 		AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
+		AVATAR_PROXY_SIGNING_SECRET: 'ef'.repeat(32),
 		ORIGIN: 'https://kaivalo.test'
 	} as Record<string, string>
 }));
@@ -28,11 +29,12 @@ vi.mock('$env/dynamic/private', () => ({
 import { _createAvatarGetHandler } from './+server';
 
 let GET: ReturnType<typeof _createAvatarGetHandler>;
-const AVATAR_PROXY_SECRET = 'cd'.repeat(32);
+const AVATAR_PROXY_SECRET = 'ef'.repeat(32);
 const TRUSTED_AVATAR_SOURCE = 'https://avatars.githubusercontent.com/u/1';
 
 beforeEach(() => {
-	mockEnv.AUTH_ERROR_SIGNING_SECRET = AVATAR_PROXY_SECRET;
+	mockEnv.AUTH_ERROR_SIGNING_SECRET = 'cd'.repeat(32);
+	mockEnv.AVATAR_PROXY_SIGNING_SECRET = AVATAR_PROXY_SECRET;
 	mockEnv.ORIGIN = 'https://kaivalo.test';
 	delete mockEnv.TRUST_X_FORWARDED_PROTO;
 	delete mockEnv.TRUSTED_PROXY_IPS;

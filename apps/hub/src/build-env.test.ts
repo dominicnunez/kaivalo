@@ -19,6 +19,7 @@ describe('hub build environment', () => {
 		expect(buildEnv.WORKOS_REDIRECT_URI).toBe(
 			'http://localhost:3100/auth/callback'
 		);
+		expect(buildEnv.AVATAR_PROXY_SIGNING_SECRET).toBe('ef'.repeat(32));
 		expect(buildEnv.ORIGIN).toBe('http://localhost:3100');
 	});
 
@@ -29,6 +30,7 @@ describe('hub build environment', () => {
 
 		expect(buildEnv.WORKOS_CLIENT_ID).toBe('client_build_placeholder');
 		expect(buildEnv.AUTH_ERROR_SIGNING_SECRET).toBe('cd'.repeat(32));
+		expect(buildEnv.AVATAR_PROXY_SIGNING_SECRET).toBe('ef'.repeat(32));
 	});
 
 	it('replaces inherited auth secrets when placeholder builds are enabled', () => {
@@ -38,6 +40,7 @@ describe('hub build environment', () => {
 			WORKOS_API_KEY: 'sk_live',
 			WORKOS_COOKIE_PASSWORD: 'ef'.repeat(32),
 			AUTH_ERROR_SIGNING_SECRET: '12'.repeat(32),
+			AVATAR_PROXY_SIGNING_SECRET: '34'.repeat(32),
 			WORKOS_REDIRECT_URI: 'https://hub.kaivalo.com/auth/callback',
 			ORIGIN: 'https://hub.kaivalo.com'
 		});
@@ -46,6 +49,7 @@ describe('hub build environment', () => {
 		expect(buildEnv.WORKOS_API_KEY).toBe('sk_build_placeholder');
 		expect(buildEnv.WORKOS_COOKIE_PASSWORD).toBe('ab'.repeat(32));
 		expect(buildEnv.AUTH_ERROR_SIGNING_SECRET).toBe('cd'.repeat(32));
+		expect(buildEnv.AVATAR_PROXY_SIGNING_SECRET).toBe('ef'.repeat(32));
 		expect(buildEnv.WORKOS_REDIRECT_URI).toBe(
 			'https://hub.kaivalo.com/auth/callback'
 		);
@@ -62,6 +66,7 @@ describe('hub build environment', () => {
 		expect(previewEnv.WORKOS_REDIRECT_URI).toBe(
 			'http://localhost:4173/auth/callback'
 		);
+		expect(previewEnv.AVATAR_PROXY_SIGNING_SECRET).toBe('ef'.repeat(32));
 		expect(previewEnv.ORIGIN).toBe('http://localhost:4173');
 	});
 
@@ -118,13 +123,15 @@ describe('hub build environment', () => {
 		const previewEnv = getHubPreviewEnv({
 			ORIGIN: 'https://hub.kaivalo.com/',
 			WORKOS_COOKIE_PASSWORD: 'ef'.repeat(32),
-			AUTH_ERROR_SIGNING_SECRET: '12'.repeat(32)
+			AUTH_ERROR_SIGNING_SECRET: '12'.repeat(32),
+			AVATAR_PROXY_SIGNING_SECRET: '34'.repeat(32)
 		});
 
 		expect(previewEnv.WORKOS_CLIENT_ID).toBe('client_build_placeholder');
 		expect(previewEnv.WORKOS_REDIRECT_URI).toBe(
 			'https://hub.kaivalo.com/auth/callback'
 		);
+		expect(previewEnv.AVATAR_PROXY_SIGNING_SECRET).toBe('34'.repeat(32));
 		expect(previewEnv.ORIGIN).toBe('https://hub.kaivalo.com');
 	});
 
@@ -145,6 +152,7 @@ describe('hub build environment', () => {
 			WORKOS_REDIRECT_URI: 'https://hub.kaivalo.com/auth/callback',
 			WORKOS_COOKIE_PASSWORD: 'ef'.repeat(32),
 			AUTH_ERROR_SIGNING_SECRET: '12'.repeat(32),
+			AVATAR_PROXY_SIGNING_SECRET: '34'.repeat(32),
 			ORIGIN: 'https://hub.kaivalo.com'
 		});
 

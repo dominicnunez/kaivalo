@@ -19,6 +19,7 @@ readonly SMOKE_WORKOS_CLIENT_ID='client_image_smoke'
 readonly SMOKE_WORKOS_API_KEY='sk_image_smoke'
 readonly SMOKE_WORKOS_COOKIE_PASSWORD='abababababababababababababababababababababababababababababababab'
 readonly SMOKE_AUTH_ERROR_SIGNING_SECRET='cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd'
+readonly SMOKE_AVATAR_PROXY_SIGNING_SECRET='efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef'
 
 container_id=''
 remove_image_tag='false'
@@ -93,6 +94,7 @@ container_id="$(
 		--detach \
 		--publish "127.0.0.1::${CONTAINER_HEALTH_PORT}" \
 		--env "AUTH_ERROR_SIGNING_SECRET=${SMOKE_AUTH_ERROR_SIGNING_SECRET}" \
+		--env "AVATAR_PROXY_SIGNING_SECRET=${SMOKE_AVATAR_PROXY_SIGNING_SECRET}" \
 		--env "ORIGIN=${SMOKE_ORIGIN}" \
 		--env "WORKOS_API_KEY=${SMOKE_WORKOS_API_KEY}" \
 		--env "WORKOS_CLIENT_ID=${SMOKE_WORKOS_CLIENT_ID}" \

@@ -246,7 +246,7 @@ function findWorkflowStep(
 
 function includesSensitiveSecretReference(value: unknown): boolean {
 	const sensitiveSecretPattern =
-		/\$\{\{\s*secrets\.(?:WORKOS_[A-Z0-9_]+|AUTH_ERROR_SIGNING_SECRET|ORIGIN)\s*\}\}/;
+		/\$\{\{\s*secrets\.(?:WORKOS_[A-Z0-9_]+|AUTH_ERROR_SIGNING_SECRET|AVATAR_PROXY_SIGNING_SECRET|ORIGIN)\s*\}\}/;
 	if (typeof value === 'string') {
 		return sensitiveSecretPattern.test(value);
 	}
@@ -580,6 +580,11 @@ describe('deployment runtime guardrails', () => {
 			'deploy health verification should not receive runtime auth signing secrets'
 		);
 		assert.strictEqual(
+			verifyStep.env.AVATAR_PROXY_SIGNING_SECRET,
+			undefined,
+			'deploy health verification should not receive runtime avatar signing secrets'
+		);
+		assert.strictEqual(
 			includesSensitiveSecretReference(verifyStep),
 			false,
 			'deploy health verification should stay free of runtime auth secret references'
@@ -807,8 +812,10 @@ describe('deployment runtime guardrails', () => {
 		);
 		assert.doesNotMatch(dockerfile, /--mount=type=secret,id=workos_/);
 		assert.doesNotMatch(dockerfile, /--mount=type=secret,id=auth_error_/);
+		assert.doesNotMatch(dockerfile, /--mount=type=secret,id=avatar_proxy_/);
 		assert.doesNotMatch(dockerfile, /--mount=type=secret,id=origin/);
 		assert.ok(buildEnv.AUTH_ERROR_SIGNING_SECRET);
+		assert.ok(buildEnv.AVATAR_PROXY_SIGNING_SECRET);
 		assert.ok(buildEnv.WORKOS_COOKIE_PASSWORD);
 		assert.strictEqual(
 			buildEnv.WORKOS_REDIRECT_URI,
