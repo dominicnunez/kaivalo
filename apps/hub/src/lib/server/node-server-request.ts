@@ -6,9 +6,15 @@ import {
 	type ErrorDiagnostics
 } from './error-diagnostics.ts';
 import { normalizeRequestId } from './request-id.ts';
+import { getTrustedClientAddress } from './trusted-client-address.ts';
 import { getTrustedForwardedProto } from './workos-security-cache.ts';
+import {
+	getProxyTrustConfiguration,
+	getValidatedWorkosEnv
+} from './workos-security.ts';
 
 const PRODUCTION_NODE_ENV = 'production';
+const UNKNOWN_ADDRESS = 'unknown';
 
 type Env = Record<string, string | undefined>;
 
@@ -96,10 +102,35 @@ export function buildRequestFailureLog(
 	method?: string;
 	pathname: string;
 	requestId: string;
+	clientAddress: string;
 	remoteAddress: string;
 	error: ErrorDiagnostics;
 } {
 	const incidentId = randomUUID();
+	const remoteAddress =
+		canonicalizeIpAddress(req.socket?.remoteAddress) || UNKNOWN_ADDRESS;
+	const clientAddress = (() => {
+		try {
+			const { trustForwardedProto, trustedProxyIps } =
+				getProxyTrustConfiguration(env, getValidatedWorkosEnv(env).origin);
+			if (!trustForwardedProto) {
+				return remoteAddress;
+			}
+
+			return (
+				getTrustedClientAddress({
+					directClientAddress:
+						remoteAddress === UNKNOWN_ADDRESS ? '' : remoteAddress,
+					forwardedForHeader: readSingleHeaderValue(
+						req.headers?.['x-forwarded-for']
+					),
+					trustedProxyIps
+				}) || UNKNOWN_ADDRESS
+			);
+		} catch {
+			return remoteAddress;
+		}
+	})();
 	return {
 		incidentId,
 		method: req.method,
@@ -107,8 +138,8 @@ export function buildRequestFailureLog(
 		requestId: normalizeRequestId(
 			readSingleHeaderValue(req.headers?.['x-request-id'])
 		),
-		remoteAddress:
-			canonicalizeIpAddress(req.socket?.remoteAddress) || 'unknown',
+		clientAddress,
+		remoteAddress,
 		error: getErrorDiagnostics(error, {
 			includeSensitiveDetails: shouldIncludeSensitiveErrorDetails(env)
 		})

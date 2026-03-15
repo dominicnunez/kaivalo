@@ -10,6 +10,7 @@ export const RUNTIME_SERVER_FILES = [
 	'port.ts',
 	'request-peer-address.ts',
 	'request-id.ts',
+	'trusted-client-address.ts',
 	'workos-security.ts',
 	'workos-security-cache.ts',
 	'workos-security-env.ts'

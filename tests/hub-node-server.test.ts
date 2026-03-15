@@ -321,6 +321,7 @@ describe('node server diagnostics', () => {
 		assert.strictEqual(logRecord.pathname, '/auth/callback');
 		assert.strictEqual(logRecord.method, 'GET');
 		assert.strictEqual(logRecord.requestId, 'bad_request_id___trace');
+		assert.strictEqual(logRecord.clientAddress, '203.0.113.10');
 		assert.strictEqual(logRecord.remoteAddress, '203.0.113.10');
 		assert.strictEqual(logRecord.error.type, 'Error');
 		assert.ok(!('message' in logRecord.error));
@@ -344,8 +345,32 @@ describe('node server diagnostics', () => {
 			NODE_ENV: 'production'
 		});
 
+		assert.strictEqual(logRecord.clientAddress, 'unknown');
 		assert.strictEqual(logRecord.remoteAddress, 'unknown');
 		assert.strictEqual(logRecord.requestId, 'missing');
+	});
+
+	it('logs the trusted forwarded client address while retaining the proxy peer address', () => {
+		const req = {
+			method: 'GET',
+			url: '/auth/callback?code=supersecret&state=sensitive',
+			headers: {
+				'x-forwarded-for': '198.51.100.10, 203.0.113.10'
+			},
+			socket: {
+				remoteAddress: '203.0.113.11'
+			}
+		};
+
+		const logRecord = buildRequestFailureLog(req, new Error('boom'), {
+			...baseEnv,
+			NODE_ENV: 'production',
+			TRUST_X_FORWARDED_PROTO: 'true',
+			TRUSTED_PROXY_IPS: '203.0.113.10,203.0.113.11'
+		});
+
+		assert.strictEqual(logRecord.clientAddress, '198.51.100.10');
+		assert.strictEqual(logRecord.remoteAddress, '203.0.113.11');
 	});
 });
 
