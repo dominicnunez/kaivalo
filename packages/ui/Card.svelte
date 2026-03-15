@@ -132,12 +132,16 @@
 		return value.startsWith('https://');
 	}
 
+	function isBlankTarget(target: unknown) {
+		return typeof target === 'string' && target.toLowerCase() === '_blank';
+	}
+
 	function getHardenedExternalRel(
 		href: string,
 		target: unknown,
 		rel: unknown
 	): string | undefined {
-		if (target !== '_blank' || !isExternalHref(href)) {
+		if (!isBlankTarget(target) || !isExternalHref(href)) {
 			return typeof rel === 'string' ? rel : undefined;
 		}
 

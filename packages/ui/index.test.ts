@@ -85,6 +85,16 @@ describe('@kaivalo/ui public api', () => {
 				children: snippet
 			}
 		});
+		const externalMixedCaseBlankWithoutRelRender = render(Card, {
+			props: {
+				variant: 'link',
+				href: 'https://kaivalo.com/services',
+				allowExternal: true,
+				allowedExternalHosts: ['kaivalo.com'],
+				target: '_BlAnK',
+				children: snippet
+			}
+		});
 		const unsafeRender = render(Card, {
 			variant: 'link',
 			href: 'javascript:alert(1)',
@@ -147,6 +157,8 @@ describe('@kaivalo/ui public api', () => {
 		const externalBlankLink = externalBlankRender.container.querySelector('a');
 		const externalBlankWithoutRelLink =
 			externalBlankWithoutRelRender.container.querySelector('a');
+		const externalMixedCaseBlankWithoutRelLink =
+			externalMixedCaseBlankWithoutRelRender.container.querySelector('a');
 		const normalizedAllowlistLink =
 			normalizedAllowlistRender.container.querySelector('a');
 
@@ -161,6 +173,12 @@ describe('@kaivalo/ui public api', () => {
 		expect(externalBlankLink?.getAttribute('target')).toBe('_blank');
 		expect(externalBlankLink?.getAttribute('rel')).toBe('noreferrer noopener');
 		expect(externalBlankWithoutRelLink?.getAttribute('rel')).toBe(
+			'noopener noreferrer'
+		);
+		expect(externalMixedCaseBlankWithoutRelLink?.getAttribute('target')).toBe(
+			'_BlAnK'
+		);
+		expect(externalMixedCaseBlankWithoutRelLink?.getAttribute('rel')).toBe(
 			'noopener noreferrer'
 		);
 		expect(normalizedAllowlistLink?.getAttribute('href')).toBe(
