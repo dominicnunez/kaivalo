@@ -32,7 +32,11 @@ describe('canonical hostname parsing', () => {
 		'https://auth.kaivalo-login.test/path',
 		'.kaivalo-login.com',
 		'bad-.example',
-		'bad.example:443'
+		'bad.example:443',
+		'user@auth.kaivalo-login.test',
+		'user:password@auth.kaivalo-login.test',
+		'auth.kaivalo-login.test?debug=1',
+		'auth.kaivalo-login.test#fragment'
 	])('rejects invalid canonical hostname input %s', (value) => {
 		expect(parseCanonicalHostname(value)).toBeNull();
 	});

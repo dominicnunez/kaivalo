@@ -24,7 +24,15 @@ export function parseCanonicalHostname(value: string): string | null {
 
 	try {
 		const parsed = new URL(`https://${value}`);
-		if (!parsed.hostname || parsed.port || parsed.pathname !== '/') {
+		if (
+			!parsed.hostname ||
+			parsed.username ||
+			parsed.password ||
+			parsed.port ||
+			parsed.pathname !== '/' ||
+			parsed.search ||
+			parsed.hash
+		) {
 			return null;
 		}
 

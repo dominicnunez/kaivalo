@@ -25,7 +25,11 @@ describe('auth origin policy', () => {
 	it.each([
 		'https://auth.kaivalo-login.com/login',
 		'auth.kaivalo-login.com:443',
-		'auth.kaivalo-login.com/login'
+		'auth.kaivalo-login.com/login',
+		'user@auth.kaivalo-login.com',
+		'user:password@auth.kaivalo-login.com',
+		'auth.kaivalo-login.com?debug=1',
+		'auth.kaivalo-login.com#fragment'
 	])('rejects malformed hosted auth hostnames: %s', (hostname) => {
 		expect(() => normalizeWorkosApiHostname(hostname)).toThrow(
 			/WORKOS_API_HOSTNAME must be a hostname without protocol, path, credentials, or port/
