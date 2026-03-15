@@ -30,9 +30,12 @@ const BUILD_PLACEHOLDER_FLAG = 'HUB_BUILD_ALLOW_PLACEHOLDERS';
 function formatFailedBuildStep(
 	command: string,
 	args: readonly string[],
-	result: Pick<ReturnType<typeof spawnSync>, 'signal' | 'status'>
+	result: Pick<ReturnType<typeof spawnSync>, 'error' | 'signal' | 'status'>
 ): string {
 	const step = `${command} ${args.join(' ')}`;
+	if (result.error) {
+		return `${step} failed`;
+	}
 	if (typeof result.signal === 'string' && result.signal.length > 0) {
 		return `${step} terminated by ${result.signal}`;
 	}
@@ -238,7 +241,12 @@ export function runHubBuildWithEnv({
 		}
 
 		if (result.error) {
-			throw result.error;
+			throw new Error(
+				`${formatFailedBuildStep(command, args, result)}: ${result.error.message}`,
+				{
+					cause: result.error
+				}
+			);
 		}
 
 		throw new Error(formatFailedBuildStep(command, args, result));

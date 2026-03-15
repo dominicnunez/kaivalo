@@ -36,6 +36,47 @@ describe('hub build runner', () => {
 		expect(removeSourceMaps).not.toHaveBeenCalled();
 	});
 
+	it('wraps spawn failures with the failed build step context', () => {
+		const removeSourceMaps = vi.fn();
+		const assertNodeVersion = vi.fn();
+		const spawnError = new Error('spawnSync vite ENOENT');
+		const runStep = vi.fn().mockReturnValueOnce({
+			pid: 0,
+			output: [null, Buffer.alloc(0), Buffer.alloc(0)],
+			stdout: Buffer.alloc(0),
+			stderr: Buffer.alloc(0),
+			status: null,
+			signal: null,
+			error: spawnError
+		} satisfies SpawnSyncReturns<Buffer>);
+
+		let thrownError: unknown;
+		try {
+			runHubBuildWithEnv({
+				baseEnv: {
+					NODE_ENV: 'test'
+				},
+				getBuildPaths: () => ({
+					buildDir: '/tmp/kaivalo-hub-build',
+					clientDir: '/tmp/kaivalo-hub-build/client',
+					serverDir: '/tmp/kaivalo-hub-build/server',
+					repoRoot: '/tmp/kaivalo'
+				}),
+				assertNodeVersion,
+				removeSourceMaps,
+				runStep
+			});
+		} catch (error) {
+			thrownError = error;
+		}
+
+		expect(assertNodeVersion).toHaveBeenCalledTimes(1);
+		expect(removeSourceMaps).not.toHaveBeenCalled();
+		expect(thrownError).toBeInstanceOf(Error);
+		expect((thrownError as Error).message).toContain('vite build');
+		expect((thrownError as Error & { cause?: unknown }).cause).toBe(spawnError);
+	});
+
 	it('uses the current node interpreter for the runtime preparation step', () => {
 		const removeSourceMaps = vi.fn();
 		const assertNodeVersion = vi.fn();
