@@ -10,6 +10,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { REQUIRED_DOCKER_BUILD_ROOT_SCRIPT_PATHS } from './helpers/dockerfile.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DOCKERIGNORE_PATH = path.join(ROOT, '.dockerignore');
@@ -106,6 +107,7 @@ describe('docker build context', () => {
 
 			for (const includedPath of [
 				'apps/hub/src/routes/+layout.server.ts',
+				...REQUIRED_DOCKER_BUILD_ROOT_SCRIPT_PATHS,
 				'package.json',
 				'Dockerfile'
 			]) {
@@ -132,6 +134,9 @@ describe('docker build context', () => {
 					'RUN test ! -e /context/packages/ui/index.test.ts',
 					'RUN test ! -e /context/apps/hub/src/routes/__tests__/unexpected-error/+page.server.ts',
 					'RUN test -e /context/apps/hub/src/routes/+layout.server.ts',
+					...REQUIRED_DOCKER_BUILD_ROOT_SCRIPT_PATHS.map(
+						(includedPath) => `RUN test -e /context/${includedPath}`
+					),
 					'RUN test -e /context/package.json',
 					'RUN test -e /context/Dockerfile'
 				].join('\n')

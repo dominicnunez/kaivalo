@@ -6,19 +6,66 @@ import {
 	assertSupportedNodeVersion,
 	readPinnedNodeVersion
 } from '../scripts/check-node-version.ts';
+import {
+	getLocalBuildContextCopySources,
+	REQUIRED_DOCKER_BUILD_ROOT_SCRIPT_PATHS
+} from './helpers/dockerfile.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DOCKERFILE_PATH = path.join(ROOT, 'Dockerfile');
+const DOCKERIGNORE_PATH = path.join(ROOT, '.dockerignore');
 const PACKAGE_JSON_PATH = path.join(ROOT, 'package.json');
 const PACKAGE_LOCK_PATH = path.join(ROOT, 'package-lock.json');
 const HUB_PACKAGE_JSON_PATH = path.join(ROOT, 'apps', 'hub', 'package.json');
 const DOCKER_NODE_VERSION_PATTERN = /^FROM node:(\d+\.\d+\.\d+)-/m;
+
+function escapeRegExp(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeShellScript(value: string): string {
+	return value
+		.replace(/\\\s*\n/g, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
+function isBuildContextPathCopied(
+	buildContextSources: ReadonlySet<string>,
+	relativePath: string
+): boolean {
+	const parentDirectory = path.posix.dirname(relativePath);
+
+	return (
+		buildContextSources.has('.') ||
+		buildContextSources.has(parentDirectory) ||
+		buildContextSources.has(`${parentDirectory}/`) ||
+		buildContextSources.has(relativePath)
+	);
+}
 
 function readPinnedDockerNodeVersion(): string {
 	const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
 	const match = dockerfile.match(DOCKER_NODE_VERSION_PATTERN);
 	assert.ok(match, 'Dockerfile should pin a Node runtime image');
 	return match[1] ?? '';
+}
+
+function assertRunsNodePreflightFirst(
+	scriptName: string,
+	scriptValue: string | undefined,
+	preflightScriptPath: string
+): void {
+	const firstCommand = normalizeShellScript(scriptValue ?? '')
+		.split('&&')[0]
+		?.trim();
+
+	assert.ok(firstCommand, `${scriptName} should define a command`);
+	assert.ok(
+		firstCommand.includes('node:check') ||
+			firstCommand.includes(preflightScriptPath),
+		`${scriptName} should fail fast on unsupported Node.js versions`
+	);
 }
 
 describe('node runtime version alignment', () => {
@@ -50,7 +97,9 @@ describe('node runtime version alignment', () => {
 		);
 		assert.throws(
 			() => assertSupportedNodeVersion('v22.22.1', pinnedNodeVersion),
-			/Unsupported Node\.js runtime: expected 24\.14\.0, received 22\.22\.1/
+			new RegExp(
+				`Unsupported Node\\.js runtime: expected ${escapeRegExp(pinnedNodeVersion)}, received 22\\.22\\.1`
+			)
 		);
 	});
 
@@ -60,9 +109,9 @@ describe('node runtime version alignment', () => {
 		};
 		const scripts = packageJson.scripts ?? {};
 
-		assert.strictEqual(
-			scripts['node:check'],
-			'node scripts/check-node-version.ts'
+		assert.ok(
+			(scripts['node:check'] ?? '').includes('scripts/check-node-version.ts'),
+			'node:check should invoke the shared root Node.js preflight script'
 		);
 		for (const scriptName of [
 			'check',
@@ -74,10 +123,10 @@ describe('node runtime version alignment', () => {
 			'test:production',
 			'test:integration'
 		]) {
-			assert.match(
-				scripts[scriptName] ?? '',
-				/^npm run node:check && /,
-				`${scriptName} should fail fast on unsupported Node.js versions`
+			assertRunsNodePreflightFirst(
+				scriptName,
+				scripts[scriptName],
+				'scripts/check-node-version.ts'
 			);
 		}
 	});
@@ -90,9 +139,11 @@ describe('node runtime version alignment', () => {
 		};
 		const scripts = packageJson.scripts ?? {};
 
-		assert.strictEqual(
-			scripts['node:check'],
-			'node ../../scripts/check-node-version.ts'
+		assert.ok(
+			(scripts['node:check'] ?? '').includes(
+				'../../scripts/check-node-version.ts'
+			),
+			'hub node:check should invoke the shared root Node.js preflight script'
 		);
 		for (const scriptName of [
 			'build',
@@ -103,10 +154,41 @@ describe('node runtime version alignment', () => {
 			'test:unit',
 			'test:build'
 		]) {
+			assertRunsNodePreflightFirst(
+				scriptName,
+				scripts[scriptName],
+				'../../scripts/check-node-version.ts'
+			);
+		}
+	});
+
+	it('copies the required shared build helpers into the Docker build stage', () => {
+		const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
+		const buildContextSources = new Set(
+			getLocalBuildContextCopySources(dockerfile)
+		);
+
+		for (const requiredPath of REQUIRED_DOCKER_BUILD_ROOT_SCRIPT_PATHS) {
+			assert.ok(
+				isBuildContextPathCopied(buildContextSources, requiredPath),
+				`Dockerfile should copy ${requiredPath} into the build context`
+			);
+		}
+	});
+
+	it('keeps the required shared build helpers in the Docker build context', () => {
+		const dockerignore = readFileSync(DOCKERIGNORE_PATH, 'utf8');
+
+		assert.match(
+			dockerignore,
+			/^scripts\/\*$/m,
+			'.dockerignore should ignore root scripts by default'
+		);
+		for (const requiredPath of REQUIRED_DOCKER_BUILD_ROOT_SCRIPT_PATHS) {
 			assert.match(
-				scripts[scriptName] ?? '',
-				/^npm run node:check && /,
-				`${scriptName} should fail fast on unsupported Node.js versions`
+				dockerignore,
+				new RegExp(`^!${escapeRegExp(requiredPath)}$`, 'm'),
+				`.dockerignore should keep ${requiredPath} in the Docker build context`
 			);
 		}
 	});

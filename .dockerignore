@@ -13,7 +13,9 @@ docs
 eslint.config.js
 flake.lock
 flake.nix
-scripts
+scripts/*
+!scripts/check-node-version.ts
+!scripts/is-executed-directly.ts
 tests
 .envrc
 .prettierignore

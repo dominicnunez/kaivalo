@@ -7,6 +7,11 @@ type DockerCopyInstruction = {
 	destination: string;
 };
 
+export const REQUIRED_DOCKER_BUILD_ROOT_SCRIPT_PATHS = [
+	'scripts/check-node-version.ts',
+	'scripts/is-executed-directly.ts'
+] as const;
+
 function normalizeDockerInstruction(line: string): string {
 	return line
 		.trim()

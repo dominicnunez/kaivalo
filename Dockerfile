@@ -7,6 +7,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/hub/package.json apps/hub/package.json
 COPY packages/ui/package.json packages/ui/package.json
+COPY scripts/check-node-version.ts scripts/is-executed-directly.ts scripts/
 
 RUN npm ci --ignore-scripts
 
