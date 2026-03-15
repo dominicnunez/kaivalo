@@ -63,8 +63,10 @@ vi.mock('$env/dynamic/private', () => ({
 }));
 
 vi.mock('$lib/server/workos-auth.ts', () => ({
-	createClearedWorkosCallbackStateCookieHeader: () =>
+	createClearedWorkosCallbackStateCookieHeaders: () => [
 		'__Host-wos_callback_state=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax',
+		'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0; HttpOnly; Secure; SameSite=Lax'
+	],
 	didValidateWorkosCallbackState: (event: {
 		locals?: { __workosCallbackStateValidated?: boolean };
 	}) => event.locals?.__workosCallbackStateValidated === true,
@@ -166,6 +168,9 @@ describe('auth callback route', () => {
 		);
 		expect(response.headers.get('set-cookie')).toContain(
 			'__Host-wos_callback_state=; Path=/; Max-Age=0'
+		);
+		expect(response.headers.get('set-cookie')).toContain(
+			'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0'
 		);
 		expect(mockWorkosCallbackRequestHandler).toHaveBeenCalledOnce();
 	});
@@ -308,6 +313,9 @@ describe('auth callback route', () => {
 		expect(response.headers.get('set-cookie')).toContain(
 			'__Host-wos_callback_state=; Path=/; Max-Age=0'
 		);
+		expect(response.headers.get('set-cookie')).toContain(
+			'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0'
+		);
 		const location = new URL(
 			response.headers.get('location') ?? '',
 			'https://kaivalo.test'
@@ -361,6 +369,9 @@ describe('auth callback route', () => {
 		expect(response.status).toBe(302);
 		expect(response.headers.get('set-cookie')).toContain(
 			'__Host-wos_callback_state=; Path=/; Max-Age=0'
+		);
+		expect(response.headers.get('set-cookie')).toContain(
+			'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0'
 		);
 		const location = new URL(
 			response.headers.get('location') ?? '',
@@ -444,6 +455,9 @@ describe('auth callback route', () => {
 		expect(response.headers.get('content-type')).toContain('application/json');
 		expect(response.headers.get('set-cookie')).toContain(
 			'__Host-wos_callback_state=; Path=/; Max-Age=0'
+		);
+		expect(response.headers.get('set-cookie')).toContain(
+			'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0'
 		);
 		expect(response.headers.get('set-cookie')).not.toContain(
 			`${AUTHKIT_COOKIE_NAME}=`
@@ -553,6 +567,9 @@ describe('auth callback route', () => {
 		expect(response.headers.get('set-cookie')).toContain(
 			'__Host-wos_callback_state=; Path=/; Max-Age=0'
 		);
+		expect(response.headers.get('set-cookie')).toContain(
+			'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0'
+		);
 		expect(body.message).toEqual(
 			expect.stringMatching(/^Auth callback failed\. Reference: authcb_/)
 		);
@@ -589,6 +606,9 @@ describe('auth callback route', () => {
 		expect(response.headers.get('content-type')).toContain('application/json');
 		expect(response.headers.get('set-cookie')).toContain(
 			'__Host-wos_callback_state=; Path=/; Max-Age=0'
+		);
+		expect(response.headers.get('set-cookie')).toContain(
+			'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0'
 		);
 		expect(body.message).toEqual(
 			expect.stringMatching(/^Auth callback failed\. Reference: authcb_/)

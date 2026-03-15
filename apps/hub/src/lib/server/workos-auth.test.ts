@@ -16,6 +16,8 @@ import {
 	createWorkosSessionHandle
 } from './workos-auth.ts';
 
+const LEGACY_WORKOS_CALLBACK_STATE_COOKIE_NAME = '__Secure-wos_callback_state';
+
 type SessionResolve = Parameters<Handle>[0]['resolve'];
 type SessionEvent = Parameters<SessionResolve>[0];
 
@@ -60,7 +62,7 @@ function buildCallbackState(
 }
 
 describe('WorkOS auth sign-in start', () => {
-	it('mints a nonce cookie and passes the nonce through state', async () => {
+	it('mints transition-safe nonce cookies and passes the nonce through state', async () => {
 		const getSignInUrl = vi.fn(
 			async () => 'https://auth.kaivalo-login.com/start'
 		);
@@ -78,14 +80,56 @@ describe('WorkOS auth sign-in start', () => {
 			state: 'nonce-value'
 		});
 		expect(result.location).toBe('https://auth.kaivalo-login.com/start');
-		expect(result.headers).toMatchObject({
-			'set-cookie': expect.stringContaining(
-				`${WORKOS_CALLBACK_STATE_COOKIE_NAME}=nonce-value`
-			)
-		});
+		expect(result.headers).toEqual(
+			expect.arrayContaining([
+				[
+					'set-cookie',
+					expect.stringContaining(
+						`${WORKOS_CALLBACK_STATE_COOKIE_NAME}=nonce-value`
+					)
+				],
+				[
+					'set-cookie',
+					expect.stringContaining(
+						`${LEGACY_WORKOS_CALLBACK_STATE_COOKIE_NAME}=nonce-value`
+					)
+				]
+			])
+		);
+		const cookieHeaders = Array.isArray(result.headers)
+			? result.headers
+					.filter(([name]) => name.toLowerCase() === 'set-cookie')
+					.map(([, value]) => value)
+			: [];
+		expect(cookieHeaders).toHaveLength(2);
 		expect(
-			String((result.headers as Record<string, string>)['set-cookie'])
+			cookieHeaders.some((header) =>
+				header.startsWith(`${WORKOS_CALLBACK_STATE_COOKIE_NAME}=nonce-value`)
+			)
+		).toBe(true);
+		expect(
+			cookieHeaders.some((header) =>
+				header.startsWith(
+					`${LEGACY_WORKOS_CALLBACK_STATE_COOKIE_NAME}=nonce-value`
+				)
+			)
+		).toBe(true);
+		for (const cookieHeader of cookieHeaders) {
+			expect(cookieHeader).toContain('Max-Age=600');
+			expect(cookieHeader).toContain('HttpOnly');
+			expect(cookieHeader).toContain('Secure');
+			expect(cookieHeader).toContain('SameSite=Lax');
+		}
+		expect(
+			cookieHeaders.find((header) =>
+				header.startsWith(`${WORKOS_CALLBACK_STATE_COOKIE_NAME}=`)
+			)
 		).toContain('Path=/');
+		expect(
+			cookieHeaders.find((header) =>
+				header.startsWith(`${LEGACY_WORKOS_CALLBACK_STATE_COOKIE_NAME}=`)
+			)
+		).toContain('Path=/auth/callback');
 	});
 });
 
@@ -199,6 +243,35 @@ describe('WorkOS auth callback request handling', () => {
 		).rejects.toThrow(/state/i);
 
 		expect(handleCallback).not.toHaveBeenCalled();
+	});
+
+	it('accepts callbacks that still present the legacy auth flow cookie', async () => {
+		const handleCallback = vi.fn(async () => ({
+			response: new Response(null, {
+				status: 200
+			}),
+			headers: undefined,
+			returnPathname: '/services',
+			state: undefined,
+			authResponse: {}
+		}));
+		const handler = createWorkosCallbackRequestHandler({
+			handleCallback
+		});
+		const nonce = 'bc'.repeat(32);
+
+		const response = await handler(
+			createEvent(
+				`https://kaivalo.test/auth/callback?code=valid-code&state=${buildCallbackState(nonce)}`,
+				{
+					cookie: `${LEGACY_WORKOS_CALLBACK_STATE_COOKIE_NAME}=${nonce}`
+				}
+			) as never
+		);
+
+		expect(handleCallback).toHaveBeenCalledOnce();
+		expect(response.status).toBe(302);
+		expect(response.headers.get('location')).toBe('/services');
 	});
 
 	it('preserves the upstream session cookie after a successful callback', async () => {

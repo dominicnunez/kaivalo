@@ -5,7 +5,7 @@ import { createAuthCallbackGetHandler } from '$lib/auth/callback-handler.ts';
 import { shouldIncludeErrorMessage } from '$lib/server/error-diagnostics.ts';
 import { getValidatedWorkosEnv } from '$lib/server/workos-security.ts';
 import {
-	createClearedWorkosCallbackStateCookieHeader,
+	createClearedWorkosCallbackStateCookieHeaders,
 	createConfiguredWorkosCallbackRequestHandler,
 	didValidateWorkosCallbackState
 } from '$lib/server/workos-auth.ts';
@@ -13,10 +13,9 @@ import {
 let getHandler: ReturnType<typeof createAuthCallbackGetHandler> | null = null;
 
 function appendClearedCallbackStateCookie(response: Response): Response {
-	response.headers.append(
-		'set-cookie',
-		createClearedWorkosCallbackStateCookieHeader()
-	);
+	for (const headerValue of createClearedWorkosCallbackStateCookieHeaders()) {
+		response.headers.append('set-cookie', headerValue);
+	}
 	return response;
 }
 

@@ -63,10 +63,11 @@ const CALLBACK_ERROR_CODE_MAX_LENGTH = 64;
 const CALLBACK_ERROR_CODE_SEPARATOR_PATTERN = /[^A-Za-z0-9._:-]+/g;
 const CALLBACK_ERROR_CODE_EDGE_SEPARATOR_PATTERN = /^_+|_+$/g;
 const ROOT_COOKIE_PATH = '/';
-const CALLBACK_STATE_COOKIE_PATH = ROOT_COOKIE_PATH;
+const LEGACY_CALLBACK_STATE_COOKIE_PATH = '/auth/callback';
 const CALLBACK_STATE_COOKIE_MAX_AGE_SECONDS = 10 * 60;
 const CALLBACK_STATE_VALIDATED_LOCAL = '__workosCallbackStateValidated';
 export const WORKOS_CALLBACK_STATE_COOKIE_NAME = '__Host-wos_callback_state';
+const LEGACY_WORKOS_CALLBACK_STATE_COOKIE_NAME = '__Secure-wos_callback_state';
 
 export type WorkosCallbackRequestHandlerDependencies = {
 	handleCallback: (
@@ -179,16 +180,45 @@ function createWorkosCallbackStateCookieHeader(state: string): string {
 		WORKOS_CALLBACK_STATE_COOKIE_NAME,
 		state,
 		CALLBACK_STATE_COOKIE_MAX_AGE_SECONDS,
-		CALLBACK_STATE_COOKIE_PATH
+		ROOT_COOKIE_PATH
 	);
 }
 
-export function createClearedWorkosCallbackStateCookieHeader(): string {
+function createLegacyWorkosCallbackStateCookieHeader(state: string): string {
 	return createSecureCookieHeader(
-		WORKOS_CALLBACK_STATE_COOKIE_NAME,
-		'',
-		0,
-		CALLBACK_STATE_COOKIE_PATH
+		LEGACY_WORKOS_CALLBACK_STATE_COOKIE_NAME,
+		state,
+		CALLBACK_STATE_COOKIE_MAX_AGE_SECONDS,
+		LEGACY_CALLBACK_STATE_COOKIE_PATH
+	);
+}
+
+export function createClearedWorkosCallbackStateCookieHeaders(): string[] {
+	return [
+		createSecureCookieHeader(
+			WORKOS_CALLBACK_STATE_COOKIE_NAME,
+			'',
+			0,
+			ROOT_COOKIE_PATH
+		),
+		createSecureCookieHeader(
+			LEGACY_WORKOS_CALLBACK_STATE_COOKIE_NAME,
+			'',
+			0,
+			LEGACY_CALLBACK_STATE_COOKIE_PATH
+		)
+	];
+}
+
+function readExpectedCallbackState(request: Request): string | null {
+	const cookieHeader = request.headers.get('cookie');
+	if (!cookieHeader) {
+		return null;
+	}
+
+	return (
+		readCookieValue(cookieHeader, WORKOS_CALLBACK_STATE_COOKIE_NAME) ??
+		readCookieValue(cookieHeader, LEGACY_WORKOS_CALLBACK_STATE_COOKIE_NAME)
 	);
 }
 
@@ -242,10 +272,7 @@ function assertValidCallbackState(
 	request: Request,
 	state: string | undefined
 ): void {
-	const expectedState = readCookieValue(
-		request.headers.get('cookie'),
-		WORKOS_CALLBACK_STATE_COOKIE_NAME
-	);
+	const expectedState = readExpectedCallbackState(request);
 	if (!expectedState) {
 		throw new Error('Missing callback state cookie');
 	}
@@ -340,9 +367,10 @@ export function createWorkosSignInStart({
 				returnPathname: returnTo,
 				state
 			}),
-			headers: {
-				'set-cookie': createWorkosCallbackStateCookieHeader(state)
-			}
+			headers: [
+				['set-cookie', createWorkosCallbackStateCookieHeader(state)],
+				['set-cookie', createLegacyWorkosCallbackStateCookieHeader(state)]
+			]
 		};
 	};
 }

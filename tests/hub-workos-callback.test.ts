@@ -857,7 +857,8 @@ describe('WorkOS Auth Callback Route', () => {
 
 				assert.strictEqual(response.statusCode, 302);
 				assert.deepStrictEqual(getSetCookieHeaders(response.headers), [
-					'__Host-wos_callback_state=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax'
+					'__Host-wos_callback_state=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax',
+					'__Secure-wos_callback_state=; Max-Age=0; Path=/auth/callback; HttpOnly; Secure; SameSite=Lax'
 				]);
 				const location = new URL(
 					response.headers.location ?? '/',
@@ -934,7 +935,8 @@ describe('WorkOS Auth Callback Route', () => {
 				assert.deepStrictEqual(
 					getSetCookieHeaders(response.headers),
 					[
-						'__Host-wos_callback_state=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax'
+						'__Host-wos_callback_state=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax',
+						'__Secure-wos_callback_state=; Max-Age=0; Path=/auth/callback; HttpOnly; Secure; SameSite=Lax'
 					],
 					'failed upstream exchanges should clear the one-time callback state without minting a session cookie'
 				);
@@ -955,7 +957,8 @@ describe('WorkOS Auth Callback Route', () => {
 
 				assert.strictEqual(response.statusCode, 503);
 				assert.deepStrictEqual(getSetCookieHeaders(response.headers), [
-					'__Host-wos_callback_state=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax'
+					'__Host-wos_callback_state=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax',
+					'__Secure-wos_callback_state=; Max-Age=0; Path=/auth/callback; HttpOnly; Secure; SameSite=Lax'
 				]);
 				const failure = JSON.parse(response.data) as { message: string };
 				assert.match(
