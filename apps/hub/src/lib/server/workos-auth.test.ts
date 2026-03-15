@@ -85,7 +85,7 @@ describe('WorkOS auth sign-in start', () => {
 		});
 		expect(
 			String((result.headers as Record<string, string>)['set-cookie'])
-		).toContain('Path=/auth/callback');
+		).toContain('Path=/');
 	});
 });
 

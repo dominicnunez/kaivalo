@@ -32,7 +32,7 @@ vi.mock('$lib/server/workos-auth.ts', () => ({
 	createConfiguredWorkosSignInStart: mockCreateConfiguredWorkosSignInStart
 }));
 
-const WORKOS_CALLBACK_STATE_COOKIE_NAME = '__Secure-wos_callback_state';
+const WORKOS_CALLBACK_STATE_COOKIE_NAME = '__Host-wos_callback_state';
 
 function createEvent(
 	headers: HeadersInit = {},
@@ -87,7 +87,7 @@ function readNonceCookie(response: Response): string {
 	const separatorIndex = nameValue.indexOf('=');
 	expect(separatorIndex).toBeGreaterThan(0);
 	const attributes = parseSetCookieAttributes(cookieHeader);
-	expect(attributes.get('path')).toBe('/auth/callback');
+	expect(attributes.get('path')).toBe('/');
 	expect(attributes.has('httponly')).toBe(true);
 	expect(attributes.has('secure')).toBe(true);
 	expect(attributes.get('samesite')?.toLowerCase()).toBe('lax');
@@ -129,7 +129,7 @@ describe('auth sign-in route', () => {
 			location: `https://auth.kaivalo-login.com/user_management/authorize?screen_hint=sign-up&state=${buildReturnToState('/services')}.nonce-value`,
 			headers: {
 				'set-cookie':
-					'__Secure-wos_callback_state=nonce-value; Path=/auth/callback; Max-Age=600; HttpOnly; Secure; SameSite=Lax'
+					'__Host-wos_callback_state=nonce-value; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=Lax'
 			}
 		} as never);
 
@@ -166,7 +166,7 @@ describe('auth sign-in route', () => {
 			location: 'https://kaivalo.test/services?welcome=1#hero',
 			headers: {
 				'set-cookie':
-					'__Secure-wos_callback_state=nonce-value; Path=/auth/callback; Max-Age=600; HttpOnly; Secure; SameSite=Lax'
+					'__Host-wos_callback_state=nonce-value; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=Lax'
 			}
 		} as never);
 
@@ -176,7 +176,7 @@ describe('auth sign-in route', () => {
 		expect(response.status).toBe(303);
 		expect(response.headers.get('location')).toBe('/services?welcome=1#hero');
 		expect(response.headers.get('set-cookie')).toContain(
-			'__Secure-wos_callback_state=nonce-value'
+			'__Host-wos_callback_state=nonce-value'
 		);
 	});
 
@@ -185,7 +185,7 @@ describe('auth sign-in route', () => {
 			location: 'https://kaivalo.test/services?welcome=1#hero',
 			headers: {
 				'set-cookie':
-					'__Secure-wos_callback_state=nonce-value; Path=/auth/callback; Max-Age=600; HttpOnly; Secure; SameSite=Lax'
+					'__Host-wos_callback_state=nonce-value; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=Lax'
 			}
 		} as never);
 
@@ -199,7 +199,7 @@ describe('auth sign-in route', () => {
 			'https://kaivalo.test/services?welcome=1#hero'
 		);
 		expect(response.headers.get('set-cookie')).toContain(
-			'__Secure-wos_callback_state=nonce-value'
+			'__Host-wos_callback_state=nonce-value'
 		);
 	});
 
@@ -252,7 +252,7 @@ describe('auth sign-in route', () => {
 			location: 'https://kaivalo.test/auth/sign-in?screen_hint=sign-up#hero',
 			headers: {
 				'set-cookie':
-					'__Secure-wos_callback_state=nonce-value; Path=/auth/callback; Max-Age=600; HttpOnly; Secure; SameSite=Lax'
+					'__Host-wos_callback_state=nonce-value; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=Lax'
 			}
 		} as never);
 
@@ -287,7 +287,7 @@ describe('auth sign-in route', () => {
 			location: 'https://evil.example/login',
 			headers: {
 				'set-cookie':
-					'__Secure-wos_callback_state=nonce-value; Path=/auth/callback; Max-Age=600; HttpOnly; Secure; SameSite=Lax'
+					'__Host-wos_callback_state=nonce-value; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=Lax'
 			}
 		} as never);
 

@@ -41,7 +41,7 @@ There may still be room to tighten the build context further, but this finding i
 
 ### Baseline security headers leave the app without any Content-Security-Policy
 
-**Location:** `apps/hub/src/lib/server/workos-security.js:612` — baseline header helper
+**Location:** `apps/hub/src/lib/server/workos-security-cache.ts:410` — baseline header helper
 
 **Date:** 2026-03-07
 
@@ -51,13 +51,13 @@ There may still be a narrower question about raw Node-generated responses outsid
 
 ### Startup tests never exercise asynchronous bind failures like EADDRINUSE
 
-**Location:** `tests/hub-node-server-port-validation.test.js:49` — report overlooked broader startup coverage in the main node server suite
+**Location:** `tests/hub-node-server-port-validation.test.ts:49` — report overlooked broader startup coverage in the main node server suite
 
 **Date:** 2026-03-07
 
 **Reason:** The claim says the current test suite never exercises asynchronous `server.listen()` failures.
-That is incorrect: `tests/hub-node-server.test.js:664` already reserves a local port, calls `startHubServer()` with that occupied port, waits for the fatal event, and asserts the controlled startup-failure path.
-The narrower `tests/hub-node-server-port-validation.test.js` file does focus on synchronous validation failures, but the audit described a suite-wide coverage gap that does not exist.
+That is incorrect: `tests/hub-node-server.test.ts:870` already reserves a local port, calls `startHubServer()` with that occupied port, waits for the fatal event, and asserts the controlled startup-failure path.
+The narrower `tests/hub-node-server-port-validation.test.ts` file does focus on synchronous validation failures, but the audit described a suite-wide coverage gap that does not exist.
 
 ### The cookie advisory allowlist is masking a repo-controlled dependency fix
 
@@ -74,21 +74,21 @@ The actionable repo-controlled work was to keep the exception accurate and conti
 
 **Reason:** The audit missed the repo's existing review loop for this exception.
 `docs/development.md` already documents that `npm run audit:deps` allows accepted upstream-only production advisories while failing new ones, and the exception is tracked in `audit/exceptions/risks.md`.
-The repository also has a scheduled upstream monitor in `.github/workflows/track-sveltekit-upstream.yml` backed by `scripts/check-sveltekit-upstream.mjs`, which opens or updates a tracking issue whenever a newer `@sveltejs/kit` release appears.
+The repository also has a scheduled upstream monitor in `.github/workflows/track-sveltekit-upstream.yml` backed by `scripts/check-sveltekit-upstream.ts`, which opens or updates a tracking issue whenever a newer `@sveltejs/kit` release appears.
 Because the exception is already documented and actively revisited, the audit's claim that the allowlist creates a false sense of security unless it is revisited is a misread of the current repo controls.
 
 ### Test auth fixture return-to headers create an open redirect
 
-**Location:** `apps/hub/src/lib/server/authkit-runtime.ts:165` — fixture callback and sign-out handlers copy caller-supplied return targets into `Location`
+**Location:** `apps/hub/src/routes/auth/callback/+server.ts:1` — fixture callback and sign-out behavior is only exposed through the route wrappers
 
 **Reason:** The audit stopped at `authkit-runtime.ts` and missed the actual route handlers that serve these responses.
-`apps/hub/src/routes/auth/callback/+server.ts` wraps the fixture callback handler with `createAuthCallbackGetHandler()`, and `apps/hub/src/lib/auth/callback-handler.js:63` normalizes redirect responses to same-origin targets and rejects external locations.
-`apps/hub/src/routes/auth/sign-out/+server.ts` wraps fixture sign-out through `createSignOutPostHandler()`, and `apps/hub/src/lib/auth/sign-out-handler.js:166` applies the same same-origin redirect normalization or rejects invalid locations.
+`apps/hub/src/routes/auth/callback/+server.ts` wraps the fixture callback handler with `createAuthCallbackGetHandler()`, and `apps/hub/src/lib/auth/callback-handler.ts:112` normalizes redirect responses to same-origin targets and rejects external locations.
+`apps/hub/src/routes/auth/sign-out/+server.ts` wraps fixture sign-out through `createSignOutPostHandler()`, and `apps/hub/src/lib/auth/sign-out-handler.ts:195` applies the same same-origin redirect normalization or rejects invalid locations.
 Because the exported route paths always pass through those wrappers, the externally observable open-redirect behavior described in the audit does not actually occur.
 
 ### Node-server test still documents a removed debug env toggle
 
-**Location:** `tests/hub-node-server.test.js:147` — production redaction test that sets `KAIVALO_INCLUDE_SENSITIVE_ERROR_LOGS`
+**Location:** `tests/hub-node-server.test.ts:244` — production redaction test that sets `KAIVALO_INCLUDE_SENSITIVE_ERROR_LOGS`
 
 **Reason:** The audit misread the test’s intent.
 The runtime no longer reads `KAIVALO_INCLUDE_SENSITIVE_ERROR_LOGS`, and the test explicitly verifies that setting the legacy variable does not disable production redaction.
@@ -128,19 +128,19 @@ The shared validator in `apps/hub/src/lib/server/workos-security-env.ts:217` rej
 
 ### The hook tests preserve an app-wide missing Content Security Policy
 
-**Location:** `tests/hub-workos-hooks.test.js:444` — helper-level security header assertion
+**Location:** `tests/hub-workos-hooks.test.ts:456` — helper-level security header assertion
 
 **Reason:** The report treats `assert.strictEqual(response.headers.get('Content-Security-Policy'), null)` as proof that the suite locks in a missing browser CSP for real HTML responses.
 That misreads the current layering: the helper-level test only asserts that `createSecurityHeadersHandle()` itself does not add CSP, while real app responses already receive CSP from SvelteKit config in `apps/hub/svelte.config.js:10`.
-`tests/hub-workos-hooks.test.js:985` and `tests/hub-workos-hooks.test.js:1030` already verify that preview-served HTML and framework-generated 500 pages include the expected `Content-Security-Policy` header.
+`tests/hub-workos-hooks.test.ts:983` and `tests/hub-workos-hooks.test.ts:1043` already verify that preview-served HTML and framework-generated 500 pages include the expected `Content-Security-Policy` header.
 So the suite is not preserving the app-wide gap the audit described.
 
 ### Hook and WorkOS tests are redundant with lower-level validator coverage
 
-**Location:** `tests/hub-workos-hooks.test.js:61` — environment and proxy validation assertions
+**Location:** `tests/hub-workos-hooks.test.ts:61` — environment and proxy validation assertions
 
 **Reason:** The report says this file mostly duplicates existing lower-level coverage in dedicated `workos-security` and startup suites, but the current codebase does not support that claim.
-`apps/hub/src/lib/server/workos-security.test.js` covers static-asset policy, protocol checks, and a small hostname/proto subset; it does not replicate the broad missing-env, callback-path, origin-matching, loopback, or proxy-trust cases asserted here.
+`apps/hub/src/lib/server/workos-security.test.ts` covers static-asset policy, protocol checks, and a small hostname/proto subset; it does not replicate the broad missing-env, callback-path, origin-matching, loopback, or proxy-trust cases asserted here.
 `apps/hub/src/hooks.server.test.ts` exercises hook behavior and one startup failure path, not the validator matrix in this file.
 The audit therefore overstates duplication and describes an already-covered gap that does not actually exist.
 
@@ -150,7 +150,7 @@ The audit therefore overstates duplication and describes an already-covered gap 
 
 **Reason:** The audit missed the route-specific contract this test actually covers.
 `apps/hub/src/routes/auth/sign-out/+server.ts` derives `allowedRedirectOrigins` from validated env via `getTrustedWorkosAuthOrigin(workosEnv)`, and this test verifies that a redirect to the configured auth host `auth.kaivalo-login.com` is preserved through the real route wrapper.
-The broader `tests/hub-sign-out.test.js` suite exercises CSRF, redirect normalization, and generic allowed-origin behavior, but it does not verify this route-level env-to-handler wiring for a custom `WORKOS_API_HOSTNAME`.
+The broader `tests/hub-sign-out.test.ts` suite exercises CSRF, redirect normalization, and generic allowed-origin behavior, but it does not verify this route-level env-to-handler wiring for a custom `WORKOS_API_HOSTNAME`.
 
 ### Vulnerable production cookie dependency is still shipped through @sveltejs/kit
 
@@ -162,11 +162,11 @@ Because there is no durable in-repo remediation path today beyond waiting for th
 
 ### Public API smoke test only re-checks component rendering already covered elsewhere
 
-**Location:** `apps/hub/src/ui-public-api.test.ts:10`
+**Location:** `packages/ui/index.test.ts:10`
 
 **Reason:** This test does more than duplicate the direct component tests.
-`apps/hub/src/ui-public-api.test.ts` imports `Button`, `Badge`, `Card`, and `Container` from the package root `@kaivalo/ui`, while `apps/hub/src/ui-components.test.ts` imports the Svelte files directly from `packages/ui`.
-That means the public-API test uniquely verifies the package barrel exports and consumer import surface, which normal component rendering tests and the current app build do not fully cover.
+`packages/ui/index.test.ts` imports `Button`, `Badge`, `Card`, and `Container` from the package root `./index.ts`.
+That means the public-API test uniquely verifies the package barrel exports and consumer import surface, which a plain build or direct component render does not fully cover.
 
 ### Shared preview helper can leave detached test servers running after abrupt exits
 
@@ -218,6 +218,23 @@ When forwarded data is malformed, the code falls back to the shared empty-key bu
 **Reason:** The audit stopped at `prepare-runtime.ts` and missed the surrounding build behavior.
 `npm --prefix apps/hub run build` runs `vite build` before `node scripts/prepare-runtime.ts`, and the real build clears `apps/hub/build` before the runtime helper copy step.
 Seeding `apps/hub/build/runtime/server/__audit_stale_helper__.ts` and then running `HUB_BUILD_ALLOW_PLACEHOLDERS=true npm --prefix apps/hub run build` removed the stale file, so the obsolete helper does not persist into the artifact later copied by `Dockerfile`.
+
+### Exact Node patch pinning blocks newer Node 24 patch releases
+
+**Location:** `scripts/check-node-version.ts:42` — runtime preflight compared against the repo-pinned Docker/CI patch version
+
+**Reason:** `assertSupportedNodeVersion()` does reject `24.14.1` and other patch releases, but the repository deliberately enforces that exact patch-level alignment.
+`package.json`, `package-lock.json`, `Dockerfile`, GitHub workflow `node-version` settings, and `tests/node-version-alignment.test.ts` all pin and verify the same `24.14.0` runtime.
+The audit described real behavior, but misclassified this reproducibility guardrail as an accidental compatibility bug.
+
+### Real WorkOS sign-out handling only exercises the happy path
+
+**Location:** `apps/hub/src/lib/server/workos-auth.test.ts:85` — configured sign-out handler coverage
+
+**Reason:** The audit missed existing failure-path coverage for the configured WorkOS sign-out flow.
+`tests/hub-preview-script.test.ts:480` starts the real preview app, signs in through the callback route, then exercises `/auth/sign-out` while `tests/helpers/hub-preview-fixtures.mts:212` patches `AuthService.prototype.signOut` to throw.
+That path goes through the actual configured sign-out handler and already asserts the sanitized `503` response and that no cookies are leaked on failure.
+A narrower gap around malformed logout response contracts may still exist, but the report's claim that real sign-out handling only covers the happy path is factually wrong.
 
 ### Avatar proxy double-buffers every successful image body
 

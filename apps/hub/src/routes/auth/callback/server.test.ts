@@ -64,7 +64,7 @@ vi.mock('$env/dynamic/private', () => ({
 
 vi.mock('$lib/server/workos-auth.ts', () => ({
 	createClearedWorkosCallbackStateCookieHeader: () =>
-		'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0; HttpOnly; Secure; SameSite=Lax',
+		'__Host-wos_callback_state=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax',
 	didValidateWorkosCallbackState: (event: {
 		locals?: { __workosCallbackStateValidated?: boolean };
 	}) => event.locals?.__workosCallbackStateValidated === true,
@@ -165,7 +165,7 @@ describe('auth callback route', () => {
 			'https://kaivalo.test/services#shell'
 		);
 		expect(response.headers.get('set-cookie')).toContain(
-			'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0'
+			'__Host-wos_callback_state=; Path=/; Max-Age=0'
 		);
 		expect(mockWorkosCallbackRequestHandler).toHaveBeenCalledOnce();
 	});
@@ -306,7 +306,7 @@ describe('auth callback route', () => {
 
 		expect(response.status).toBe(303);
 		expect(response.headers.get('set-cookie')).toContain(
-			'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0'
+			'__Host-wos_callback_state=; Path=/; Max-Age=0'
 		);
 		const location = new URL(
 			response.headers.get('location') ?? '',
@@ -360,7 +360,7 @@ describe('auth callback route', () => {
 
 		expect(response.status).toBe(302);
 		expect(response.headers.get('set-cookie')).toContain(
-			'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0'
+			'__Host-wos_callback_state=; Path=/; Max-Age=0'
 		);
 		const location = new URL(
 			response.headers.get('location') ?? '',
@@ -409,6 +409,48 @@ describe('auth callback route', () => {
 				)
 			}
 		});
+		expect(errorSpy).toHaveBeenCalledOnce();
+		expect(errorSpy).toHaveBeenCalledWith(
+			'Auth callback failed',
+			expect.objectContaining({
+				errorCode: 'AUTH_CALLBACK_UNEXPECTED_FAILURE',
+				pathname: '/auth/callback',
+				method: 'GET',
+				incidentId: expect.stringMatching(/^authcb_/),
+				errorName: 'Error'
+			})
+		);
+	});
+
+	it('clears validated callback state for non-browser callback failures', async () => {
+		const errorSpy = vi
+			.spyOn(console, 'error')
+			.mockImplementation(() => undefined);
+		mockWorkosCallbackRequestHandler.mockImplementation(async (event) => {
+			markValidatedCallbackState(event);
+			throw new Error('upstream unavailable');
+		});
+
+		const { GET } = await import('./+server');
+
+		const response = await GET(
+			createEvent({
+				accept: 'application/json'
+			})
+		);
+		const body = (await response.json()) as { message?: unknown };
+
+		expect(response.status).toBe(503);
+		expect(response.headers.get('content-type')).toContain('application/json');
+		expect(response.headers.get('set-cookie')).toContain(
+			'__Host-wos_callback_state=; Path=/; Max-Age=0'
+		);
+		expect(response.headers.get('set-cookie')).not.toContain(
+			`${AUTHKIT_COOKIE_NAME}=`
+		);
+		expect(body.message).toEqual(
+			expect.stringMatching(/^Auth callback failed\. Reference: authcb_/)
+		);
 		expect(errorSpy).toHaveBeenCalledOnce();
 		expect(errorSpy).toHaveBeenCalledWith(
 			'Auth callback failed',
@@ -499,20 +541,21 @@ describe('auth callback route', () => {
 
 		const { GET } = await import('./+server');
 
-		await expect(
-			GET(
-				createEvent({
-					accept: 'application/json'
-				})
-			)
-		).rejects.toMatchObject({
-			status: 503,
-			body: {
-				message: expect.stringMatching(
-					/^Auth callback failed\. Reference: authcb_/
-				)
-			}
-		});
+		const response = await GET(
+			createEvent({
+				accept: 'application/json'
+			})
+		);
+		const body = (await response.json()) as { message?: unknown };
+
+		expect(response.status).toBe(503);
+		expect(response.headers.get('content-type')).toContain('application/json');
+		expect(response.headers.get('set-cookie')).toContain(
+			'__Host-wos_callback_state=; Path=/; Max-Age=0'
+		);
+		expect(body.message).toEqual(
+			expect.stringMatching(/^Auth callback failed\. Reference: authcb_/)
+		);
 		expect(errorSpy).toHaveBeenCalledWith(
 			'Auth callback failed',
 			expect.objectContaining({
@@ -535,20 +578,21 @@ describe('auth callback route', () => {
 
 		const { GET } = await import('./+server');
 
-		await expect(
-			GET(
-				createEvent({
-					accept: 'application/json'
-				})
-			)
-		).rejects.toMatchObject({
-			status: 503,
-			body: {
-				message: expect.stringMatching(
-					/^Auth callback failed\. Reference: authcb_/
-				)
-			}
-		});
+		const response = await GET(
+			createEvent({
+				accept: 'application/json'
+			})
+		);
+		const body = (await response.json()) as { message?: unknown };
+
+		expect(response.status).toBe(503);
+		expect(response.headers.get('content-type')).toContain('application/json');
+		expect(response.headers.get('set-cookie')).toContain(
+			'__Host-wos_callback_state=; Path=/; Max-Age=0'
+		);
+		expect(body.message).toEqual(
+			expect.stringMatching(/^Auth callback failed\. Reference: authcb_/)
+		);
 		expect(errorSpy).toHaveBeenCalledWith(
 			'Auth callback failed',
 			expect.objectContaining({

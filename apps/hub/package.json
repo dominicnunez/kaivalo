@@ -36,6 +36,7 @@
 	"dependencies": {
 		"@workos/authkit-session": "^0.3.4",
 		"@workos/authkit-sveltekit": "^0.1.0",
+		"cookie": "^1.1.1",
 		"lucide-svelte": "^0.563.0"
 	}
 }

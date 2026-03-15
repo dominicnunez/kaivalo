@@ -1,4 +1,4 @@
-import { isRedirect, isHttpError } from '@sveltejs/kit';
+import { isRedirect, isHttpError, type HttpError } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import type { RequestHandler } from './$types';
 import { createAuthCallbackGetHandler } from '$lib/auth/callback-handler.ts';
@@ -18,6 +18,15 @@ function appendClearedCallbackStateCookie(response: Response): Response {
 		createClearedWorkosCallbackStateCookieHeader()
 	);
 	return response;
+}
+
+function createHttpErrorResponse(error: HttpError): Response {
+	return new Response(JSON.stringify(error.body), {
+		status: error.status,
+		headers: {
+			'content-type': 'application/json; charset=utf-8'
+		}
+	});
 }
 
 function getCallbackHandler(): ReturnType<typeof createAuthCallbackGetHandler> {
@@ -46,6 +55,9 @@ export const GET: RequestHandler = async (event) => {
 			: response;
 	} catch (error) {
 		if (!isRedirect(error)) {
+			if (didValidateWorkosCallbackState(event) && isHttpError(error)) {
+				return appendClearedCallbackStateCookie(createHttpErrorResponse(error));
+			}
 			throw error;
 		}
 

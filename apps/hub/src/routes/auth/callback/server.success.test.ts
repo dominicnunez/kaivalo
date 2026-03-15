@@ -178,7 +178,7 @@ async function expectBrowserCallbackFailure(
 	expect(getSetCookieHeaders(response.headers)).toEqual(
 		expect.arrayContaining([
 			expect.stringContaining(
-				`${WORKOS_CALLBACK_STATE_COOKIE_NAME}=; Path=/auth/callback; Max-Age=0`
+				`${WORKOS_CALLBACK_STATE_COOKIE_NAME}=; Max-Age=0; Path=/`
 			)
 		])
 	);
@@ -290,7 +290,7 @@ describe('auth callback success path', () => {
 			expect.arrayContaining([
 				expect.stringContaining(`${AUTHKIT_COOKIE_NAME}=`),
 				expect.stringContaining(
-					`${WORKOS_CALLBACK_STATE_COOKIE_NAME}=; Path=/auth/callback; Max-Age=0`
+					`${WORKOS_CALLBACK_STATE_COOKIE_NAME}=; Max-Age=0; Path=/`
 				)
 			])
 		);

@@ -14,6 +14,7 @@ import {
 	getWorkOS,
 	sessionEncryption
 } from '@workos/authkit-session';
+import { parse, serialize } from 'cookie';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import {
 	AUTH_NOTICE_SIGN_IN_CANCELLED_VALUE,
@@ -61,10 +62,11 @@ const CALLBACK_PROVIDER_ERROR_CODE_QUERY_NAME = 'provider_code';
 const CALLBACK_ERROR_CODE_MAX_LENGTH = 64;
 const CALLBACK_ERROR_CODE_SEPARATOR_PATTERN = /[^A-Za-z0-9._:-]+/g;
 const CALLBACK_ERROR_CODE_EDGE_SEPARATOR_PATTERN = /^_+|_+$/g;
-const CALLBACK_STATE_COOKIE_PATH = '/auth/callback';
+const ROOT_COOKIE_PATH = '/';
+const CALLBACK_STATE_COOKIE_PATH = ROOT_COOKIE_PATH;
 const CALLBACK_STATE_COOKIE_MAX_AGE_SECONDS = 10 * 60;
 const CALLBACK_STATE_VALIDATED_LOCAL = '__workosCallbackStateValidated';
-export const WORKOS_CALLBACK_STATE_COOKIE_NAME = '__Secure-wos_callback_state';
+export const WORKOS_CALLBACK_STATE_COOKIE_NAME = '__Host-wos_callback_state';
 
 export type WorkosCallbackRequestHandlerDependencies = {
 	handleCallback: (
@@ -154,30 +156,7 @@ function readCookieValue(
 		return null;
 	}
 
-	for (const pair of cookieHeader.split(';')) {
-		const trimmed = pair.trim();
-		if (!trimmed) {
-			continue;
-		}
-
-		const separatorIndex = trimmed.indexOf('=');
-		if (separatorIndex <= 0) {
-			continue;
-		}
-
-		if (trimmed.slice(0, separatorIndex) !== cookieName) {
-			continue;
-		}
-
-		const value = trimmed.slice(separatorIndex + 1);
-		try {
-			return decodeURIComponent(value);
-		} catch {
-			return value;
-		}
-	}
-
-	return null;
+	return parse(cookieHeader)[cookieName] ?? null;
 }
 
 function createSecureCookieHeader(
@@ -186,14 +165,13 @@ function createSecureCookieHeader(
 	maxAgeSeconds: number,
 	pathname: string
 ): string {
-	return [
-		`${name}=${encodeURIComponent(value)}`,
-		`Path=${pathname}`,
-		`Max-Age=${maxAgeSeconds}`,
-		'HttpOnly',
-		'Secure',
-		'SameSite=Lax'
-	].join('; ');
+	return serialize(name, value, {
+		path: pathname,
+		maxAge: maxAgeSeconds,
+		httpOnly: true,
+		secure: true,
+		sameSite: 'lax'
+	});
 }
 
 function createWorkosCallbackStateCookieHeader(state: string): string {
