@@ -5,6 +5,7 @@ export const AVATAR_PROXY_PATH = '/avatar';
 export const AVATAR_PROXY_TOKEN_QUERY_NAME = 'token';
 export const AVATAR_PROXY_TOKEN_TTL_MS = 5 * 60 * 1000;
 export const AVATAR_PROXY_TOKEN_MAX_FUTURE_SKEW_MS = 30 * 1000;
+const AVATAR_PROXY_TOKEN_CACHE_MAX_ENTRIES = 512;
 
 type AvatarProxySigningOptions = {
 	secret: string;
@@ -17,7 +18,14 @@ type AvatarProxyTokenPayload = {
 	signature: string;
 };
 
+type AvatarProxyTokenCacheEntry = {
+	issuedAt: number;
+	token: string;
+	expiresAt: number;
+};
+
 const AVATAR_PROXY_TOKEN_SIGNATURE_PATTERN = /^[A-Za-z0-9_-]+$/;
+const avatarProxyTokenCache = new Map<string, AvatarProxyTokenCacheEntry>();
 
 function normalizeSigningSecret(secret: string): string {
 	return secret.trim();
@@ -48,6 +56,35 @@ function signaturesMatch(
 
 function encodeAvatarProxyToken(payload: AvatarProxyTokenPayload): string {
 	return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+}
+
+function getAvatarProxyTokenCacheKey(source: string, secret: string): string {
+	return `${secret}:${source}`;
+}
+
+function touchAvatarProxyTokenCacheEntry(
+	cacheKey: string,
+	entry: AvatarProxyTokenCacheEntry
+): void {
+	avatarProxyTokenCache.delete(cacheKey);
+	avatarProxyTokenCache.set(cacheKey, entry);
+}
+
+function pruneExpiredAvatarProxyTokenCache(now: number): void {
+	for (const [cacheKey, entry] of avatarProxyTokenCache.entries()) {
+		if (entry.expiresAt >= now) {
+			continue;
+		}
+
+		avatarProxyTokenCache.delete(cacheKey);
+	}
+}
+
+function evictOldestAvatarProxyTokenCacheEntry(): void {
+	const oldestKey = avatarProxyTokenCache.keys().next().value;
+	if (oldestKey) {
+		avatarProxyTokenCache.delete(oldestKey);
+	}
 }
 
 function decodeAvatarProxyToken(
@@ -128,12 +165,35 @@ export function createAvatarProxyToken(
 		throw new Error('secret must be a non-empty string');
 	}
 
+	const cacheKey = getAvatarProxyTokenCacheKey(sanitized, normalizedSecret);
+	const cachedEntry = avatarProxyTokenCache.get(cacheKey);
+	if (
+		cachedEntry &&
+		cachedEntry.expiresAt >= now &&
+		cachedEntry.issuedAt - now <= AVATAR_PROXY_TOKEN_MAX_FUTURE_SKEW_MS
+	) {
+		touchAvatarProxyTokenCacheEntry(cacheKey, cachedEntry);
+		return cachedEntry.token;
+	}
+
 	const timestamp = String(now);
-	return encodeAvatarProxyToken({
+	const token = encodeAvatarProxyToken({
 		source: sanitized,
 		timestamp,
 		signature: signAvatarSource(sanitized, timestamp, normalizedSecret)
 	});
+
+	pruneExpiredAvatarProxyTokenCache(now);
+	if (avatarProxyTokenCache.size >= AVATAR_PROXY_TOKEN_CACHE_MAX_ENTRIES) {
+		evictOldestAvatarProxyTokenCacheEntry();
+	}
+	avatarProxyTokenCache.set(cacheKey, {
+		issuedAt: now,
+		token,
+		expiresAt: now + AVATAR_PROXY_TOKEN_TTL_MS
+	});
+
+	return token;
 }
 
 export function readVerifiedAvatarProxySource(

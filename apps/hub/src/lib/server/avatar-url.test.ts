@@ -70,6 +70,44 @@ describe('avatar url policy', () => {
 		).toBe('https://lh3.googleusercontent.com/a/abc123');
 	});
 
+	it('reuses the same avatar proxy url while the cached token remains valid', () => {
+		const firstUrl = toAvatarProxyUrl(
+			'https://avatars.githubusercontent.com/u/1',
+			{
+				secret: AVATAR_PROXY_SECRET,
+				now: AVATAR_PROXY_NOW
+			}
+		);
+		const secondUrl = toAvatarProxyUrl(
+			'https://avatars.githubusercontent.com/u/1?size=96',
+			{
+				secret: AVATAR_PROXY_SECRET,
+				now: AVATAR_PROXY_NOW + 60_000
+			}
+		);
+
+		expect(secondUrl).toBe(firstUrl);
+	});
+
+	it('rotates the avatar proxy url after the cached token expires', () => {
+		const firstUrl = toAvatarProxyUrl(
+			'https://avatars.githubusercontent.com/u/1',
+			{
+				secret: AVATAR_PROXY_SECRET,
+				now: AVATAR_PROXY_NOW
+			}
+		);
+		const rotatedUrl = toAvatarProxyUrl(
+			'https://avatars.githubusercontent.com/u/1',
+			{
+				secret: AVATAR_PROXY_SECRET,
+				now: AVATAR_PROXY_NOW + AVATAR_PROXY_TOKEN_TTL_MS + 1
+			}
+		);
+
+		expect(rotatedUrl).not.toBe(firstUrl);
+	});
+
 	it('rejects expired avatar proxy tokens', () => {
 		const avatarProxyUrl = toAvatarProxyUrl(
 			'https://avatars.githubusercontent.com/u/1',
