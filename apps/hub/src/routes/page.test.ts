@@ -30,29 +30,44 @@ const SIGNED_AVATAR_URL =
 		now: Date.UTC(2026, 2, 14, 12, 0, 0)
 	}) ?? '';
 
-function createMatchMediaController(matches = false) {
+function createMatchMediaController(
+	matches = false,
+	{ supportsEventListener = true } = {}
+) {
 	const listeners = new Set<EventListenerOrEventListenerObject>();
 	const state = { matches };
+	const addChangeListener = (listener: EventListenerOrEventListenerObject) => {
+		listeners.add(listener);
+	};
+	const removeChangeListener = (
+		listener: EventListenerOrEventListenerObject
+	) => {
+		listeners.delete(listener);
+	};
 	const mediaQuery = {
 		get matches() {
 			return state.matches;
 		},
 		media: '(prefers-reduced-motion: reduce)',
 		onchange: null,
-		addEventListener: vi.fn(
-			(_type: string, listener: EventListenerOrEventListenerObject) => {
-				listeners.add(listener);
-			}
-		),
-		removeEventListener: vi.fn(
-			(_type: string, listener: EventListenerOrEventListenerObject) => {
-				listeners.delete(listener);
-			}
-		),
-		addListener: vi.fn(),
-		removeListener: vi.fn(),
+		addEventListener: supportsEventListener
+			? vi.fn((_type: string, listener: EventListenerOrEventListenerObject) => {
+					addChangeListener(listener);
+				})
+			: undefined,
+		removeEventListener: supportsEventListener
+			? vi.fn((_type: string, listener: EventListenerOrEventListenerObject) => {
+					removeChangeListener(listener);
+				})
+			: undefined,
+		addListener: vi.fn((listener: EventListenerOrEventListenerObject) => {
+			addChangeListener(listener);
+		}),
+		removeListener: vi.fn((listener: EventListenerOrEventListenerObject) => {
+			removeChangeListener(listener);
+		}),
 		dispatchEvent: vi.fn()
-	} as MediaQueryList;
+	} as unknown as MediaQueryList;
 
 	return {
 		mediaQuery,
@@ -355,6 +370,33 @@ describe('home page client behavior', () => {
 		expect(getHeroTypewriterText(container)).toContain(
 			'Making chimney cleaning|simple.'
 		);
+	});
+
+	it('falls back to legacy media query listeners when change events are unavailable', async () => {
+		matchMediaController = createMatchMediaController(false, {
+			supportsEventListener: false
+		});
+		window.matchMedia = vi
+			.fn()
+			.mockImplementation(() => matchMediaController.mediaQuery);
+
+		const { container, unmount } = renderPage();
+
+		expect(matchMediaController.mediaQuery.addListener).toHaveBeenCalledTimes(
+			1
+		);
+		expect(matchMediaController.mediaQuery.addEventListener).toBeUndefined();
+
+		matchMediaController.setMatches(true);
+		await tick();
+		expect(getHeroTypewriterText(container)).toContain(
+			'Making chimney cleaning|simple.'
+		);
+
+		unmount();
+		expect(
+			matchMediaController.mediaQuery.removeListener
+		).toHaveBeenCalledTimes(1);
 	});
 
 	it('pauses the typewriter while the page is hidden and resumes when visible again', async () => {

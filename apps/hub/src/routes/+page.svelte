@@ -27,6 +27,23 @@
 	let pageVisible = $state(true);
 	let reducedMotion = $state(false);
 
+	function listenToMediaQueryChange(
+		mediaQuery: MediaQueryList,
+		listener: (event: MediaQueryListEvent) => void
+	) {
+		if (typeof mediaQuery.addEventListener === 'function') {
+			mediaQuery.addEventListener('change', listener);
+			return () => {
+				mediaQuery.removeEventListener('change', listener);
+			};
+		}
+
+		mediaQuery.addListener(listener);
+		return () => {
+			mediaQuery.removeListener(listener);
+		};
+	}
+
 	onMount(() => {
 		mounted = true;
 		const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -40,11 +57,14 @@
 		updateReducedMotion();
 		updateVisibility();
 
-		mediaQuery.addEventListener('change', updateReducedMotion);
+		const removeReducedMotionListener = listenToMediaQueryChange(
+			mediaQuery,
+			updateReducedMotion
+		);
 		document.addEventListener('visibilitychange', updateVisibility);
 
 		return () => {
-			mediaQuery.removeEventListener('change', updateReducedMotion);
+			removeReducedMotionListener();
 			document.removeEventListener('visibilitychange', updateVisibility);
 		};
 	});
