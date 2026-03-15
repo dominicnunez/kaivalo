@@ -142,8 +142,8 @@ async function createPreviewAccessToken() {
 
 const signInFixtureMode = process.env.HUB_PREVIEW_SIGN_IN_FIXTURE_MODE;
 if (signInFixtureMode) {
-	const { authKit } = await import('@workos/authkit-sveltekit');
-	authKit.getSignInUrl = async () => {
+	const { AuthService } = await import('@workos/authkit-session');
+	AuthService.prototype.getSignInUrl = async function signInFixtureUrl() {
 		switch (signInFixtureMode) {
 			case 'same-origin':
 				return `${process.env.ORIGIN}/services?welcome=1#hero`;

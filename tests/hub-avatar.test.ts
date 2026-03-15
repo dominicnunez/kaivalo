@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { toAvatarProxyUrl } from '../apps/hub/src/lib/server/avatar-url.ts';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 import { assertSessionCookieContract } from './helpers/session-cookie.ts';
+import { withWorkosCallbackStateCookie } from './helpers/workos-callback-state.ts';
 
 const PREVIEW_FIXTURE_IMPORT = new URL(
 	'./helpers/hub-preview-fixtures.mts',
@@ -43,10 +44,10 @@ async function hitAvatar(preview, headers = {}) {
 async function createSignedInSessionCookie(preview) {
 	const callbackResponse = await httpGet(
 		`${preview.baseUrl}/auth/callback?code=test-code&state=test-state`,
-		{
+		withWorkosCallbackStateCookie({
 			accept: 'text/html',
 			'sec-fetch-mode': 'navigate'
-		}
+		})
 	);
 
 	assert.strictEqual(callbackResponse.statusCode, 302);

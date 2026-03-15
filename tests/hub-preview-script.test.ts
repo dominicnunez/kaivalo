@@ -24,6 +24,10 @@ import {
 	assertSessionCookieContract,
 	getSetCookieHeaders
 } from './helpers/session-cookie.ts';
+import {
+	buildWorkosCallbackState,
+	withWorkosCallbackStateCookie
+} from './helpers/workos-callback-state.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const STARTUP_TIMEOUT_MS = 15000;
@@ -174,16 +178,19 @@ async function assertPreviewAuthRoutes(
 async function assertAuthenticatedPreviewSession(
 	baseUrl: string
 ): Promise<void> {
-	const signedInState = Buffer.from(
-		JSON.stringify({ returnPathname: '/services?welcome=1' }),
-		'utf8'
-	).toString('base64url');
+	const signedInState = buildWorkosCallbackState(
+		'/services?welcome=1',
+		'signed-in-state'
+	);
 	const callbackResponse = await httpGet(
 		`${baseUrl}/auth/callback?code=test-code&state=${signedInState}`,
-		{
-			accept: 'text/html',
-			'sec-fetch-mode': 'navigate'
-		}
+		withWorkosCallbackStateCookie(
+			{
+				accept: 'text/html',
+				'sec-fetch-mode': 'navigate'
+			},
+			'signed-in-state'
+		)
 	);
 	assert.strictEqual(callbackResponse.statusCode, 302);
 	assert.ok(callbackResponse.headers.location, 'Expected callback redirect');
@@ -419,16 +426,16 @@ describe('hub preview script', () => {
 		try {
 			const browserResponse = await httpGet(
 				`${preview.baseUrl}/auth/callback?code=test-code&state=test-state`,
-				{
+				withWorkosCallbackStateCookie({
 					accept: 'text/html',
 					'sec-fetch-mode': 'navigate'
-				}
+				})
 			);
 			const apiResponse = await httpGet(
 				`${preview.baseUrl}/auth/callback?code=test-code&state=test-state`,
-				{
+				withWorkosCallbackStateCookie({
 					accept: 'application/json'
-				}
+				})
 			);
 
 			assert.strictEqual(browserResponse.statusCode, 303);
@@ -460,7 +467,9 @@ describe('hub preview script', () => {
 				browserResponse.headers['cache-control'],
 				'private, no-store'
 			);
-			assert.deepStrictEqual(getSetCookieHeaders(browserResponse.headers), []);
+			assert.deepStrictEqual(getSetCookieHeaders(browserResponse.headers), [
+				'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0; HttpOnly; Secure; SameSite=Lax'
+			]);
 
 			const apiFailure = JSON.parse(apiResponse.data) as { message: string };
 			assert.strictEqual(apiResponse.statusCode, 503);
@@ -488,10 +497,10 @@ describe('hub preview script', () => {
 		try {
 			const callbackResponse = await httpGet(
 				`${preview.baseUrl}/auth/callback?code=test-code&state=test-state`,
-				{
+				withWorkosCallbackStateCookie({
 					accept: 'text/html',
 					'sec-fetch-mode': 'navigate'
-				}
+				})
 			);
 			assert.strictEqual(callbackResponse.statusCode, 302);
 			const sessionCookie = assertSessionCookieContract(

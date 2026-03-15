@@ -16,6 +16,7 @@ import {
 } from '../../../lib/auth/auth-error-query.ts';
 import { AUTHKIT_COOKIE_NAME } from '$lib/server/authkit-config.ts';
 import { readVerifiedAvatarProxySource } from '$lib/server/avatar-url.ts';
+import { WORKOS_CALLBACK_STATE_COOKIE_NAME } from '$lib/server/workos-auth.ts';
 import {
 	assertSessionCookieContract,
 	getSetCookieHeaders
@@ -24,7 +25,6 @@ import { createSign, generateKeyPairSync, type KeyObject } from 'node:crypto';
 
 const WORKOS_AUTHENTICATE_URL =
 	'https://api.workos.com/user_management/authenticate';
-const WORKOS_JWKS_URL = 'https://api.workos.com/sso/jwks/client_123';
 const SESSION_ID = 'session_123';
 const AUTHENTICATED_USER_RESPONSE = {
 	object: 'user',
@@ -77,6 +77,7 @@ function createEvent(
 	requestUrl = 'https://kaivalo.test/auth/callback'
 ) {
 	return {
+		locals: {},
 		request: new Request(requestUrl, {
 			headers
 		}),
@@ -100,7 +101,35 @@ function buildReturnToState(returnPathname: string): string {
 	);
 }
 
-async function createAccessToken(): Promise<string> {
+function buildCallbackState(
+	returnPathname: string,
+	nonce = 'callback-state'
+): string {
+	return `${buildReturnToState(returnPathname)}.${nonce}`;
+}
+
+function createCallbackCookieHeader(nonce = 'callback-state'): string {
+	return `${WORKOS_CALLBACK_STATE_COOKIE_NAME}=${nonce}`;
+}
+
+function getWorkosJwksUrl(clientId = mockEnv.WORKOS_CLIENT_ID): string {
+	return `https://api.workos.com/sso/jwks/${clientId}`;
+}
+
+function wasRequested(
+	fetchSpy: ReturnType<typeof vi.fn>,
+	expectedUrl: string
+): boolean {
+	return fetchSpy.mock.calls.some(([input]) => {
+		const requestUrl =
+			input instanceof Request ? input.url : new Request(String(input)).url;
+		return requestUrl === expectedUrl;
+	});
+}
+
+async function createAccessToken(
+	signingKeyOverride: KeyObject = signingKey
+): Promise<string> {
 	const now = Math.floor(Date.now() / 1000);
 	const header = Buffer.from(
 		JSON.stringify({
@@ -124,7 +153,9 @@ async function createAccessToken(): Promise<string> {
 	signer.update(signingInput);
 	signer.end();
 
-	return `${signingInput}.${signer.sign(signingKey).toString('base64url')}`;
+	return `${signingInput}.${signer
+		.sign(signingKeyOverride)
+		.toString('base64url')}`;
 }
 
 function jsonResponse(body: unknown): Response {
@@ -133,6 +164,35 @@ function jsonResponse(body: unknown): Response {
 		headers: {
 			'content-type': 'application/json'
 		}
+	});
+}
+
+async function expectBrowserCallbackFailure(
+	callbackResult: Response | Promise<Response>
+): Promise<void> {
+	const response = await callbackResult;
+	expect(response.status).toBe(303);
+	expect(response.headers.get('location')).toMatch(
+		/^https:\/\/kaivalo\.test\/\?/
+	);
+	expect(getSetCookieHeaders(response.headers)).toEqual(
+		expect.arrayContaining([
+			expect.stringContaining(
+				`${WORKOS_CALLBACK_STATE_COOKIE_NAME}=; Path=/auth/callback; Max-Age=0`
+			)
+		])
+	);
+
+	const location = new URL(response.headers.get('location') ?? '');
+	expect(
+		readVerifiedAuthError(location.searchParams, {
+			secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
+			now:
+				Number(location.searchParams.get(AUTH_ERROR_TIMESTAMP_QUERY_NAME)) + 1
+		})
+	).toEqual({
+		message: 'Sign-in is temporarily unavailable. Please try again shortly.',
+		incidentId: location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME)
 	});
 }
 
@@ -184,7 +244,7 @@ describe('auth callback success path', () => {
 					});
 				}
 
-				if (requestUrl === WORKOS_JWKS_URL) {
+				if (requestUrl === getWorkosJwksUrl()) {
 					return jsonResponse({
 						keys: [publicJwk]
 					});
@@ -215,15 +275,24 @@ describe('auth callback success path', () => {
 			createEvent(
 				{
 					accept: 'text/html',
-					'sec-fetch-mode': 'navigate'
+					'sec-fetch-mode': 'navigate',
+					cookie: createCallbackCookieHeader()
 				},
-				`https://kaivalo.test/auth/callback?code=valid-code&state=${buildReturnToState('/services?welcome=1')}`
+				`https://kaivalo.test/auth/callback?code=valid-code&state=${buildCallbackState('/services?welcome=1')}`
 			)
 		);
 
 		expect(callbackResponse.status).toBe(302);
 		expect(callbackResponse.headers.get('location')).toBe(
 			'/services?welcome=1'
+		);
+		expect(getSetCookieHeaders(callbackResponse.headers)).toEqual(
+			expect.arrayContaining([
+				expect.stringContaining(`${AUTHKIT_COOKIE_NAME}=`),
+				expect.stringContaining(
+					`${WORKOS_CALLBACK_STATE_COOKIE_NAME}=; Path=/auth/callback; Max-Age=0`
+				)
+			])
 		);
 
 		const sessionCookie = assertSessionCookieContract(callbackResponse.headers);
@@ -307,7 +376,8 @@ describe('auth callback success path', () => {
 		expect(servicesData.plannedServices.map((service) => service.id)).toEqual([
 			'podstudio'
 		]);
-		expect(fetchSpy).toHaveBeenCalledTimes(2);
+		expect(wasRequested(fetchSpy, WORKOS_AUTHENTICATE_URL)).toBe(true);
+		expect(wasRequested(fetchSpy, getWorkosJwksUrl())).toBe(true);
 	});
 
 	it('rejects hostile return targets in the real callback route', async () => {
@@ -334,7 +404,7 @@ describe('auth callback success path', () => {
 					});
 				}
 
-				if (requestUrl === WORKOS_JWKS_URL) {
+				if (requestUrl === getWorkosJwksUrl()) {
 					return jsonResponse({
 						keys: [publicJwk]
 					});
@@ -358,7 +428,7 @@ describe('auth callback success path', () => {
 		});
 
 		const { GET } = await import('./+server');
-		const callbackUrl = `https://kaivalo.test/auth/callback?code=valid-code&state=${buildReturnToState('https://evil.example.test/phish')}`;
+		const callbackUrl = `https://kaivalo.test/auth/callback?code=valid-code&state=${buildCallbackState('https://evil.example.test/phish')}`;
 		const upstreamResponse = await authKit.handleCallback()(
 			createEvent(
 				{
@@ -375,38 +445,160 @@ describe('auth callback success path', () => {
 		);
 		expect(getSetCookieHeaders(upstreamResponse.headers)).toHaveLength(1);
 
-		try {
-			await GET(
+		await expectBrowserCallbackFailure(
+			GET(
 				createEvent(
 					{
 						accept: 'text/html',
-						'sec-fetch-mode': 'navigate'
+						'sec-fetch-mode': 'navigate',
+						cookie: createCallbackCookieHeader()
 					},
 					callbackUrl
 				)
-			);
-			throw new Error('expected callback route to redirect');
-		} catch (caught) {
-			const redirectLike = caught as { status: number; location: string };
-			expect(redirectLike).toMatchObject({
-				status: 303,
-				location: expect.stringMatching(/^https:\/\/kaivalo\.test\/\?/)
-			});
-			expect(redirectLike).not.toHaveProperty('headers');
+			)
+		);
+	});
 
-			const location = new URL(redirectLike.location);
-			expect(
-				readVerifiedAuthError(location.searchParams, {
-					secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
-					now:
-						Number(location.searchParams.get(AUTH_ERROR_TIMESTAMP_QUERY_NAME)) +
-						1
-				})
-			).toEqual({
-				message:
-					'Sign-in is temporarily unavailable. Please try again shortly.',
-				incidentId: location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME)
-			});
-		}
+	it('redirects with a signed auth error when WorkOS returns a malformed authenticate payload', async () => {
+		const fetchSpy = vi.fn(
+			async (input: RequestInfo | URL, init?: RequestInit) => {
+				const request =
+					input instanceof Request ? input : new Request(String(input), init);
+				const requestUrl = request.url;
+
+				if (requestUrl === WORKOS_AUTHENTICATE_URL) {
+					return jsonResponse({
+						refresh_token: 'refresh_token_123',
+						user: AUTHENTICATED_USER_RESPONSE
+					});
+				}
+
+				throw new Error(
+					`Unexpected fetch request: ${request.method} ${requestUrl}`
+				);
+			}
+		);
+		vi.stubGlobal('fetch', fetchSpy);
+
+		const { GET } = await import('./+server');
+
+		await expectBrowserCallbackFailure(
+			GET(
+				createEvent(
+					{
+						accept: 'text/html',
+						'sec-fetch-mode': 'navigate',
+						cookie: createCallbackCookieHeader()
+					},
+					`https://kaivalo.test/auth/callback?code=valid-code&state=${buildCallbackState('/services')}`
+				)
+			)
+		);
+		expect(fetchSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it('redirects with a signed auth error when the WorkOS JWKS lookup fails', async () => {
+		mockEnv.WORKOS_CLIENT_ID = 'client_jwks_failure';
+		const accessToken = await createAccessToken();
+		const jwksUrl = getWorkosJwksUrl();
+		const fetchSpy = vi.fn(
+			async (input: RequestInfo | URL, init?: RequestInit) => {
+				const request =
+					input instanceof Request ? input : new Request(String(input), init);
+				const requestUrl = request.url;
+
+				if (requestUrl === WORKOS_AUTHENTICATE_URL) {
+					return jsonResponse({
+						access_token: accessToken,
+						refresh_token: 'refresh_token_123',
+						user: AUTHENTICATED_USER_RESPONSE
+					});
+				}
+
+				if (requestUrl === jwksUrl) {
+					return new Response('service unavailable', {
+						status: 503
+					});
+				}
+
+				throw new Error(
+					`Unexpected fetch request: ${request.method} ${requestUrl}`
+				);
+			}
+		);
+		vi.stubGlobal('fetch', fetchSpy);
+
+		const { GET } = await import('./+server');
+
+		await expectBrowserCallbackFailure(
+			GET(
+				createEvent(
+					{
+						accept: 'text/html',
+						'sec-fetch-mode': 'navigate',
+						cookie: createCallbackCookieHeader()
+					},
+					`https://kaivalo.test/auth/callback?code=valid-code&state=${buildCallbackState('/services')}`
+				)
+			)
+		);
+		expect(fetchSpy).toHaveBeenCalled();
+	});
+
+	it('redirects with a signed auth error when the access token signature is invalid', async () => {
+		mockEnv.WORKOS_CLIENT_ID = 'client_invalid_signature';
+		const accessToken = await createAccessToken();
+		const { publicKey: invalidPublicKey } = generateKeyPairSync('rsa', {
+			modulusLength: 2048
+		});
+		const invalidPublicJwk = invalidPublicKey.export({
+			format: 'jwk'
+		}) as JsonWebKey & Record<string, unknown>;
+		invalidPublicJwk.alg = 'RS256';
+		invalidPublicJwk.kid = publicJwk.kid;
+		invalidPublicJwk.use = 'sig';
+		const jwksUrl = getWorkosJwksUrl();
+		const fetchSpy = vi.fn(
+			async (input: RequestInfo | URL, init?: RequestInit) => {
+				const request =
+					input instanceof Request ? input : new Request(String(input), init);
+				const requestUrl = request.url;
+
+				if (requestUrl === WORKOS_AUTHENTICATE_URL) {
+					return jsonResponse({
+						access_token: accessToken,
+						refresh_token: 'refresh_token_123',
+						user: AUTHENTICATED_USER_RESPONSE
+					});
+				}
+
+				if (requestUrl === jwksUrl) {
+					return jsonResponse({
+						keys: [invalidPublicJwk]
+					});
+				}
+
+				throw new Error(
+					`Unexpected fetch request: ${request.method} ${requestUrl}`
+				);
+			}
+		);
+		vi.stubGlobal('fetch', fetchSpy);
+
+		const { GET } = await import('./+server');
+
+		await expectBrowserCallbackFailure(
+			GET(
+				createEvent(
+					{
+						accept: 'text/html',
+						'sec-fetch-mode': 'navigate',
+						cookie: createCallbackCookieHeader()
+					},
+					`https://kaivalo.test/auth/callback?code=valid-code&state=${buildCallbackState('/services')}`
+				)
+			)
+		);
+		expect(fetchSpy).toHaveBeenCalled();
 	});
 });

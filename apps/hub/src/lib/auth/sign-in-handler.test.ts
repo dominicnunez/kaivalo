@@ -39,7 +39,7 @@ describe('sign-in handler', () => {
 			}
 		);
 		const handler = createSignInGetHandler({
-			getSignInUrl: vi.fn(async () => {
+			beginSignIn: vi.fn(async () => {
 				throw signInError;
 			}),
 			expectedOrigin: EXPECTED_ORIGIN,
@@ -105,7 +105,7 @@ describe('sign-in handler', () => {
 			}
 		);
 		const handler = createSignInGetHandler({
-			getSignInUrl: vi.fn(async () => {
+			beginSignIn: vi.fn(async () => {
 				throw signInError;
 			}),
 			expectedOrigin: EXPECTED_ORIGIN,

@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { clearAuthErrorQuery } from '$lib/auth/auth-error-query-shared.ts';
+	import { clearAuthNoticeQuery } from '$lib/auth/auth-notice-query.ts';
 	import type { Snippet } from 'svelte';
 	import type { LayoutData } from './$types';
 
@@ -29,6 +30,7 @@
 		dismissedAuthErrorSignature = authErrorSignature;
 		const url = new URL(page.url);
 		clearAuthErrorQuery(url.searchParams);
+		clearAuthNoticeQuery(url.searchParams);
 		const nextLocation = url.pathname + url.search + url.hash;
 		const currentLocation = page.url.pathname + page.url.search + page.url.hash;
 		if (nextLocation === currentLocation) {

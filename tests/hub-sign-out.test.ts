@@ -9,6 +9,7 @@ import {
 	assertSessionCookieContract,
 	getSetCookieHeaders
 } from './helpers/session-cookie.ts';
+import { withWorkosCallbackStateCookie } from './helpers/workos-callback-state.ts';
 
 const AUTHKIT_COOKIE_NAME = '__Host-wos_session';
 const previewFixtureImport = new URL(
@@ -965,10 +966,10 @@ describe('sign-out route integration behavior', () => {
 		try {
 			const callbackResponse = await httpGet(
 				`${fixturePreview.baseUrl}/auth/callback?code=test-code&state=test-state`,
-				{
+				withWorkosCallbackStateCookie({
 					accept: 'text/html',
 					'sec-fetch-mode': 'navigate'
-				}
+				})
 			);
 			assert.strictEqual(callbackResponse.statusCode, 302);
 			const sessionCookie = assertSessionCookieContract(

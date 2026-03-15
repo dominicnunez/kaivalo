@@ -4,7 +4,7 @@ import { createSignInGetHandler } from '$lib/auth/sign-in-handler.ts';
 import { shouldIncludeErrorMessage } from '$lib/server/error-diagnostics.ts';
 import { getTrustedWorkosAuthOrigin } from '$lib/server/auth-origin-policy.ts';
 import { getValidatedWorkosEnv } from '$lib/server/workos-security.ts';
-import { authKit } from '@workos/authkit-sveltekit';
+import { createConfiguredWorkosSignInStart } from '$lib/server/workos-auth.ts';
 
 let getHandler: ReturnType<typeof createSignInGetHandler> | null = null;
 
@@ -15,7 +15,7 @@ function getSignInHandler(): ReturnType<typeof createSignInGetHandler> {
 
 	const workosEnv = getValidatedWorkosEnv(env);
 	getHandler = createSignInGetHandler({
-		getSignInUrl: authKit.getSignInUrl,
+		beginSignIn: createConfiguredWorkosSignInStart(workosEnv),
 		expectedOrigin: workosEnv.origin,
 		authErrorSigningSecret: workosEnv.authErrorSigningSecret,
 		allowedRedirectOrigins: [getTrustedWorkosAuthOrigin(workosEnv)],

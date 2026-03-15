@@ -10,6 +10,7 @@ import {
 	PROXY_HSTS_CONFIGURATION_ERROR_MESSAGE
 } from '../apps/hub/src/lib/server/workos-security.ts';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
+import { withWorkosCallbackStateCookie } from './helpers/workos-callback-state.ts';
 
 const validEnv = {
 	WORKOS_CLIENT_ID: 'client_123',
@@ -1124,10 +1125,10 @@ describe('Security headers on preview responses', () => {
 		try {
 			const callbackResponse = await httpGet(
 				`${fixturePreview.baseUrl}/auth/callback?code=test-code&state=test-state`,
-				{
+				withWorkosCallbackStateCookie({
 					accept: 'text/html',
 					'sec-fetch-mode': 'navigate'
-				}
+				})
 			);
 			const sessionCookie = getSetCookieHeaders(
 				callbackResponse.headers

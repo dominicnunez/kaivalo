@@ -19,7 +19,9 @@ type SignInLogContext = ReturnType<typeof getErrorLogContext> & {
 };
 
 type CreateSignInGetHandlerOptions = {
-	getSignInUrl: (options: { returnTo: string }) => Promise<string>;
+	beginSignIn: (options: {
+		returnTo: string;
+	}) => Promise<{ location: string; headers?: HeadersInit }>;
 	expectedOrigin: string;
 	authErrorSigningSecret: string;
 	allowedRedirectOrigins?: Iterable<string>;
@@ -40,8 +42,21 @@ function isSelfReferentialRedirect(
 	);
 }
 
+function createRedirectResponse(
+	status: number,
+	location: string,
+	headers?: HeadersInit
+): Response {
+	const responseHeaders = new Headers(headers);
+	responseHeaders.set('location', location);
+	return new Response(null, {
+		status,
+		headers: responseHeaders
+	});
+}
+
 export function createSignInGetHandler({
-	getSignInUrl,
+	beginSignIn,
 	expectedOrigin,
 	authErrorSigningSecret,
 	allowedRedirectOrigins = [],
@@ -56,14 +71,14 @@ export function createSignInGetHandler({
 
 	return async (event: RequestEvent) => {
 		try {
-			const signInUrl = await getSignInUrl({ returnTo: defaultReturnTo });
-			const safeLocation = normalizeSignInRedirectLocation(signInUrl, {
+			const signIn = await beginSignIn({ returnTo: defaultReturnTo });
+			const safeLocation = normalizeSignInRedirectLocation(signIn.location, {
 				requestOrigin: event.url.origin,
 				trustedOrigin,
 				allowedOrigins: trustedRedirectOrigins,
 				requestPathname: event.url.pathname
 			});
-			throw redirect(303, safeLocation);
+			return createRedirectResponse(303, safeLocation, signIn.headers);
 		} catch (err) {
 			let normalizedError = err;
 			if (isRedirect(err)) {
@@ -83,10 +98,7 @@ export function createSignInGetHandler({
 					normalizedError = normalizationError;
 				}
 				if (safeLocation) {
-					if (safeLocation === redirectError.location) {
-						throw redirectError;
-					}
-					throw redirect(redirectError.status, safeLocation);
+					return createRedirectResponse(redirectError.status, safeLocation);
 				}
 			}
 

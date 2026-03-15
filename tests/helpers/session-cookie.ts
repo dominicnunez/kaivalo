@@ -59,6 +59,10 @@ function getCookieAttributes(
 
 export function getSetCookieHeaders(headers: HeaderContainer): string[] {
 	if (headers instanceof Headers) {
+		if (typeof headers.getSetCookie === 'function') {
+			return headers.getSetCookie();
+		}
+
 		const value = headers.get('set-cookie');
 		return value ? [value] : [];
 	}

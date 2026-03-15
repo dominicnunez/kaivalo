@@ -7,30 +7,32 @@ import {
 	readVerifiedAuthError
 } from '$lib/auth/auth-error-query.ts';
 
-const { mockEnv, mockGetSignInUrl } = vi.hoisted(() => ({
-	mockEnv: {
-		WORKOS_CLIENT_ID: 'client_123',
-		WORKOS_API_KEY: 'sk_test_123',
-		WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback',
-		WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
-		AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
-		AVATAR_PROXY_SIGNING_SECRET: 'ef'.repeat(32),
-		WORKOS_API_HOSTNAME: 'auth.kaivalo-login.com',
-		ORIGIN: 'https://kaivalo.test',
-		NODE_ENV: 'production'
-	} as Record<string, string>,
-	mockGetSignInUrl: vi.fn()
-}));
+const { mockCreateConfiguredWorkosSignInStart, mockBeginSignIn, mockEnv } =
+	vi.hoisted(() => ({
+		mockCreateConfiguredWorkosSignInStart: vi.fn(),
+		mockBeginSignIn: vi.fn(),
+		mockEnv: {
+			WORKOS_CLIENT_ID: 'client_123',
+			WORKOS_API_KEY: 'sk_test_123',
+			WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback',
+			WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
+			AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
+			AVATAR_PROXY_SIGNING_SECRET: 'ef'.repeat(32),
+			WORKOS_API_HOSTNAME: 'auth.kaivalo-login.com',
+			ORIGIN: 'https://kaivalo.test',
+			NODE_ENV: 'production'
+		} as Record<string, string>
+	}));
 
 vi.mock('$env/dynamic/private', () => ({
 	env: mockEnv
 }));
 
-vi.mock('@workos/authkit-sveltekit', () => ({
-	authKit: {
-		getSignInUrl: mockGetSignInUrl
-	}
+vi.mock('$lib/server/workos-auth.ts', () => ({
+	createConfiguredWorkosSignInStart: mockCreateConfiguredWorkosSignInStart
 }));
+
+const WORKOS_CALLBACK_STATE_COOKIE_NAME = '__Secure-wos_callback_state';
 
 function createEvent(
 	headers: HeadersInit = {},
@@ -44,12 +46,67 @@ function createEvent(
 	} as never;
 }
 
+function buildReturnToState(returnPathname: string): string {
+	return Buffer.from(JSON.stringify({ returnPathname }), 'utf8').toString(
+		'base64url'
+	);
+}
+
+function parseSetCookieAttributes(
+	setCookieHeader: string
+): Map<string, string> {
+	return new Map(
+		setCookieHeader
+			.split(';')
+			.slice(1)
+			.map((entry) => entry.trim())
+			.filter(Boolean)
+			.map((entry) => {
+				const separatorIndex = entry.indexOf('=');
+				if (separatorIndex < 0) {
+					return [entry.toLowerCase(), ''];
+				}
+
+				return [
+					entry.slice(0, separatorIndex).toLowerCase(),
+					entry.slice(separatorIndex + 1)
+				];
+			})
+	);
+}
+
+function readNonceCookie(response: Response): string {
+	const cookieHeader =
+		response.headers.get('set-cookie') ??
+		response.headers.getSetCookie?.()[0] ??
+		'';
+	expect(cookieHeader).toMatch(
+		new RegExp(`^${WORKOS_CALLBACK_STATE_COOKIE_NAME}=`)
+	);
+	const [nameValue] = cookieHeader.split(';');
+	const separatorIndex = nameValue.indexOf('=');
+	expect(separatorIndex).toBeGreaterThan(0);
+	const attributes = parseSetCookieAttributes(cookieHeader);
+	expect(attributes.get('path')).toBe('/auth/callback');
+	expect(attributes.has('httponly')).toBe(true);
+	expect(attributes.has('secure')).toBe(true);
+	expect(attributes.get('samesite')?.toLowerCase()).toBe('lax');
+	expect(attributes.get('max-age')).toBe('600');
+	return nameValue.slice(separatorIndex + 1);
+}
+
+function readCustomStatePayload(location: string): string {
+	const state = new URL(location).searchParams.get('state') ?? '';
+	return state.includes('.') ? state.split('.').slice(1).join('.') : state;
+}
+
 describe('auth sign-in route', () => {
 	let errorSpy: ReturnType<typeof vi.spyOn>;
 
 	beforeEach(() => {
 		vi.resetModules();
-		mockGetSignInUrl.mockReset();
+		mockCreateConfiguredWorkosSignInStart.mockReset();
+		mockBeginSignIn.mockReset();
 		mockEnv.WORKOS_CLIENT_ID = 'client_123';
 		mockEnv.WORKOS_API_KEY = 'sk_test_123';
 		mockEnv.WORKOS_REDIRECT_URI = 'https://kaivalo.test/auth/callback';
@@ -59,6 +116,7 @@ describe('auth sign-in route', () => {
 		mockEnv.WORKOS_API_HOSTNAME = 'auth.kaivalo-login.com';
 		mockEnv.ORIGIN = 'https://kaivalo.test';
 		mockEnv.NODE_ENV = 'production';
+		mockCreateConfiguredWorkosSignInStart.mockReturnValue(mockBeginSignIn);
 		errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 	});
 
@@ -67,18 +125,29 @@ describe('auth sign-in route', () => {
 	});
 
 	it('redirects to the trusted WorkOS sign-in URL', async () => {
-		mockGetSignInUrl.mockResolvedValue(
-			'https://auth.kaivalo-login.com/user_management/authorize?screen_hint=sign-up' as never
-		);
+		mockBeginSignIn.mockResolvedValue({
+			location: `https://auth.kaivalo-login.com/user_management/authorize?screen_hint=sign-up&state=${buildReturnToState('/services')}.nonce-value`,
+			headers: {
+				'set-cookie':
+					'__Secure-wos_callback_state=nonce-value; Path=/auth/callback; Max-Age=600; HttpOnly; Secure; SameSite=Lax'
+			}
+		} as never);
 
 		const { GET } = await import('./+server');
+		const response = await GET(createEvent());
 
-		await expect(GET(createEvent())).rejects.toMatchObject({
-			status: 303,
-			location:
-				'https://auth.kaivalo-login.com/user_management/authorize?screen_hint=sign-up'
-		});
-		expect(mockGetSignInUrl).toHaveBeenCalledWith({ returnTo: '/services' });
+		expect(response.status).toBe(303);
+		const location = response.headers.get('location');
+		expect(location).toMatch(
+			/^https:\/\/auth\.kaivalo-login\.com\/user_management\/authorize\?/
+		);
+		expect(new URL(location ?? '').searchParams.get('screen_hint')).toBe(
+			'sign-up'
+		);
+		expect(readCustomStatePayload(location ?? '')).toBe(
+			readNonceCookie(response)
+		);
+		expect(mockBeginSignIn).toHaveBeenCalledWith({ returnTo: '/services' });
 	});
 
 	it('fails fast when the sign-in route is initialized without required auth env', async () => {
@@ -89,52 +158,66 @@ describe('auth sign-in route', () => {
 		expect(() => GET(createEvent())).toThrow(
 			/Missing required environment variable: WORKOS_CLIENT_ID/
 		);
-		expect(mockGetSignInUrl).not.toHaveBeenCalled();
+		expect(mockBeginSignIn).not.toHaveBeenCalled();
 	});
 
 	it('normalizes trusted same-origin destinations that do not point back to the sign-in route', async () => {
-		mockGetSignInUrl.mockResolvedValue(
-			'https://kaivalo.test/services?welcome=1#hero' as never
-		);
+		mockBeginSignIn.mockResolvedValue({
+			location: 'https://kaivalo.test/services?welcome=1#hero',
+			headers: {
+				'set-cookie':
+					'__Secure-wos_callback_state=nonce-value; Path=/auth/callback; Max-Age=600; HttpOnly; Secure; SameSite=Lax'
+			}
+		} as never);
 
 		const { GET } = await import('./+server');
+		const response = await GET(createEvent());
 
-		await expect(GET(createEvent())).rejects.toMatchObject({
-			status: 303,
-			location: '/services?welcome=1#hero'
-		});
+		expect(response.status).toBe(303);
+		expect(response.headers.get('location')).toBe('/services?welcome=1#hero');
+		expect(response.headers.get('set-cookie')).toContain(
+			'__Secure-wos_callback_state=nonce-value'
+		);
 	});
 
 	it('preserves trusted same-origin destinations as absolute URLs when the request host is poisoned', async () => {
-		mockGetSignInUrl.mockResolvedValue(
-			'https://kaivalo.test/services?welcome=1#hero' as never
-		);
+		mockBeginSignIn.mockResolvedValue({
+			location: 'https://kaivalo.test/services?welcome=1#hero',
+			headers: {
+				'set-cookie':
+					'__Secure-wos_callback_state=nonce-value; Path=/auth/callback; Max-Age=600; HttpOnly; Secure; SameSite=Lax'
+			}
+		} as never);
 
 		const { GET } = await import('./+server');
+		const response = await GET(
+			createEvent({}, 'https://attacker.test/auth/sign-in')
+		);
 
-		await expect(
-			GET(createEvent({}, 'https://attacker.test/auth/sign-in'))
-		).rejects.toMatchObject({
-			status: 303,
-			location: 'https://kaivalo.test/services?welcome=1#hero'
-		});
+		expect(response.status).toBe(303);
+		expect(response.headers.get('location')).toBe(
+			'https://kaivalo.test/services?welcome=1#hero'
+		);
+		expect(response.headers.get('set-cookie')).toContain(
+			'__Secure-wos_callback_state=nonce-value'
+		);
 	});
 
 	it('normalizes trusted redirect exceptions from upstream sign-in helpers', async () => {
-		mockGetSignInUrl.mockImplementation(async () => {
+		mockBeginSignIn.mockImplementation(async () => {
 			throw redirect(307, 'https://kaivalo.test/services?welcome=1#hero');
 		});
 
 		const { GET } = await import('./+server');
+		const response = await GET(createEvent());
 
-		await expect(GET(createEvent())).rejects.toMatchObject({
-			status: 307,
-			location: '/services?welcome=1#hero'
-		});
+		expect(response.status).toBe(307);
+		expect(response.headers.get('location')).toBe('/services?welcome=1#hero');
+		expect(response.headers.get('set-cookie')).toBeNull();
 	});
 
 	it('rejects redirect exceptions on untrusted origins', async () => {
-		mockGetSignInUrl.mockImplementation(async () => {
+		mockBeginSignIn.mockImplementation(async () => {
 			throw redirect(307, 'https://evil.example/login');
 		});
 
@@ -165,9 +248,13 @@ describe('auth sign-in route', () => {
 	});
 
 	it('rejects same-origin sign-in destinations that loop back to the route itself', async () => {
-		mockGetSignInUrl.mockResolvedValue(
-			'https://kaivalo.test/auth/sign-in?screen_hint=sign-up#hero' as never
-		);
+		mockBeginSignIn.mockResolvedValue({
+			location: 'https://kaivalo.test/auth/sign-in?screen_hint=sign-up#hero',
+			headers: {
+				'set-cookie':
+					'__Secure-wos_callback_state=nonce-value; Path=/auth/callback; Max-Age=600; HttpOnly; Secure; SameSite=Lax'
+			}
+		} as never);
 
 		const { GET } = await import('./+server');
 
@@ -196,7 +283,13 @@ describe('auth sign-in route', () => {
 	});
 
 	it('rejects sign-in URLs on untrusted origins', async () => {
-		mockGetSignInUrl.mockResolvedValue('https://evil.example/login' as never);
+		mockBeginSignIn.mockResolvedValue({
+			location: 'https://evil.example/login',
+			headers: {
+				'set-cookie':
+					'__Secure-wos_callback_state=nonce-value; Path=/auth/callback; Max-Age=600; HttpOnly; Secure; SameSite=Lax'
+			}
+		} as never);
 
 		const { GET } = await import('./+server');
 
@@ -225,7 +318,7 @@ describe('auth sign-in route', () => {
 	});
 
 	it('redirects browser failures back to the landing page with a signed auth error', async () => {
-		mockGetSignInUrl.mockRejectedValue(new Error('upstream unavailable'));
+		mockBeginSignIn.mockRejectedValue(new Error('upstream unavailable'));
 
 		const { GET } = await import('./+server');
 
@@ -283,7 +376,7 @@ describe('auth sign-in route', () => {
 	});
 
 	it('pins poisoned-host browser failures to the trusted landing-page origin', async () => {
-		mockGetSignInUrl.mockRejectedValue(new Error('upstream unavailable'));
+		mockBeginSignIn.mockRejectedValue(new Error('upstream unavailable'));
 
 		const { GET } = await import('./+server');
 
@@ -345,7 +438,7 @@ describe('auth sign-in route', () => {
 	});
 
 	it('treats sec-fetch-dest=document failures as browser navigations', async () => {
-		mockGetSignInUrl.mockRejectedValue(new Error('upstream unavailable'));
+		mockBeginSignIn.mockRejectedValue(new Error('upstream unavailable'));
 
 		const { GET } = await import('./+server');
 

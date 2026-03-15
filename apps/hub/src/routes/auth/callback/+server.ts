@@ -4,9 +4,21 @@ import type { RequestHandler } from './$types';
 import { createAuthCallbackGetHandler } from '$lib/auth/callback-handler.ts';
 import { shouldIncludeErrorMessage } from '$lib/server/error-diagnostics.ts';
 import { getValidatedWorkosEnv } from '$lib/server/workos-security.ts';
-import { createConfiguredWorkosCallbackRequestHandler } from '$lib/server/workos-auth.ts';
+import {
+	createClearedWorkosCallbackStateCookieHeader,
+	createConfiguredWorkosCallbackRequestHandler,
+	didValidateWorkosCallbackState
+} from '$lib/server/workos-auth.ts';
 
 let getHandler: ReturnType<typeof createAuthCallbackGetHandler> | null = null;
+
+function appendClearedCallbackStateCookie(response: Response): Response {
+	response.headers.append(
+		'set-cookie',
+		createClearedWorkosCallbackStateCookieHeader()
+	);
+	return response;
+}
 
 function getCallbackHandler(): ReturnType<typeof createAuthCallbackGetHandler> {
 	if (getHandler) {
@@ -26,4 +38,25 @@ function getCallbackHandler(): ReturnType<typeof createAuthCallbackGetHandler> {
 	return getHandler;
 }
 
-export const GET: RequestHandler = (event) => getCallbackHandler()(event);
+export const GET: RequestHandler = async (event) => {
+	try {
+		const response = await getCallbackHandler()(event);
+		return didValidateWorkosCallbackState(event)
+			? appendClearedCallbackStateCookie(response)
+			: response;
+	} catch (error) {
+		if (!isRedirect(error)) {
+			throw error;
+		}
+
+		const response = new Response(null, {
+			status: error.status,
+			headers: {
+				location: error.location
+			}
+		});
+		return didValidateWorkosCallbackState(event)
+			? appendClearedCallbackStateCookie(response)
+			: response;
+	}
+};

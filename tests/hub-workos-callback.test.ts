@@ -10,8 +10,17 @@ import {
 	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
 	readVerifiedAuthError
 } from '../apps/hub/src/lib/auth/auth-error-query.ts';
+import {
+	AUTH_NOTICE_QUERY_NAME,
+	AUTH_NOTICE_SIGN_IN_CANCELLED_MESSAGE,
+	AUTH_NOTICE_SIGN_IN_CANCELLED_VALUE
+} from '../apps/hub/src/lib/auth/auth-notice-query.ts';
 import { isHttpError, isRedirect } from '@sveltejs/kit';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
+import {
+	buildWorkosCallbackState,
+	withWorkosCallbackStateCookie
+} from './helpers/workos-callback-state.ts';
 
 const authErrorSigningSecret = 'cd'.repeat(32);
 const expectedOrigin = 'https://kaivalo.test';
@@ -34,6 +43,7 @@ function createEvent(
 	requestUrl = 'https://kaivalo.test/auth/callback'
 ) {
 	return {
+		locals: {},
 		request: new Request(requestUrl, {
 			method: 'GET',
 			headers
@@ -371,6 +381,45 @@ describe('WorkOS Auth Callback Route', () => {
 
 		it('preserves sanitized provider callback error codes in failure logs', async () => {
 			const logs = [];
+			const callbackState = buildWorkosCallbackState('/services');
+			const handler = createHandler({
+				handleCallback: () =>
+					createWorkosCallbackRequestHandler({
+						handleCallback: async () => {
+							throw new Error('callback handler should not execute');
+						}
+					}),
+				isRedirect,
+				isHttpError,
+				authErrorSigningSecret,
+				logError: (...args) => logs.push(args)
+			});
+
+			await assert.rejects(
+				() =>
+					handler(
+						createEvent(
+							withWorkosCallbackStateCookie({
+								accept: 'application/json'
+							}),
+							`https://kaivalo.test/auth/callback?error=temporarily_unavailable&state=${callbackState}`
+						)
+					),
+				(caught) => {
+					assert.ok(isHttpError(caught));
+					assert.strictEqual(caught.status, 503);
+					return true;
+				}
+			);
+
+			assert.strictEqual(logs.length, 1);
+			assert.strictEqual(logs[0][1].errorUpstreamCode, 'AUTH_ERROR');
+			assert.strictEqual(logs[0][1].errorCauseCode, 'temporarily_unavailable');
+		});
+
+		it('rejects forged provider errors that do not present callback state', async () => {
+			const logs = [];
+			const callbackState = buildWorkosCallbackState('/services');
 			const handler = createHandler({
 				handleCallback: () =>
 					createWorkosCallbackRequestHandler({
@@ -389,7 +438,7 @@ describe('WorkOS Auth Callback Route', () => {
 					handler(
 						createEvent(
 							{ accept: 'application/json' },
-							'https://kaivalo.test/auth/callback?error=temporarily_unavailable'
+							`https://kaivalo.test/auth/callback?error=temporarily_unavailable&state=${callbackState}`
 						)
 					),
 				(caught) => {
@@ -400,8 +449,46 @@ describe('WorkOS Auth Callback Route', () => {
 			);
 
 			assert.strictEqual(logs.length, 1);
-			assert.strictEqual(logs[0][1].errorUpstreamCode, 'AUTH_ERROR');
-			assert.strictEqual(logs[0][1].errorCauseCode, 'temporarily_unavailable');
+			assert.strictEqual(logs[0][1].errorName, 'Error');
+			assert.ok(!('errorUpstreamCode' in logs[0][1]));
+		});
+
+		it('treats validated access_denied callbacks as a user-cancelled redirect', async () => {
+			const callbackState = buildWorkosCallbackState('/services');
+			const handler = createHandler({
+				handleCallback: () =>
+					createWorkosCallbackRequestHandler({
+						handleCallback: async () => {
+							throw new Error('callback handler should not execute');
+						}
+					}),
+				isRedirect,
+				isHttpError,
+				authErrorSigningSecret
+			});
+
+			await assert.rejects(
+				() =>
+					handler(
+						createEvent(
+							withWorkosCallbackStateCookie({
+								accept: 'text/html'
+							}),
+							`https://kaivalo.test/auth/callback?error=access_denied&state=${callbackState}`
+						)
+					),
+				(caught) => {
+					assert.ok(isRedirect(caught));
+					assert.strictEqual(caught.status, 302);
+					const location = new URL(caught.location, 'https://kaivalo.test');
+					assert.strictEqual(location.pathname, '/');
+					assert.strictEqual(
+						location.searchParams.get(AUTH_NOTICE_QUERY_NAME),
+						AUTH_NOTICE_SIGN_IN_CANCELLED_VALUE
+					);
+					return true;
+				}
+			);
 		});
 
 		it('rejects redirect throws with external locations', async () => {
@@ -741,7 +828,7 @@ describe('WorkOS Auth Callback Route', () => {
 				assert.deepStrictEqual(
 					getSetCookieHeaders(browserResponse.headers),
 					[],
-					'failed callback redirects must not set session cookies'
+					'failed callback redirects must not clear callback state before it has been validated'
 				);
 				assert.strictEqual(apiResponse.statusCode, 503);
 				assert.match(
@@ -753,12 +840,53 @@ describe('WorkOS Auth Callback Route', () => {
 			}
 		});
 
+		it('surfaces validated access_denied callbacks as a landing-page notice', async () => {
+			const preview = await startHubPreview();
+			try {
+				const response = await httpGet(
+					`${preview.baseUrl}/auth/callback?error=access_denied&state=${buildWorkosCallbackState('/services')}`,
+					withWorkosCallbackStateCookie({
+						accept: 'text/html',
+						'sec-fetch-mode': 'navigate'
+					})
+				);
+
+				assert.strictEqual(response.statusCode, 302);
+				assert.deepStrictEqual(getSetCookieHeaders(response.headers), [
+					'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0; HttpOnly; Secure; SameSite=Lax'
+				]);
+				const location = new URL(
+					response.headers.location ?? '/',
+					preview.baseUrl
+				);
+				assert.strictEqual(location.pathname, '/');
+				assert.strictEqual(
+					location.searchParams.get(AUTH_NOTICE_QUERY_NAME),
+					AUTH_NOTICE_SIGN_IN_CANCELLED_VALUE
+				);
+
+				const appResponse = await httpGet(
+					new URL(response.headers.location ?? '/', preview.baseUrl).toString(),
+					{ accept: 'text/html' }
+				);
+
+				assert.strictEqual(appResponse.statusCode, 200);
+				assert.ok(
+					appResponse.data.includes(AUTH_NOTICE_SIGN_IN_CANCELLED_MESSAGE)
+				);
+			} finally {
+				await preview.stop();
+			}
+		});
+
 		it('uses the real WorkOS callback handler contract for code exchanges', async () => {
 			const preview = await startHubPreview();
 			try {
 				const response = await httpGet(
 					`${preview.baseUrl}/auth/callback?code=test-code&state=test-state`,
-					{ accept: 'text/html' }
+					withWorkosCallbackStateCookie({
+						accept: 'text/html'
+					})
 				);
 
 				assert.strictEqual(response.statusCode, 303);
@@ -802,8 +930,10 @@ describe('WorkOS Auth Callback Route', () => {
 				assert.ok(varyHeader.includes('authorization'));
 				assert.deepStrictEqual(
 					getSetCookieHeaders(response.headers),
-					[],
-					'failed upstream exchanges must not mint synthetic session cookies'
+					[
+						'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0; HttpOnly; Secure; SameSite=Lax'
+					],
+					'failed upstream exchanges should clear the one-time callback state without minting a session cookie'
 				);
 			} finally {
 				await preview.stop();

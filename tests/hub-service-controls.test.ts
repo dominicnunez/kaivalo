@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 import { assertSessionCookieContract } from './helpers/session-cookie.ts';
+import { withWorkosCallbackStateCookie } from './helpers/workos-callback-state.ts';
 
 const AUTHKIT_COOKIE_NAME = '__Host-wos_session';
 const previewFixtureImport = new URL(
@@ -64,10 +65,10 @@ describe('hub preview service controls', () => {
 
 		const callbackResponse = await httpGet(
 			`${preview.baseUrl}/auth/callback?code=test-code&state=test-state`,
-			{
+			withWorkosCallbackStateCookie({
 				accept: 'text/html',
 				'sec-fetch-mode': 'navigate'
-			}
+			})
 		);
 		const sessionCookie = assertSessionCookieContract(
 			callbackResponse.headers,

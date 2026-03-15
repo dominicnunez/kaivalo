@@ -14,7 +14,11 @@ import {
 	getWorkOS,
 	sessionEncryption
 } from '@workos/authkit-session';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import {
+	AUTH_NOTICE_SIGN_IN_CANCELLED_VALUE,
+	AUTH_NOTICE_QUERY_NAME
+} from '../auth/auth-notice-query.ts';
 import { AUTHKIT_COOKIE_NAME } from './authkit-config.ts';
 import { getErrorLogContext } from './error-diagnostics.ts';
 import { normalizeRequestId } from './request-id.ts';
@@ -57,6 +61,10 @@ const CALLBACK_PROVIDER_ERROR_CODE_QUERY_NAME = 'provider_code';
 const CALLBACK_ERROR_CODE_MAX_LENGTH = 64;
 const CALLBACK_ERROR_CODE_SEPARATOR_PATTERN = /[^A-Za-z0-9._:-]+/g;
 const CALLBACK_ERROR_CODE_EDGE_SEPARATOR_PATTERN = /^_+|_+$/g;
+const CALLBACK_STATE_COOKIE_PATH = '/auth/callback';
+const CALLBACK_STATE_COOKIE_MAX_AGE_SECONDS = 10 * 60;
+const CALLBACK_STATE_VALIDATED_LOCAL = '__workosCallbackStateValidated';
+export const WORKOS_CALLBACK_STATE_COOKIE_NAME = '__Secure-wos_callback_state';
 
 export type WorkosCallbackRequestHandlerDependencies = {
 	handleCallback: (
@@ -64,6 +72,15 @@ export type WorkosCallbackRequestHandlerDependencies = {
 		response: Response,
 		options: { code: string; state?: string }
 	) => Promise<CallbackResult>;
+	validateAuthResponse?: (authResponse: unknown) => Promise<void>;
+};
+
+export type WorkosSignInStartDependencies = {
+	getSignInUrl: (options: {
+		returnPathname: string;
+		state: string;
+	}) => Promise<string>;
+	createState?: () => string;
 };
 
 export type WorkosSessionHandleDependencies = {
@@ -163,6 +180,164 @@ function readCookieValue(
 	return null;
 }
 
+function createSecureCookieHeader(
+	name: string,
+	value: string,
+	maxAgeSeconds: number,
+	pathname: string
+): string {
+	return [
+		`${name}=${encodeURIComponent(value)}`,
+		`Path=${pathname}`,
+		`Max-Age=${maxAgeSeconds}`,
+		'HttpOnly',
+		'Secure',
+		'SameSite=Lax'
+	].join('; ');
+}
+
+function createWorkosCallbackStateCookieHeader(state: string): string {
+	return createSecureCookieHeader(
+		WORKOS_CALLBACK_STATE_COOKIE_NAME,
+		state,
+		CALLBACK_STATE_COOKIE_MAX_AGE_SECONDS,
+		CALLBACK_STATE_COOKIE_PATH
+	);
+}
+
+export function createClearedWorkosCallbackStateCookieHeader(): string {
+	return createSecureCookieHeader(
+		WORKOS_CALLBACK_STATE_COOKIE_NAME,
+		'',
+		0,
+		CALLBACK_STATE_COOKIE_PATH
+	);
+}
+
+function createWorkosCallbackStateNonce(): string {
+	return randomBytes(32).toString('base64url');
+}
+
+function extractCallbackCustomState(
+	state: string | undefined
+): string | undefined {
+	if (!state) {
+		return undefined;
+	}
+
+	if (state.includes('.')) {
+		const [, ...rest] = state.split('.');
+		const customState = rest.join('.');
+		return customState || undefined;
+	}
+
+	try {
+		const parsed = JSON.parse(
+			Buffer.from(state, 'base64url').toString('utf8')
+		) as {
+			returnPathname?: unknown;
+		};
+		if (typeof parsed.returnPathname === 'string' && parsed.returnPathname) {
+			return undefined;
+		}
+	} catch {
+		return state;
+	}
+
+	return state;
+}
+
+function hasMatchingCallbackState(
+	expectedState: string,
+	receivedState: string
+): boolean {
+	const expectedBuffer = Buffer.from(expectedState);
+	const receivedBuffer = Buffer.from(receivedState);
+
+	return (
+		expectedBuffer.length === receivedBuffer.length &&
+		timingSafeEqual(expectedBuffer, receivedBuffer)
+	);
+}
+
+function assertValidCallbackState(
+	request: Request,
+	state: string | undefined
+): void {
+	const expectedState = readCookieValue(
+		request.headers.get('cookie'),
+		WORKOS_CALLBACK_STATE_COOKIE_NAME
+	);
+	if (!expectedState) {
+		throw new Error('Missing callback state cookie');
+	}
+
+	const receivedState = extractCallbackCustomState(state);
+	if (
+		typeof receivedState !== 'string' ||
+		!hasMatchingCallbackState(expectedState, receivedState)
+	) {
+		throw new Error('Invalid callback state');
+	}
+}
+
+function markCallbackStateValidated(event: RequestEvent): void {
+	event.locals[CALLBACK_STATE_VALIDATED_LOCAL] = true;
+}
+
+export function didValidateWorkosCallbackState(
+	event: Pick<RequestEvent, 'locals'>
+): boolean {
+	return event.locals[CALLBACK_STATE_VALIDATED_LOCAL] === true;
+}
+
+function createCancelledSignInRedirectLocation(): string {
+	const searchParams = new URLSearchParams({
+		[AUTH_NOTICE_QUERY_NAME]: AUTH_NOTICE_SIGN_IN_CANCELLED_VALUE
+	});
+	return `/?${searchParams.toString()}`;
+}
+
+function createSessionFromCallbackAuthResponse(authResponse: unknown): Session {
+	if (!authResponse || typeof authResponse !== 'object') {
+		throw new Error('WorkOS returned an invalid authentication response');
+	}
+
+	const record = authResponse as Record<string, unknown>;
+	const accessToken =
+		typeof record.accessToken === 'string' ? record.accessToken.trim() : '';
+	const refreshToken =
+		typeof record.refreshToken === 'string' ? record.refreshToken.trim() : '';
+	const user = record.user;
+
+	if (!accessToken || !refreshToken || !user || typeof user !== 'object') {
+		throw new Error('WorkOS returned an invalid authentication response');
+	}
+
+	return {
+		accessToken,
+		refreshToken,
+		user: user as Session['user'],
+		impersonator: record.impersonator as Session['impersonator']
+	};
+}
+
+function createCallbackAuthResponseValidator(
+	config: AuthKitConfig
+): (authResponse: unknown) => Promise<void> {
+	const core = new AuthKitCore(config, getWorkOS(), sessionEncryption);
+
+	return async (authResponse) => {
+		const session = createSessionFromCallbackAuthResponse(authResponse);
+		const isValid = await core.verifyToken(session.accessToken);
+		if (!isValid) {
+			throw new Error('WorkOS returned an invalid access token');
+		}
+
+		core.parseTokenClaims(session.accessToken);
+	};
+}
+
 function buildAuthKitConfig(workosEnv: WorkosEnvLike): Partial<AuthKitConfig> {
 	return {
 		clientId: workosEnv.clientId,
@@ -171,6 +346,26 @@ function buildAuthKitConfig(workosEnv: WorkosEnvLike): Partial<AuthKitConfig> {
 		cookiePassword: workosEnv.cookiePassword,
 		apiHostname: workosEnv.apiHostname,
 		cookieName: AUTHKIT_COOKIE_NAME
+	};
+}
+
+export function createWorkosSignInStart({
+	getSignInUrl,
+	createState = createWorkosCallbackStateNonce
+}: WorkosSignInStartDependencies): (options: {
+	returnTo: string;
+}) => Promise<{ location: string; headers: HeadersInit }> {
+	return async ({ returnTo }) => {
+		const state = createState();
+		return {
+			location: await getSignInUrl({
+				returnPathname: returnTo,
+				state
+			}),
+			headers: {
+				'set-cookie': createWorkosCallbackStateCookieHeader(state)
+			}
+		};
 	};
 }
 
@@ -363,7 +558,8 @@ function createCallbackErrorRedirectLocation(
 }
 
 export function createWorkosCallbackRequestHandler({
-	handleCallback
+	handleCallback,
+	validateAuthResponse = async () => undefined
 }: WorkosCallbackRequestHandlerDependencies): (
 	event: RequestEvent
 ) => Promise<Response> {
@@ -373,12 +569,16 @@ export function createWorkosCallbackRequestHandler({
 		const callbackError = event.url.searchParams.get('error');
 
 		if (callbackError) {
-			const errorCode =
-				callbackError === 'access_denied' ? 'ACCESS_DENIED' : 'AUTH_ERROR';
+			assertValidCallbackState(event.request, state);
+			markCallbackStateValidated(event);
+			if (callbackError === 'access_denied') {
+				throw redirect(302, createCancelledSignInRedirectLocation());
+			}
+
 			throw redirect(
 				302,
 				createCallbackErrorRedirectLocation(
-					errorCode,
+					'AUTH_ERROR',
 					sanitizeCallbackErrorCode(callbackError)
 				)
 			);
@@ -386,11 +586,14 @@ export function createWorkosCallbackRequestHandler({
 		if (!code) {
 			throw new Error('Missing authorization code');
 		}
+		assertValidCallbackState(event.request, state);
+		markCallbackStateValidated(event);
 
 		const result = await handleCallback(event.request, new Response(), {
 			code,
 			state
 		});
+		await validateAuthResponse(result.authResponse);
 		const headers = new Headers();
 		headers.set('location', result.returnPathname);
 		if (result.response) {
@@ -414,10 +617,28 @@ export function createConfiguredWorkosCallbackRequestHandler(
 	const authService = createAuthService<Request, Response>({
 		sessionStorageFactory: () => new RequestCookieSessionStorage(config)
 	});
+	const validateAuthResponse = createCallbackAuthResponseValidator(config);
 
 	return createWorkosCallbackRequestHandler({
+		validateAuthResponse,
 		handleCallback: (request, response, options) =>
 			authService.handleCallback(request, response, options)
+	});
+}
+
+export function createConfiguredWorkosSignInStart(
+	workosEnv: WorkosEnvLike
+): (options: { returnTo: string }) => Promise<{
+	location: string;
+	headers: HeadersInit;
+}> {
+	const config = configureAuthKitSession(workosEnv);
+	const authService = createAuthService<Request, Response>({
+		sessionStorageFactory: () => new RequestCookieSessionStorage(config)
+	});
+
+	return createWorkosSignInStart({
+		getSignInUrl: (options) => authService.getSignInUrl(options)
 	});
 }
 
@@ -480,8 +701,27 @@ export function createWorkosSessionHandle({
 						includeMessageInLogs
 					)
 				);
+				let clearResult: Awaited<
+					ReturnType<WorkosSessionHandleDependencies['clearSession']>
+				>;
+				try {
+					clearResult = await deps.clearSession(undefined);
+				} catch (error) {
+					const clearIncidentId = `authmw_${randomUUID()}`;
+					logError(
+						'Auth session unavailable',
+						createSessionLogContext(
+							event,
+							error,
+							clearIncidentId,
+							'AUTH_SESSION_UNEXPECTED_FAILURE',
+							includeMessageInLogs
+						)
+					);
+					return createAuthUnavailableResponse(clearIncidentId);
+				}
+
 				const response = await resolve(event);
-				const clearResult = await deps.clearSession(undefined);
 				applyHeaderBag(response.headers, clearResult.headers);
 				return response;
 			}

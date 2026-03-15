@@ -9,6 +9,10 @@ import {
 	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
 	readVerifiedAuthError
 } from '$lib/auth/auth-error-query.ts';
+import {
+	AUTH_NOTICE_QUERY_NAME,
+	AUTH_NOTICE_SIGN_IN_CANCELLED_VALUE
+} from '$lib/auth/auth-notice-query.ts';
 import { AUTHKIT_COOKIE_NAME } from '$lib/server/authkit-config.ts';
 import { readVerifiedAvatarProxySource } from '$lib/server/avatar-url.ts';
 import { assertSessionCookieContract } from '../../../../../../tests/helpers/session-cookie.ts';
@@ -59,6 +63,11 @@ vi.mock('$env/dynamic/private', () => ({
 }));
 
 vi.mock('$lib/server/workos-auth.ts', () => ({
+	createClearedWorkosCallbackStateCookieHeader: () =>
+		'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0; HttpOnly; Secure; SameSite=Lax',
+	didValidateWorkosCallbackState: (event: {
+		locals?: { __workosCallbackStateValidated?: boolean };
+	}) => event.locals?.__workosCallbackStateValidated === true,
 	createConfiguredWorkosCallbackRequestHandler:
 		mockCreateConfiguredWorkosCallbackRequestHandler
 }));
@@ -86,11 +95,18 @@ function createEvent(
 	requestUrl = 'https://kaivalo.test/auth/callback'
 ) {
 	return {
+		locals: {},
 		request: new Request(requestUrl, {
 			headers
 		}),
 		url: new URL(requestUrl)
 	} as never;
+}
+
+function markValidatedCallbackState(event: {
+	locals: { __workosCallbackStateValidated?: boolean };
+}): void {
+	event.locals.__workosCallbackStateValidated = true;
 }
 
 function readLayoutAvatarProfilePictureUrl(layoutData: unknown): string | null {
@@ -130,7 +146,8 @@ describe('auth callback route', () => {
 	});
 
 	it('normalizes redirect-like objects through the real route entrypoint', async () => {
-		mockWorkosCallbackRequestHandler.mockImplementation(async () => {
+		mockWorkosCallbackRequestHandler.mockImplementation(async (event) => {
+			markValidatedCallbackState(event);
 			throw {
 				status: 303,
 				location: 'https://kaivalo.test/services#shell'
@@ -139,17 +156,23 @@ describe('auth callback route', () => {
 
 		const { GET } = await import('./+server');
 
-		await expect(
-			GET(createEvent({}, 'https://attacker.test/auth/callback'))
-		).rejects.toMatchObject({
-			status: 303,
-			location: 'https://kaivalo.test/services#shell'
-		});
+		const response = await GET(
+			createEvent({}, 'https://attacker.test/auth/callback')
+		);
+
+		expect(response.status).toBe(303);
+		expect(response.headers.get('location')).toBe(
+			'https://kaivalo.test/services#shell'
+		);
+		expect(response.headers.get('set-cookie')).toContain(
+			'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0'
+		);
 		expect(mockWorkosCallbackRequestHandler).toHaveBeenCalledOnce();
 	});
 
 	it('establishes a session that unlocks the protected services launcher', async () => {
-		mockWorkosCallbackRequestHandler.mockImplementation(async () => {
+		mockWorkosCallbackRequestHandler.mockImplementation(async (event) => {
+			markValidatedCallbackState(event);
 			const headers = new Headers();
 			headers.set('location', 'https://kaivalo.test/services?welcome=1');
 			headers.set(
@@ -261,7 +284,8 @@ describe('auth callback route', () => {
 	});
 
 	it('translates vendor auth error redirects into the signed landing-page error flow', async () => {
-		mockWorkosCallbackRequestHandler.mockImplementation(async () => {
+		mockWorkosCallbackRequestHandler.mockImplementation(async (event) => {
+			markValidatedCallbackState(event);
 			throw {
 				status: 302,
 				location: 'https://kaivalo.test/auth/error?code=AUTH_FAILED'
@@ -270,49 +294,82 @@ describe('auth callback route', () => {
 
 		const { GET } = await import('./+server');
 
-		try {
-			await GET(
-				createEvent(
-					{
-						accept: 'text/html',
-						'sec-fetch-mode': 'navigate'
-					},
-					'https://kaivalo.test/auth/callback?code=test-code&state=test-state'
-				)
-			);
-			throw new Error('expected callback route to redirect');
-		} catch (caught) {
-			const redirectLike = caught as { status: number; location: string };
-			expect(redirectLike).toMatchObject({
-				status: 303
-			});
-			const location = new URL(redirectLike.location, 'https://kaivalo.test');
-			expect(location.pathname).toBe('/');
-			expect(location.searchParams.get(AUTH_ERROR_QUERY_NAME)).toBe(
-				AUTH_ERROR_QUERY_VALUE
-			);
-			expect(
-				location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME) ?? ''
-			).toMatch(/^authcb_[0-9a-f-]+$/);
-			expect(location.searchParams.has(AUTH_ERROR_TIMESTAMP_QUERY_NAME)).toBe(
-				true
-			);
-			expect(location.searchParams.has(AUTH_ERROR_SIGNATURE_QUERY_NAME)).toBe(
-				true
-			);
-			expect(
-				readVerifiedAuthError(location.searchParams, {
-					secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
-					now:
-						Number(location.searchParams.get(AUTH_ERROR_TIMESTAMP_QUERY_NAME)) +
-						1
-				})
-			).toEqual({
-				message:
-					'Sign-in is temporarily unavailable. Please try again shortly.',
-				incidentId: location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME)
-			});
-		}
+		const response = await GET(
+			createEvent(
+				{
+					accept: 'text/html',
+					'sec-fetch-mode': 'navigate'
+				},
+				'https://kaivalo.test/auth/callback?code=test-code&state=test-state'
+			)
+		);
+
+		expect(response.status).toBe(303);
+		expect(response.headers.get('set-cookie')).toContain(
+			'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0'
+		);
+		const location = new URL(
+			response.headers.get('location') ?? '',
+			'https://kaivalo.test'
+		);
+		expect(location.pathname).toBe('/');
+		expect(location.searchParams.get(AUTH_ERROR_QUERY_NAME)).toBe(
+			AUTH_ERROR_QUERY_VALUE
+		);
+		expect(
+			location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME) ?? ''
+		).toMatch(/^authcb_[0-9a-f-]+$/);
+		expect(location.searchParams.has(AUTH_ERROR_TIMESTAMP_QUERY_NAME)).toBe(
+			true
+		);
+		expect(location.searchParams.has(AUTH_ERROR_SIGNATURE_QUERY_NAME)).toBe(
+			true
+		);
+		expect(
+			readVerifiedAuthError(location.searchParams, {
+				secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
+				now:
+					Number(location.searchParams.get(AUTH_ERROR_TIMESTAMP_QUERY_NAME)) + 1
+			})
+		).toEqual({
+			message: 'Sign-in is temporarily unavailable. Please try again shortly.',
+			incidentId: location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME)
+		});
+	});
+
+	it('surfaces access_denied callbacks as a benign sign-in notice', async () => {
+		mockWorkosCallbackRequestHandler.mockImplementation(async (event) => {
+			markValidatedCallbackState(event);
+			throw {
+				status: 302,
+				location: `https://kaivalo.test/?${AUTH_NOTICE_QUERY_NAME}=${AUTH_NOTICE_SIGN_IN_CANCELLED_VALUE}`
+			};
+		});
+
+		const { GET } = await import('./+server');
+
+		const response = await GET(
+			createEvent(
+				{
+					accept: 'text/html',
+					'sec-fetch-mode': 'navigate'
+				},
+				'https://kaivalo.test/auth/callback?error=access_denied&state=test-state'
+			)
+		);
+
+		expect(response.status).toBe(302);
+		expect(response.headers.get('set-cookie')).toContain(
+			'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0'
+		);
+		const location = new URL(
+			response.headers.get('location') ?? '',
+			'https://kaivalo.test'
+		);
+		expect(location.pathname).toBe('/');
+		expect(location.searchParams.get(AUTH_NOTICE_QUERY_NAME)).toBe(
+			AUTH_NOTICE_SIGN_IN_CANCELLED_VALUE
+		);
 	});
 
 	it('fails fast when the callback route is initialized without required auth env', async () => {
@@ -320,7 +377,7 @@ describe('auth callback route', () => {
 
 		const { GET } = await import('./+server');
 
-		expect(() => GET(createEvent())).toThrow(
+		await expect(GET(createEvent())).rejects.toThrow(
 			/Missing required environment variable: WORKOS_CLIENT_ID/
 		);
 		expect(
@@ -375,62 +432,57 @@ describe('auth callback route', () => {
 
 		const { GET } = await import('./+server');
 
-		try {
-			await GET(
-				createEvent(
-					{
-						accept: 'text/html',
-						'sec-fetch-mode': 'navigate'
-					},
-					'https://attacker.test/auth/callback?code=test-code&state=test-state'
-				)
-			);
-			throw new Error('expected callback route to redirect');
-		} catch (caught) {
-			const redirectLike = caught as { status: number; location: string };
-			expect(redirectLike).toMatchObject({
-				status: 303,
-				location: expect.stringMatching(/^https:\/\/kaivalo\.test\/\?/)
-			});
+		const response = await GET(
+			createEvent(
+				{
+					accept: 'text/html',
+					'sec-fetch-mode': 'navigate'
+				},
+				'https://attacker.test/auth/callback?code=test-code&state=test-state'
+			)
+		);
 
-			const location = new URL(redirectLike.location);
-			expect(location.origin).toBe(mockEnv.ORIGIN);
-			expect(location.pathname).toBe('/');
-			expect(location.searchParams.get(AUTH_ERROR_QUERY_NAME)).toBe(
-				AUTH_ERROR_QUERY_VALUE
-			);
-			expect(
-				location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME) ?? ''
-			).toMatch(/^authcb_[0-9a-f-]+$/);
-			expect(location.searchParams.has(AUTH_ERROR_TIMESTAMP_QUERY_NAME)).toBe(
-				true
-			);
-			expect(location.searchParams.has(AUTH_ERROR_SIGNATURE_QUERY_NAME)).toBe(
-				true
-			);
-			expect(
-				readVerifiedAuthError(location.searchParams, {
-					secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
-					now:
-						Number(location.searchParams.get(AUTH_ERROR_TIMESTAMP_QUERY_NAME)) +
-						1
-				})
-			).toEqual({
-				message:
-					'Sign-in is temporarily unavailable. Please try again shortly.',
-				incidentId: location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME)
-			});
-			expect(errorSpy).toHaveBeenCalledWith(
-				'Auth callback failed',
-				expect.objectContaining({
-					errorCode: 'AUTH_CALLBACK_UNEXPECTED_FAILURE',
-					pathname: '/auth/callback',
-					method: 'GET',
-					incidentId: expect.stringMatching(/^authcb_/),
-					errorName: 'Error'
-				})
-			);
-		}
+		expect(response.status).toBe(303);
+		expect(response.headers.get('location')).toMatch(
+			/^https:\/\/kaivalo\.test\/\?/
+		);
+		expect(response.headers.get('set-cookie')).toBeNull();
+
+		const location = new URL(response.headers.get('location') ?? '');
+		expect(location.origin).toBe(mockEnv.ORIGIN);
+		expect(location.pathname).toBe('/');
+		expect(location.searchParams.get(AUTH_ERROR_QUERY_NAME)).toBe(
+			AUTH_ERROR_QUERY_VALUE
+		);
+		expect(
+			location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME) ?? ''
+		).toMatch(/^authcb_[0-9a-f-]+$/);
+		expect(location.searchParams.has(AUTH_ERROR_TIMESTAMP_QUERY_NAME)).toBe(
+			true
+		);
+		expect(location.searchParams.has(AUTH_ERROR_SIGNATURE_QUERY_NAME)).toBe(
+			true
+		);
+		expect(
+			readVerifiedAuthError(location.searchParams, {
+				secret: mockEnv.AUTH_ERROR_SIGNING_SECRET,
+				now:
+					Number(location.searchParams.get(AUTH_ERROR_TIMESTAMP_QUERY_NAME)) + 1
+			})
+		).toEqual({
+			message: 'Sign-in is temporarily unavailable. Please try again shortly.',
+			incidentId: location.searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME)
+		});
+		expect(errorSpy).toHaveBeenCalledWith(
+			'Auth callback failed',
+			expect.objectContaining({
+				errorCode: 'AUTH_CALLBACK_UNEXPECTED_FAILURE',
+				pathname: '/auth/callback',
+				method: 'GET',
+				incidentId: expect.stringMatching(/^authcb_/),
+				errorName: 'Error'
+			})
+		);
 	});
 
 	it('treats redirect responses without a location header as route failures', async () => {
@@ -438,12 +490,12 @@ describe('auth callback route', () => {
 		const errorSpy = vi
 			.spyOn(console, 'error')
 			.mockImplementation(() => undefined);
-		mockWorkosCallbackRequestHandler.mockImplementation(
-			async () =>
-				new Response(null, {
-					status: 302
-				})
-		);
+		mockWorkosCallbackRequestHandler.mockImplementation(async (event) => {
+			markValidatedCallbackState(event);
+			return new Response(null, {
+				status: 302
+			});
+		});
 
 		const { GET } = await import('./+server');
 
@@ -476,9 +528,10 @@ describe('auth callback route', () => {
 		const errorSpy = vi
 			.spyOn(console, 'error')
 			.mockImplementation(() => undefined);
-		mockWorkosCallbackRequestHandler.mockImplementation(async () =>
-			Response.redirect('https://evil.example/auth/callback', 302)
-		);
+		mockWorkosCallbackRequestHandler.mockImplementation(async (event) => {
+			markValidatedCallbackState(event);
+			return Response.redirect('https://evil.example/auth/callback', 302);
+		});
 
 		const { GET } = await import('./+server');
 
@@ -503,5 +556,26 @@ describe('auth callback route', () => {
 				errorMessage: 'Auth callback produced an invalid redirect location'
 			})
 		);
+	});
+
+	it('does not clear the callback cookie when an unvalidated callback failure redirects home', async () => {
+		mockCreateConfiguredWorkosCallbackRequestHandler.mockImplementation(() => {
+			throw new Error('upstream unavailable');
+		});
+
+		const { GET } = await import('./+server');
+
+		const response = await GET(
+			createEvent(
+				{
+					accept: 'text/html',
+					'sec-fetch-mode': 'navigate'
+				},
+				'https://kaivalo.test/auth/callback?error=temporarily_unavailable'
+			)
+		);
+
+		expect(response.status).toBe(303);
+		expect(response.headers.get('set-cookie')).toBeNull();
 	});
 });

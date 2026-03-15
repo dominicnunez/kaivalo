@@ -11,6 +11,7 @@ import {
 	AUTH_ERROR_MESSAGE,
 	readVerifiedAuthError
 } from '$lib/auth/auth-error-query.ts';
+import { readAuthNotice } from '$lib/auth/auth-notice-query.ts';
 import { toAvatarProxyUrl } from '$lib/server/avatar-url.ts';
 import {
 	isLoopbackHostname as isLoopbackHost,
@@ -206,6 +207,7 @@ export const load: LayoutServerLoad = async (event) => {
 		const authErrorFromQuery = readVerifiedAuthError(event.url.searchParams, {
 			secret: env.AUTH_ERROR_SIGNING_SECRET ?? ''
 		});
+		const authNoticeFromQuery = readAuthNotice(event.url.searchParams);
 		const developmentBypassUser = getDevelopmentAuthBypassUser(event);
 		let user: LayoutUser | null = developmentBypassUser;
 		if (!user) {
@@ -234,6 +236,7 @@ export const load: LayoutServerLoad = async (event) => {
 		const authError = user
 			? null
 			: (authErrorFromQuery ??
+				authNoticeFromQuery ??
 				(signInUrl
 					? null
 					: {
