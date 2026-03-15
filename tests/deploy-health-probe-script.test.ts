@@ -1,14 +1,9 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
-import {
-	AUTH_ERROR_MESSAGE,
-	buildAuthErrorLandingRedirectLocation,
-	readVerifiedAuthError
-} from '../apps/hub/src/lib/auth/auth-error-query.ts';
-import { getTrustedWorkosAuthOrigin } from '../apps/hub/src/lib/server/auth-origin-policy.ts';
 import { canListenOnLoopback } from './helpers/runtime-capabilities.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -21,12 +16,21 @@ const LOCAL_SIGN_IN_PATH = '/auth/sign-in';
 const CALLBACK_PATH = '/auth/callback';
 const AUTH_ERROR_SIGNING_SECRET = 'cd'.repeat(32);
 const WORKOS_API_HOSTNAME = 'auth.kaivalo-login.com';
-const TRUSTED_AUTH_ORIGIN = getTrustedWorkosAuthOrigin({
-	apiHostname: WORKOS_API_HOSTNAME
-});
+const TRUSTED_AUTH_ORIGIN = `https://${WORKOS_API_HOSTNAME}`;
 const AUTH_AUTHORIZE_PATH = '/user_management/authorize';
 const LOOPBACK_LISTEN_SUPPORTED = await canListenOnLoopback();
 const AUTH_ERROR_INCIDENT_ID = 'authcb_123e4567-e89b-12d3-a456-426614174000';
+const AUTH_ERROR_MESSAGE =
+	'Sign-in is temporarily unavailable. Please try again shortly.';
+const AUTH_ERROR_QUERY_NAME = 'error';
+const AUTH_ERROR_QUERY_VALUE = 'auth';
+const AUTH_ERROR_INCIDENT_QUERY_NAME = 'incident';
+const AUTH_ERROR_TIMESTAMP_QUERY_NAME = 'ts';
+const AUTH_ERROR_SIGNATURE_QUERY_NAME = 'sig';
+const AUTH_ERROR_QUERY_TTL_MS = 5 * 60 * 1000;
+const AUTH_ERROR_MAX_FUTURE_SKEW_MS = 30 * 1000;
+const AUTH_ERROR_INCIDENT_ID_PATTERN =
+	/^auth(?:cb|sign)_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SECURITY_HEADERS = {
 	'x-frame-options': 'DENY',
 	'x-content-type-options': 'nosniff',
@@ -57,6 +61,114 @@ type ScriptResult = {
 };
 
 const serverClosers = new Set<() => Promise<void>>();
+
+function signAuthErrorIncident(
+	incidentId: string,
+	timestamp: string,
+	secret: string
+): string {
+	return createHmac('sha256', secret)
+		.update(`${incidentId}:${timestamp}`)
+		.digest('base64url');
+}
+
+function buildTestAuthErrorLandingRedirectLocation({
+	incidentId,
+	secret,
+	origin,
+	now = Date.now()
+}: {
+	incidentId: string;
+	secret: string;
+	origin: string;
+	now?: number;
+}): string {
+	const landingUrl = new URL('/', new URL(origin).origin);
+	const timestamp = String(now);
+
+	landingUrl.searchParams.set(AUTH_ERROR_QUERY_NAME, AUTH_ERROR_QUERY_VALUE);
+	landingUrl.searchParams.set(AUTH_ERROR_INCIDENT_QUERY_NAME, incidentId);
+	landingUrl.searchParams.set(AUTH_ERROR_TIMESTAMP_QUERY_NAME, timestamp);
+	landingUrl.searchParams.set(
+		AUTH_ERROR_SIGNATURE_QUERY_NAME,
+		signAuthErrorIncident(incidentId, timestamp, secret.trim())
+	);
+
+	return landingUrl.toString();
+}
+
+function signaturesMatch(
+	actualSignature: string,
+	expectedSignature: string
+): boolean {
+	const actualBuffer = Buffer.from(actualSignature);
+	const expectedBuffer = Buffer.from(expectedSignature);
+	if (actualBuffer.length !== expectedBuffer.length) {
+		return false;
+	}
+
+	return timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
+function readVerifiedTestAuthError(
+	searchParams: URLSearchParams,
+	{
+		secret,
+		now = Date.now()
+	}: {
+		secret: string;
+		now?: number;
+	}
+): {
+	message: string;
+	incidentId: string;
+} | null {
+	if (searchParams.get(AUTH_ERROR_QUERY_NAME) !== AUTH_ERROR_QUERY_VALUE) {
+		return null;
+	}
+
+	const incidentId = searchParams.get(AUTH_ERROR_INCIDENT_QUERY_NAME);
+	const timestamp = searchParams.get(AUTH_ERROR_TIMESTAMP_QUERY_NAME);
+	const signature = searchParams.get(AUTH_ERROR_SIGNATURE_QUERY_NAME);
+	if (!incidentId || !timestamp || !signature) {
+		return null;
+	}
+	if (
+		!AUTH_ERROR_INCIDENT_ID_PATTERN.test(incidentId) ||
+		!/^\d+$/.test(timestamp) ||
+		!/^[A-Za-z0-9_-]+$/.test(signature)
+	) {
+		return null;
+	}
+
+	const issuedAt = Number(timestamp);
+	if (
+		!Number.isSafeInteger(issuedAt) ||
+		issuedAt - now > AUTH_ERROR_MAX_FUTURE_SKEW_MS ||
+		now - issuedAt > AUTH_ERROR_QUERY_TTL_MS
+	) {
+		return null;
+	}
+
+	const normalizedSecret = secret.trim();
+	if (normalizedSecret.length === 0) {
+		return null;
+	}
+
+	const expectedSignature = signAuthErrorIncident(
+		incidentId,
+		timestamp,
+		normalizedSecret
+	);
+	if (!signaturesMatch(signature, expectedSignature)) {
+		return null;
+	}
+
+	return {
+		message: AUTH_ERROR_MESSAGE,
+		incidentId
+	};
+}
 
 function startFixtureServer(handler: RouteHandler): Promise<FixtureServer> {
 	return new Promise((resolve, reject) => {
@@ -119,7 +231,7 @@ function createHealthyHandler(
 
 		switch (pathname) {
 			case '/': {
-				const authError = readVerifiedAuthError(requestUrl.searchParams, {
+				const authError = readVerifiedTestAuthError(requestUrl.searchParams, {
 					secret: AUTH_ERROR_SIGNING_SECRET
 				});
 				return {
@@ -179,7 +291,7 @@ function createHealthyHandler(
 					headers: {
 						...SECURITY_HEADERS,
 						'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL,
-						location: buildAuthErrorLandingRedirectLocation({
+						location: buildTestAuthErrorLandingRedirectLocation({
 							incidentId: AUTH_ERROR_INCIDENT_ID,
 							secret: AUTH_ERROR_SIGNING_SECRET,
 							origin: trustedResponseOrigin,
@@ -408,7 +520,7 @@ describe(
 					'/auth/callback': (request) => {
 						const requestOrigin = `http://${request.headers.host ?? '127.0.0.1'}`;
 						const location = new URL(
-							buildAuthErrorLandingRedirectLocation({
+							buildTestAuthErrorLandingRedirectLocation({
 								incidentId: AUTH_ERROR_INCIDENT_ID,
 								secret: AUTH_ERROR_SIGNING_SECRET,
 								origin: requestOrigin,
@@ -488,9 +600,12 @@ describe(
 					'/': (request) => {
 						const requestOrigin = `http://${request.headers.host ?? '127.0.0.1'}`;
 						const requestUrl = new URL(request.url ?? '/', requestOrigin);
-						const authError = readVerifiedAuthError(requestUrl.searchParams, {
-							secret: AUTH_ERROR_SIGNING_SECRET
-						});
+						const authError = readVerifiedTestAuthError(
+							requestUrl.searchParams,
+							{
+								secret: AUTH_ERROR_SIGNING_SECRET
+							}
+						);
 						return {
 							statusCode: 200,
 							headers: {
