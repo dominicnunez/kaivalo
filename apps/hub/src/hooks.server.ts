@@ -1,4 +1,4 @@
-import { configureAuthKit, authKitHandle } from '@workos/authkit-sveltekit';
+import { configureAuthKit } from '@workos/authkit-sveltekit';
 import { sequence } from '@sveltejs/kit/hooks';
 import type { HandleServerError } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
@@ -14,6 +14,7 @@ import {
 	shouldIncludeErrorMessage
 } from '$lib/server/error-diagnostics.ts';
 import { normalizeRequestId } from '$lib/server/request-id.ts';
+import { createConfiguredWorkosSessionHandle } from '$lib/server/workos-auth.ts';
 
 const workosEnv = getValidatedWorkosEnv(env);
 const { trustForwardedProto, trustedProxyIps } = getProxyTrustConfiguration(
@@ -30,7 +31,9 @@ configureAuthKit({
 });
 const configuredHandle = sequence(
 	createSecurityHeadersHandle({ trustForwardedProto, trustedProxyIps }),
-	authKitHandle()
+	createConfiguredWorkosSessionHandle(workosEnv, {
+		includeMessageInLogs: shouldIncludeErrorMessage(env)
+	})
 );
 
 export const handle = ({ event, resolve }) =>

@@ -72,8 +72,7 @@ describe('hub preview service controls', () => {
 		const sessionCookie = assertSessionCookieContract(
 			callbackResponse.headers,
 			{
-				cookieName: AUTHKIT_COOKIE_NAME,
-				expectedDecodedValue: 'preview-session'
+				cookieName: AUTHKIT_COOKIE_NAME
 			}
 		);
 

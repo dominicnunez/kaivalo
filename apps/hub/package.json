@@ -33,6 +33,7 @@
 	},
 	"type": "module",
 	"dependencies": {
+		"@workos/authkit-session": "^0.3.4",
 		"@workos/authkit-sveltekit": "^0.1.0",
 		"lucide-svelte": "^0.563.0"
 	}

@@ -174,8 +174,12 @@ async function assertPreviewAuthRoutes(
 async function assertAuthenticatedPreviewSession(
 	baseUrl: string
 ): Promise<void> {
+	const signedInState = Buffer.from(
+		JSON.stringify({ returnPathname: '/services?welcome=1' }),
+		'utf8'
+	).toString('base64url');
 	const callbackResponse = await httpGet(
-		`${baseUrl}/auth/callback?code=test-code&state=test-state`,
+		`${baseUrl}/auth/callback?code=test-code&state=${signedInState}`,
 		{
 			accept: 'text/html',
 			'sec-fetch-mode': 'navigate'
@@ -192,8 +196,7 @@ async function assertAuthenticatedPreviewSession(
 	assert.strictEqual(redirectLocation.searchParams.get('welcome'), '1');
 
 	const sessionCookie = assertSessionCookieContract(callbackResponse.headers, {
-		cookieName: AUTHKIT_COOKIE_NAME,
-		expectedDecodedValue: 'preview-session'
+		cookieName: AUTHKIT_COOKIE_NAME
 	});
 
 	const servicesResponse = await httpGet(`${baseUrl}/services`, {

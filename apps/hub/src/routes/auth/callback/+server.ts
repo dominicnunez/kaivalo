@@ -4,7 +4,7 @@ import type { RequestHandler } from './$types';
 import { createAuthCallbackGetHandler } from '$lib/auth/callback-handler.ts';
 import { shouldIncludeErrorMessage } from '$lib/server/error-diagnostics.ts';
 import { getValidatedWorkosEnv } from '$lib/server/workos-security.ts';
-import { authKit } from '@workos/authkit-sveltekit';
+import { createConfiguredWorkosCallbackRequestHandler } from '$lib/server/workos-auth.ts';
 
 let getHandler: ReturnType<typeof createAuthCallbackGetHandler> | null = null;
 
@@ -15,7 +15,8 @@ function getCallbackHandler(): ReturnType<typeof createAuthCallbackGetHandler> {
 
 	const workosEnv = getValidatedWorkosEnv(env);
 	getHandler = createAuthCallbackGetHandler({
-		handleCallback: () => authKit.handleCallback(),
+		handleCallback: () =>
+			createConfiguredWorkosCallbackRequestHandler(workosEnv),
 		isRedirect,
 		isHttpError,
 		authErrorSigningSecret: workosEnv.authErrorSigningSecret,

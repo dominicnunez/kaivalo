@@ -7,7 +7,7 @@ type HookInput = {
 };
 
 const configureAuthKit = vi.fn();
-const authKitHandle = vi.fn(
+const createConfiguredWorkosSessionHandle = vi.fn(
 	() =>
 		async ({ event, resolve }: HookInput) =>
 			resolve(event)
@@ -15,8 +15,11 @@ const authKitHandle = vi.fn(
 const privateEnv: Record<string, string> = {};
 
 vi.mock('@workos/authkit-sveltekit', () => ({
-	configureAuthKit,
-	authKitHandle
+	configureAuthKit
+}));
+
+vi.mock('$lib/server/workos-auth.ts', () => ({
+	createConfiguredWorkosSessionHandle
 }));
 
 vi.mock('$env/dynamic/private', () => ({
@@ -72,7 +75,7 @@ describe('hooks server behavior', () => {
 			delete privateEnv[key];
 		}
 		configureAuthKit.mockClear();
-		authKitHandle.mockClear();
+		createConfiguredWorkosSessionHandle.mockClear();
 		setRequiredWorkosEnv();
 	});
 

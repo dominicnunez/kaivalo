@@ -1,11 +1,10 @@
 import http from 'node:http';
+import { createSign, generateKeyPairSync } from 'node:crypto';
 import { AVATAR_MAX_RESPONSE_BYTES } from '../../apps/hub/src/lib/server/avatar-proxy.ts';
 
 const PEER_ADDRESS_OVERRIDE_HEADER = 'x-kaivalo-preview-peer-address';
 const PREVIEW_SESSION_COOKIE_NAME = '__Host-wos_session';
 const PREVIEW_SESSION_COOKIE_VALUE = 'preview-session';
-const PREVIEW_SESSION_COOKIE_PAIR = `${PREVIEW_SESSION_COOKIE_NAME}=${PREVIEW_SESSION_COOKIE_VALUE}`;
-const PREVIEW_SESSION_COOKIE_MAX_AGE = String(60 * 60 * 24 * 400);
 const OVERSIZED_AVATAR_CONTENT_LENGTH = String(AVATAR_MAX_RESPONSE_BYTES + 1);
 const PREVIEW_USER = Object.freeze({
 	object: 'user',
@@ -22,6 +21,22 @@ const PREVIEW_USER = Object.freeze({
 	externalId: null,
 	metadata: {}
 });
+const PREVIEW_USER_AUTH_RESPONSE = Object.freeze({
+	object: 'user',
+	id: PREVIEW_USER.id,
+	email: PREVIEW_USER.email,
+	email_verified: PREVIEW_USER.emailVerified,
+	first_name: PREVIEW_USER.firstName,
+	profile_picture_url: PREVIEW_USER.profilePictureUrl,
+	last_name: PREVIEW_USER.lastName,
+	last_sign_in_at: PREVIEW_USER.lastSignInAt,
+	locale: PREVIEW_USER.locale,
+	created_at: PREVIEW_USER.createdAt,
+	updated_at: PREVIEW_USER.updatedAt,
+	external_id: PREVIEW_USER.externalId,
+	metadata: PREVIEW_USER.metadata
+});
+const PREVIEW_AUTHENTICATE_PATHNAME = '/user_management/authenticate';
 
 const originalCreateServer = http.createServer.bind(http);
 http.createServer = function patchedCreateServer(...args) {
@@ -75,21 +90,55 @@ function getPreviewAuthOrigin() {
 	return `https://${process.env.WORKOS_API_HOSTNAME || 'api.workos.com'}`;
 }
 
-function createSignedInSignOutResponse() {
-	const headers = new Headers();
-	headers.set(
-		'location',
-		`${getPreviewAuthOrigin()}/user_management/sessions/logout?session_id=${encodeURIComponent(PREVIEW_SESSION_COOKIE_VALUE)}&return_to=${encodeURIComponent(process.env.ORIGIN || '')}`
-	);
-	headers.append(
-		'set-cookie',
-		`${PREVIEW_SESSION_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
-	);
+function getPreviewJwksPathname() {
+	return `/sso/jwks/${process.env.WORKOS_CLIENT_ID || ''}`;
+}
 
-	return new Response(null, {
-		status: 302,
-		headers
+function createPreviewJsonResponse(body) {
+	return new Response(JSON.stringify(body), {
+		status: 200,
+		headers: {
+			'content-type': 'application/json'
+		}
 	});
+}
+
+const { privateKey: callbackSigningKey, publicKey: callbackPublicKey } =
+	generateKeyPairSync('rsa', {
+		modulusLength: 2048
+	});
+const callbackPublicJwk = callbackPublicKey.export({
+	format: 'jwk'
+});
+callbackPublicJwk.alg = 'RS256';
+callbackPublicJwk.kid = 'preview-callback-key';
+callbackPublicJwk.use = 'sig';
+
+async function createPreviewAccessToken() {
+	const now = Math.floor(Date.now() / 1000);
+	const header = Buffer.from(
+		JSON.stringify({
+			alg: 'RS256',
+			kid: String(callbackPublicJwk.kid),
+			typ: 'JWT'
+		}),
+		'utf8'
+	).toString('base64url');
+	const payload = Buffer.from(
+		JSON.stringify({
+			sid: PREVIEW_SESSION_COOKIE_VALUE,
+			sub: PREVIEW_USER.id,
+			iat: now,
+			exp: now + 60 * 60
+		}),
+		'utf8'
+	).toString('base64url');
+	const signingInput = `${header}.${payload}`;
+	const signer = createSign('RSA-SHA256');
+	signer.update(signingInput);
+	signer.end();
+
+	return `${signingInput}.${signer.sign(callbackSigningKey).toString('base64url')}`;
 }
 
 const signInFixtureMode = process.env.HUB_PREVIEW_SIGN_IN_FIXTURE_MODE;
@@ -115,59 +164,70 @@ if (signInFixtureMode) {
 
 const callbackFixtureMode = process.env.HUB_PREVIEW_CALLBACK_FIXTURE_MODE;
 if (callbackFixtureMode) {
-	const { authKit } = await import('@workos/authkit-sveltekit');
-	const originalGetUser = authKit.getUser.bind(authKit);
+	const originalFetch = globalThis.fetch.bind(globalThis);
 
-	authKit.handleCallback = () => async () => {
-		switch (callbackFixtureMode) {
-			case 'signed-in': {
-				const headers = new Headers();
-				headers.set('location', `${process.env.ORIGIN}/services?welcome=1`);
-				headers.set(
-					'set-cookie',
-					`${PREVIEW_SESSION_COOKIE_PAIR}; Path=/; Max-Age=${PREVIEW_SESSION_COOKIE_MAX_AGE}; HttpOnly; Secure; SameSite=Lax`
-				);
-				return new Response(null, {
-					status: 302,
-					headers
-				});
+	globalThis.fetch = async (input, init) => {
+		const request =
+			input instanceof Request ? input : new Request(String(input), init);
+		const requestUrl = new URL(request.url);
+		if (requestUrl.origin !== getPreviewAuthOrigin()) {
+			return originalFetch(input, init);
+		}
+
+		if (requestUrl.pathname === PREVIEW_AUTHENTICATE_PATHNAME) {
+			switch (callbackFixtureMode) {
+				case 'signed-in':
+					return createPreviewJsonResponse({
+						access_token: await createPreviewAccessToken(),
+						refresh_token: 'preview-refresh-token',
+						user: PREVIEW_USER_AUTH_RESPONSE
+					});
+				case 'auth-error-redirect':
+				case 'throw':
+					throw new Error('fixture callback failure: preview secret');
+				default:
+					throw new Error(
+						`Unsupported HUB_PREVIEW_CALLBACK_FIXTURE_MODE: ${callbackFixtureMode}`
+					);
 			}
-			case 'auth-error-redirect':
-				return Response.redirect(
-					`${process.env.ORIGIN}/auth/error?code=AUTH_FAILED`,
-					302
-				);
-			case 'throw':
-				throw new Error('fixture callback failure: preview secret');
-			default:
-				throw new Error(
-					`Unsupported HUB_PREVIEW_CALLBACK_FIXTURE_MODE: ${callbackFixtureMode}`
-				);
-		}
-	};
-
-	authKit.getUser = async (event) => {
-		const cookieHeader = event.request.headers.get('cookie') ?? '';
-		if (cookieHeader.includes(PREVIEW_SESSION_COOKIE_PAIR)) {
-			return PREVIEW_USER;
 		}
 
-		return originalGetUser(event);
+		if (requestUrl.pathname === getPreviewJwksPathname()) {
+			return createPreviewJsonResponse({
+				keys: [callbackPublicJwk]
+			});
+		}
+
+		return originalFetch(input, init);
 	};
 }
 
 const signOutFixtureMode = process.env.HUB_PREVIEW_SIGN_OUT_FIXTURE_MODE;
 if (signOutFixtureMode) {
 	const { authKit } = await import('@workos/authkit-sveltekit');
+	const originalSignOut = authKit.signOut.bind(authKit);
 	authKit.signOut = async (event) => {
 		switch (signOutFixtureMode) {
 			case 'signed-in': {
 				const cookieHeader = event.request.headers.get('cookie') ?? '';
-				if (cookieHeader.includes(PREVIEW_SESSION_COOKIE_PAIR)) {
-					return createSignedInSignOutResponse();
+				if (cookieHeader.includes(`${PREVIEW_SESSION_COOKIE_NAME}=`)) {
+					const headers = new Headers();
+					headers.set(
+						'location',
+						`${getPreviewAuthOrigin()}/user_management/sessions/logout?session_id=${encodeURIComponent(PREVIEW_SESSION_COOKIE_VALUE)}&return_to=${encodeURIComponent(process.env.ORIGIN || '')}`
+					);
+					headers.append(
+						'set-cookie',
+						`${PREVIEW_SESSION_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+					);
+
+					return new Response(null, {
+						status: 302,
+						headers
+					});
 				}
 
-				return Response.redirect(`${process.env.ORIGIN || '/'}/`, 302);
+				return originalSignOut(event);
 			}
 			case 'throw':
 				throw new Error('fixture sign-out failure: preview secret');

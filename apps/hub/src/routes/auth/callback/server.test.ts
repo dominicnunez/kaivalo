@@ -31,25 +31,36 @@ const AUTHENTICATED_USER: User = {
 	metadata: {}
 };
 
-const { mockConfigureAuthKit, mockEnv, mockGetUser, mockHandleCallback } =
-	vi.hoisted(() => ({
-		mockConfigureAuthKit: vi.fn(),
-		mockEnv: {
-			WORKOS_CLIENT_ID: 'client_123',
-			WORKOS_API_KEY: 'sk_test_123',
-			WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback',
-			WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
-			AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
-			AVATAR_PROXY_SIGNING_SECRET: 'ef'.repeat(32),
-			ORIGIN: 'https://kaivalo.test',
-			NODE_ENV: 'production'
-		} as Record<string, string>,
-		mockGetUser: vi.fn(async (event) => event.locals.auth?.user ?? null),
-		mockHandleCallback: vi.fn()
-	}));
+const {
+	mockConfigureAuthKit,
+	mockCreateConfiguredWorkosCallbackRequestHandler,
+	mockEnv,
+	mockGetUser,
+	mockWorkosCallbackRequestHandler
+} = vi.hoisted(() => ({
+	mockConfigureAuthKit: vi.fn(),
+	mockCreateConfiguredWorkosCallbackRequestHandler: vi.fn(),
+	mockEnv: {
+		WORKOS_CLIENT_ID: 'client_123',
+		WORKOS_API_KEY: 'sk_test_123',
+		WORKOS_REDIRECT_URI: 'https://kaivalo.test/auth/callback',
+		WORKOS_COOKIE_PASSWORD: 'ab'.repeat(32),
+		AUTH_ERROR_SIGNING_SECRET: 'cd'.repeat(32),
+		AVATAR_PROXY_SIGNING_SECRET: 'ef'.repeat(32),
+		ORIGIN: 'https://kaivalo.test',
+		NODE_ENV: 'production'
+	} as Record<string, string>,
+	mockGetUser: vi.fn(async (event) => event.locals.auth?.user ?? null),
+	mockWorkosCallbackRequestHandler: vi.fn()
+}));
 
 vi.mock('$env/dynamic/private', () => ({
 	env: mockEnv
+}));
+
+vi.mock('$lib/server/workos-auth.ts', () => ({
+	createConfiguredWorkosCallbackRequestHandler:
+		mockCreateConfiguredWorkosCallbackRequestHandler
 }));
 
 vi.mock('@workos/authkit-sveltekit', () => ({
@@ -66,8 +77,7 @@ vi.mock('@workos/authkit-sveltekit', () => ({
 			return resolve(event);
 		},
 	authKit: {
-		getUser: mockGetUser,
-		handleCallback: mockHandleCallback
+		getUser: mockGetUser
 	}
 }));
 
@@ -97,8 +107,9 @@ describe('auth callback route', () => {
 	beforeEach(() => {
 		vi.resetModules();
 		mockConfigureAuthKit.mockReset();
+		mockCreateConfiguredWorkosCallbackRequestHandler.mockReset();
 		mockGetUser.mockClear();
-		mockHandleCallback.mockReset();
+		mockWorkosCallbackRequestHandler.mockReset();
 		mockEnv.WORKOS_CLIENT_ID = 'client_123';
 		mockEnv.WORKOS_API_KEY = 'sk_test_123';
 		mockEnv.WORKOS_REDIRECT_URI = 'https://kaivalo.test/auth/callback';
@@ -109,6 +120,9 @@ describe('auth callback route', () => {
 		mockEnv.NODE_ENV = 'production';
 		delete mockEnv.TRUST_X_FORWARDED_PROTO;
 		delete mockEnv.TRUSTED_PROXY_IPS;
+		mockCreateConfiguredWorkosCallbackRequestHandler.mockReturnValue(
+			mockWorkosCallbackRequestHandler
+		);
 	});
 
 	afterEach(() => {
@@ -116,7 +130,7 @@ describe('auth callback route', () => {
 	});
 
 	it('normalizes redirect-like objects through the real route entrypoint', async () => {
-		mockHandleCallback.mockReturnValue(async () => {
+		mockWorkosCallbackRequestHandler.mockImplementation(async () => {
 			throw {
 				status: 303,
 				location: 'https://kaivalo.test/services#shell'
@@ -131,11 +145,11 @@ describe('auth callback route', () => {
 			status: 303,
 			location: 'https://kaivalo.test/services#shell'
 		});
-		expect(mockHandleCallback).toHaveBeenCalledOnce();
+		expect(mockWorkosCallbackRequestHandler).toHaveBeenCalledOnce();
 	});
 
 	it('establishes a session that unlocks the protected services launcher', async () => {
-		mockHandleCallback.mockReturnValue(async () => {
+		mockWorkosCallbackRequestHandler.mockImplementation(async () => {
 			const headers = new Headers();
 			headers.set('location', 'https://kaivalo.test/services?welcome=1');
 			headers.set(
@@ -247,7 +261,7 @@ describe('auth callback route', () => {
 	});
 
 	it('translates vendor auth error redirects into the signed landing-page error flow', async () => {
-		mockHandleCallback.mockReturnValue(async () => {
+		mockWorkosCallbackRequestHandler.mockImplementation(async () => {
 			throw {
 				status: 302,
 				location: 'https://kaivalo.test/auth/error?code=AUTH_FAILED'
@@ -309,14 +323,16 @@ describe('auth callback route', () => {
 		expect(() => GET(createEvent())).toThrow(
 			/Missing required environment variable: WORKOS_CLIENT_ID/
 		);
-		expect(mockHandleCallback).not.toHaveBeenCalled();
+		expect(
+			mockCreateConfiguredWorkosCallbackRequestHandler
+		).not.toHaveBeenCalled();
 	});
 
 	it('returns a 503 error for non-browser callback factory failures', async () => {
 		const errorSpy = vi
 			.spyOn(console, 'error')
 			.mockImplementation(() => undefined);
-		mockHandleCallback.mockImplementation(() => {
+		mockCreateConfiguredWorkosCallbackRequestHandler.mockImplementation(() => {
 			throw new Error('upstream unavailable');
 		});
 
@@ -353,7 +369,7 @@ describe('auth callback route', () => {
 		const errorSpy = vi
 			.spyOn(console, 'error')
 			.mockImplementation(() => undefined);
-		mockHandleCallback.mockImplementation(() => {
+		mockCreateConfiguredWorkosCallbackRequestHandler.mockImplementation(() => {
 			throw new Error('upstream unavailable');
 		});
 
@@ -422,7 +438,7 @@ describe('auth callback route', () => {
 		const errorSpy = vi
 			.spyOn(console, 'error')
 			.mockImplementation(() => undefined);
-		mockHandleCallback.mockReturnValue(
+		mockWorkosCallbackRequestHandler.mockImplementation(
 			async () =>
 				new Response(null, {
 					status: 302
@@ -460,7 +476,7 @@ describe('auth callback route', () => {
 		const errorSpy = vi
 			.spyOn(console, 'error')
 			.mockImplementation(() => undefined);
-		mockHandleCallback.mockReturnValue(async () =>
+		mockWorkosCallbackRequestHandler.mockImplementation(async () =>
 			Response.redirect('https://evil.example/auth/callback', 302)
 		);
 
