@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { pathToFileURL } from 'node:url';
+import { isExecutedDirectly } from './is-executed-directly.ts';
 
 export const REPO_ROOT = resolve(import.meta.dirname, '..');
 const LOCKFILE_PATH = resolve(REPO_ROOT, 'package-lock.json');
@@ -445,7 +445,7 @@ async function main() {
 	process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+if (isExecutedDirectly(import.meta.url)) {
 	main().catch((error) => {
 		console.error(error instanceof Error ? error.message : error);
 		process.exitCode = 1;

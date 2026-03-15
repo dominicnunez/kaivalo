@@ -13,7 +13,7 @@
 		"node:check": "node scripts/check-node-version.ts",
 		"check": "npm run node:check && npm --prefix packages/ui run check && npm --prefix apps/hub run check",
 		"audit:deps": "npm run node:check && node scripts/check-npm-audit.ts",
-		"test:core": "npm run node:check && npm run check && npm --prefix packages/ui run test && npm --prefix apps/hub run test:unit && node --test tests/check-sveltekit-upstream.test.ts tests/deploy-health-probe-script.test.ts tests/deployment-runtime-guardrails.test.ts tests/gitignore.test.ts tests/hub-build-freshness.test.ts tests/hub-env-example.test.ts tests/hub-node-server-port-validation.test.ts tests/hub-node-server-static-assets.test.ts tests/hub-node-server.test.ts tests/hub-runtime-env.test.ts tests/node-version-alignment.test.ts tests/npm-audit-gate.test.ts tests/production-image-smoke-build-script.test.ts",
+		"test:core": "npm run node:check && npm run check && npm --prefix packages/ui run test && npm --prefix apps/hub run test:unit && node --test tests/check-sveltekit-upstream.test.ts tests/deploy-health-probe-script.test.ts tests/deployment-runtime-guardrails.test.ts tests/direct-execution-guard.test.ts tests/gitignore.test.ts tests/hub-build-freshness.test.ts tests/hub-env-example.test.ts tests/hub-node-server-port-validation.test.ts tests/hub-node-server-static-assets.test.ts tests/hub-node-server.test.ts tests/hub-runtime-env.test.ts tests/node-version-alignment.test.ts tests/npm-audit-gate.test.ts tests/production-image-smoke-build-script.test.ts",
 		"test:build:hub": "npm run node:check && npm --prefix apps/hub run test:build",
 		"test:preview:hub": "npm run node:check && node --test tests/hub-preview-script.test.ts",
 		"lint": "eslint . --ext .js,.mjs,.mts,.cjs,.ts,.svelte",

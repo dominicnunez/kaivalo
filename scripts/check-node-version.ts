@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { isExecutedDirectly } from './is-executed-directly.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const PACKAGE_JSON_PATH = path.join(ROOT, 'package.json');
@@ -48,6 +49,6 @@ export function assertSupportedNodeVersion(
 	);
 }
 
-if (import.meta.url === new URL(process.argv[1] ?? '', 'file://').href) {
+if (isExecutedDirectly(import.meta.url)) {
 	assertSupportedNodeVersion();
 }

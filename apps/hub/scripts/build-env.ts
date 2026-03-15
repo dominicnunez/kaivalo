@@ -8,6 +8,7 @@ import { parsePort } from '../src/lib/server/port.ts';
 import { getValidatedWorkosEnv } from '../src/lib/server/workos-security-env.ts';
 import { getHubBuildPaths, removeServerSourceMaps } from './build-artifacts.ts';
 import { assertSupportedNodeVersion } from '../../../scripts/check-node-version.ts';
+import { isExecutedDirectly } from '../../../scripts/is-executed-directly.ts';
 
 const DEFAULT_LOCAL_PREVIEW_HOST = 'localhost';
 const LOCAL_PREVIEW_WILDCARD_HOSTS = new Set(['0.0.0.0', '::', '[::]']);
@@ -244,6 +245,6 @@ export function runHubBuildWithEnv({
 	}
 }
 
-if (import.meta.url === new URL(process.argv[1] ?? '', 'file://').href) {
+if (isExecutedDirectly(import.meta.url)) {
 	runHubBuildWithEnv();
 }

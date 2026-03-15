@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
+import { isExecutedDirectly } from './is-executed-directly.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const AUDIT_SLEEP_BUFFER = new Int32Array(new SharedArrayBuffer(4));
@@ -512,6 +513,6 @@ export function runCli(options: CliDependencies = {}) {
 	}
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isExecutedDirectly(import.meta.url)) {
 	runCli();
 }
