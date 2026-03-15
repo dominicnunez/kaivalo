@@ -57,6 +57,7 @@ type WorkflowRecord = Record<string, unknown>;
 
 type WorkflowStep = {
 	name?: string;
+	if?: string;
 	uses?: string;
 	run?: string;
 	with: Record<string, string>;
@@ -187,6 +188,7 @@ function normalizeWorkflowStep(
 	const record = readRecord(step, `${description} should be an object`);
 	return {
 		name: readOptionalString(record.name),
+		if: readOptionalString(record.if),
 		uses: readOptionalString(record.uses),
 		run: readOptionalString(record.run),
 		with: isRecord(record.with)
@@ -702,6 +704,34 @@ describe('deployment runtime guardrails', () => {
 			getWorkflowJobTimeoutMinutes(trackWorkflow, 'check'),
 			EXPECTED_WORKFLOW_TIMEOUTS.trackSvelteKitCheck
 		);
+	});
+
+	it('closes stale sveltekit tracking issues once the repo catches up', () => {
+		const workflow = readWorkflow(TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH);
+		const closeIssueStep = findWorkflowStep(
+			workflow,
+			'check',
+			(step) => step.name === 'Close resolved tracking issue',
+			'a step that closes resolved upstream tracking issues'
+		);
+
+		assert.strictEqual(
+			closeIssueStep.if,
+			"steps.check.outputs.has_newer_upstream != 'true' && steps.find_issue.outputs.issue_number != ''"
+		);
+		assert.ok(
+			closeIssueStep.uses?.startsWith('actions/github-script@'),
+			'resolved upstream issue closure should use the shared github-script action'
+		);
+		assert.strictEqual(
+			closeIssueStep.env.ISSUE_NUMBER,
+			'${{ steps.find_issue.outputs.issue_number }}'
+		);
+		assert.match(
+			closeIssueStep.with.script,
+			/github\.rest\.issues\.createComment/
+		);
+		assert.match(closeIssueStep.with.script, /state:\s*'closed'/);
 	});
 
 	it('keeps workflow permissions scoped to the minimum required access', () => {

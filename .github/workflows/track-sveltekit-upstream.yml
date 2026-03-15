@@ -30,7 +30,6 @@ jobs:
         run: printf '%s\n' "${{ steps.check.outputs.summary }}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Find existing tracking issue
-        if: steps.check.outputs.has_newer_upstream == 'true'
         id: find_issue
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
         with:
@@ -80,3 +79,25 @@ jobs:
           ISSUE_NUMBER: ${{ steps.find_issue.outputs.issue_number }}
           ISSUE_TITLE: ${{ steps.check.outputs.issue_title }}
           ISSUE_BODY: ${{ steps.check.outputs.issue_body }}
+
+      - name: Close resolved tracking issue
+        if: steps.check.outputs.has_newer_upstream != 'true' && steps.find_issue.outputs.issue_number != ''
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        with:
+          script: |
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: process.env.RESOLUTION_COMMENT
+            });
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              state: 'closed'
+            });
+        env:
+          ISSUE_NUMBER: ${{ steps.find_issue.outputs.issue_number }}
+          RESOLUTION_COMMENT: The repository is already on the latest published @sveltejs/kit release, so this tracking issue no longer reflects outstanding upgrade work.
