@@ -259,7 +259,7 @@ describe('workos environment protocols', () => {
 		}
 	});
 
-	it('allows DEV_AUTH_BYPASS for loopback-only development origins', () => {
+	it('rejects DEV_AUTH_BYPASS when loopback hosts differ', () => {
 		expect(() =>
 			getValidatedWorkosEnv({
 				...validLocalEnv,
@@ -268,7 +268,7 @@ describe('workos environment protocols', () => {
 				ORIGIN: 'http://127.0.0.1:3100',
 				WORKOS_REDIRECT_URI: 'http://localhost:3100/auth/callback'
 			})
-		).not.toThrow();
+		).toThrow(/ORIGIN must match WORKOS_REDIRECT_URI origin/);
 	});
 
 	it('rejects DEV_AUTH_BYPASS outside development', () => {

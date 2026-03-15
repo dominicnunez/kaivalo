@@ -283,13 +283,25 @@ describe('WorkOS env validation', () => {
 		);
 	});
 
-	it('allows local IPv6 loopback redirect URIs over http', () => {
+	it('allows local IPv6 loopback redirect URIs over http when hosts match', () => {
 		assert.doesNotThrow(() =>
 			assertValidWorkosEnv({
 				...validEnv,
 				WORKOS_REDIRECT_URI: 'http://[::1]:3100/auth/callback',
-				ORIGIN: 'http://localhost:3100'
+				ORIGIN: 'http://[::1]:3100'
 			})
+		);
+	});
+
+	it('rejects local loopback origin and redirect URLs when hosts differ', () => {
+		assert.throws(
+			() =>
+				assertValidWorkosEnv({
+					...validEnv,
+					WORKOS_REDIRECT_URI: 'http://[::1]:3100/auth/callback',
+					ORIGIN: 'http://localhost:3100'
+				}),
+			/ORIGIN must match WORKOS_REDIRECT_URI origin/
 		);
 	});
 

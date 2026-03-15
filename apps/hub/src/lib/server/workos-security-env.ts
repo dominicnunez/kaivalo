@@ -112,7 +112,8 @@ function hasEquivalentOrigin(left: URL, right: URL): boolean {
 
 	return (
 		left.protocol === right.protocol &&
-		getEffectivePort(left) === getEffectivePort(right)
+		getEffectivePort(left) === getEffectivePort(right) &&
+		left.hostname === right.hostname
 	);
 }
 
