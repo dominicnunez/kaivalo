@@ -45,6 +45,13 @@ const PINNED_NODE_VERSION_PATTERN = /^node:(\d+\.\d+\.\d+)-/;
 const IMAGE_DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/i;
 const FULL_LENGTH_ACTION_REF_PATTERN =
 	/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[a-f0-9]{40}$/;
+const EXPECTED_WORKFLOW_TIMEOUTS = {
+	ciVerify: 15,
+	dailyVerify: 45,
+	dailyDockerSmoke: 20,
+	trackSvelteKitCheck: 10,
+	deploy: 15
+} as const;
 
 type WorkflowRecord = Record<string, unknown>;
 
@@ -161,6 +168,16 @@ function getWorkflowJob(
 ): WorkflowRecord {
 	const jobs = readRecord(workflow.jobs, 'workflow should define jobs');
 	return readRecord(jobs[jobName], `job ${jobName} should exist`);
+}
+
+function getWorkflowJobTimeoutMinutes(
+	workflow: WorkflowRecord,
+	jobName: string
+): number {
+	return readNumber(
+		getWorkflowJob(workflow, jobName)['timeout-minutes'],
+		`job ${jobName} should define timeout-minutes`
+	);
 }
 
 function normalizeWorkflowStep(
@@ -382,6 +399,10 @@ describe('deployment runtime guardrails', () => {
 			0,
 			'fast lane CI should invoke the shared test:ci entrypoint without a duplicate lint step'
 		);
+		assert.strictEqual(
+			getWorkflowJobTimeoutMinutes(workflow, 'verify'),
+			EXPECTED_WORKFLOW_TIMEOUTS.ciVerify
+		);
 	});
 
 	it('pins every workflow node setup step to the Docker runtime patch version', () => {
@@ -529,7 +550,6 @@ describe('deployment runtime guardrails', () => {
 		const workflow = readWorkflow(DEPLOY_WORKFLOW_PATH);
 		const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
 		const pinnedNodeVersion = getPinnedNodeVersionFromDockerfile(dockerfile);
-		const deployJob = getWorkflowJob(workflow, 'deploy');
 		const deploySteps = getWorkflowSteps(workflow, 'deploy');
 		const isDeployHealthVerificationStep = (step: WorkflowStep) =>
 			normalizeShellScript(step.run ?? '').includes(
@@ -565,11 +585,8 @@ describe('deployment runtime guardrails', () => {
 		const sshOptions = parseSshOptions(deployCommand);
 
 		assert.strictEqual(
-			readNumber(
-				deployJob['timeout-minutes'],
-				'deploy job should define timeout-minutes'
-			),
-			15
+			getWorkflowJobTimeoutMinutes(workflow, 'deploy'),
+			EXPECTED_WORKFLOW_TIMEOUTS.deploy
 		);
 		assert.ok(deployCommand.includes('ssh '));
 		assert.strictEqual(sshOptions.get('BatchMode'), 'yes');
@@ -634,6 +651,10 @@ describe('deployment runtime guardrails', () => {
 		assert.strictEqual(permissions.contents, 'read');
 		assert.ok(runCommands.includes('npm ci --ignore-scripts'));
 		assert.ok(runCommands.includes('npm run test:full'));
+		assert.strictEqual(
+			getWorkflowJobTimeoutMinutes(workflow, 'verify'),
+			EXPECTED_WORKFLOW_TIMEOUTS.dailyVerify
+		);
 	});
 
 	it('smoke builds the production image on daily full-suite runs', () => {
@@ -664,6 +685,19 @@ describe('deployment runtime guardrails', () => {
 			'daily docker smoke job should configure Node.js before running the shared smoke verifier'
 		);
 		assert.strictEqual(setupNodeStep?.with['node-version'], pinnedNodeVersion);
+		assert.strictEqual(
+			getWorkflowJobTimeoutMinutes(workflow, 'docker_smoke'),
+			EXPECTED_WORKFLOW_TIMEOUTS.dailyDockerSmoke
+		);
+	});
+
+	it('bounds routine workflow jobs that can otherwise hang on platform defaults', () => {
+		const trackWorkflow = readWorkflow(TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH);
+
+		assert.strictEqual(
+			getWorkflowJobTimeoutMinutes(trackWorkflow, 'check'),
+			EXPECTED_WORKFLOW_TIMEOUTS.trackSvelteKitCheck
+		);
 	});
 
 	it('keeps workflow permissions scoped to the minimum required access', () => {
@@ -840,6 +874,33 @@ describe('deployment runtime guardrails', () => {
 		assert.strictEqual(buildImage.reference, runtimeImage.reference);
 		assert.strictEqual(buildImage.digest, runtimeImage.digest);
 		assert.strictEqual(buildImage.nodeVersion, runtimeImage.nodeVersion);
+	});
+
+	it('declares an in-container health check against the loopback health endpoint', () => {
+		const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
+
+		assert.ok(
+			dockerfile.includes(
+				'HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3'
+			),
+			'runtime image should define a bounded health check policy'
+		);
+		assert.ok(
+			dockerfile.includes("const port = process.env.PORT ?? '3100';"),
+			'runtime image health probe should stay aligned with the configured port'
+		);
+		assert.ok(
+			dockerfile.includes("'http://127.0.0.1:' + port + '/healthz'"),
+			'runtime image should probe the loopback health endpoint'
+		);
+		assert.ok(
+			dockerfile.includes('if (!response.ok) process.exit(1);'),
+			'runtime image health probe should fail when the app stops serving successful responses'
+		);
+		assert.ok(
+			dockerfile.includes('.catch(() => process.exit(1))'),
+			'runtime image health probe should exit non-zero on probe failure'
+		);
 	});
 
 	it('uses the shared hub build env defaults for placeholder-safe image builds', () => {

@@ -33,5 +33,6 @@ WORKDIR /app/apps/hub
 USER node
 
 EXPOSE 3100
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["node", "-e", "const port = process.env.PORT ?? '3100'; fetch('http://127.0.0.1:' + port + '/healthz').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1))"]
 
 CMD ["node", "server.ts"]
