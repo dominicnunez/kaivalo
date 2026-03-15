@@ -15,6 +15,7 @@ const SMOKE_IMAGE_TAG = 'kaivalo-hub-smoke:test';
 const SMOKE_CONTAINER_ID = 'container-smoke-123';
 const SMOKE_PUBLISHED_PORT = '41234';
 const SMOKE_CANONICAL_ORIGIN = 'http://127.0.0.1:3100';
+const REPO_DOCKERFILE_PATH = path.join(ROOT, 'Dockerfile');
 
 type ScriptResult = {
 	exitCode: number | null;
@@ -100,13 +101,15 @@ function createFakeSmokeDependencies() {
 }
 
 function runSmokeBuildScript({
+	cwd = ROOT,
 	environmentOverrides = {}
 }: {
+	cwd?: string;
 	environmentOverrides?: Record<string, string>;
 } = {}): Promise<ScriptResult> {
 	return new Promise((resolve, reject) => {
 		const child = spawn('bash', [PRODUCTION_IMAGE_SMOKE_BUILD_SCRIPT_PATH], {
-			cwd: ROOT,
+			cwd,
 			env: {
 				...process.env,
 				...environmentOverrides
@@ -195,9 +198,9 @@ describe('production image smoke build script', () => {
 			/^docker image rm\b/
 		]);
 		assertCommandIncludes(invocations[0] ?? '', [
-			'--file ./Dockerfile',
+			`--file ${REPO_DOCKERFILE_PATH}`,
 			`--tag ${SMOKE_IMAGE_TAG}`,
-			' .'
+			` ${ROOT}`
 		]);
 		assertCommandIncludes(invocations[1] ?? '', [
 			'--publish 127.0.0.1::3100',
@@ -220,6 +223,33 @@ describe('production image smoke build script', () => {
 		assertCommandIncludes(invocations[5] ?? '', ['--force', SMOKE_IMAGE_TAG]);
 	});
 
+	it('resolves the repository build context even when invoked outside the repo root', async () => {
+		const { fakeDockerPath, fakeVerifyDeployHealthPath, invocationLogPath } =
+			createFakeSmokeDependencies();
+		const externalCwd = mkdtempSync(
+			path.join(os.tmpdir(), 'kaivalo-production-image-smoke-cwd-')
+		);
+
+		tempDirectories.add(externalCwd);
+		const result = await runSmokeBuildScript({
+			cwd: externalCwd,
+			environmentOverrides: {
+				DOCKER_BIN: fakeDockerPath,
+				FAKE_DOCKER_LOG: invocationLogPath,
+				PRODUCTION_IMAGE_SMOKE_DEPLOY_HEALTH_SCRIPT: fakeVerifyDeployHealthPath,
+				PRODUCTION_IMAGE_SMOKE_TAG: SMOKE_IMAGE_TAG
+			}
+		});
+
+		assert.strictEqual(result.exitCode, 0, result.stderr || result.stdout);
+		const invocations = readInvocationLog(invocationLogPath);
+
+		assertCommandIncludes(invocations[0] ?? '', [
+			`--file ${REPO_DOCKERFILE_PATH}`,
+			` ${ROOT}`
+		]);
+	});
+
 	it('removes the temporary image tag even when the docker build fails', async () => {
 		const { fakeDockerPath, invocationLogPath } = createFakeSmokeDependencies();
 		const result = await runSmokeBuildScript({
@@ -239,9 +269,9 @@ describe('production image smoke build script', () => {
 			/^docker image rm\b/
 		]);
 		assertCommandIncludes(invocations[0] ?? '', [
-			'--file ./Dockerfile',
+			`--file ${REPO_DOCKERFILE_PATH}`,
 			'--tag kaivalo-hub-smoke:test-failure',
-			' .'
+			` ${ROOT}`
 		]);
 		assertCommandIncludes(invocations[1] ?? '', [
 			'--force',

@@ -5,11 +5,14 @@ set -euo pipefail
 readonly SCRIPT_DIR="$(
 	cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd
 )"
+readonly REPO_ROOT="$(
+	cd -- "$SCRIPT_DIR/.." && pwd
+)"
 readonly DOCKER_BIN="${DOCKER_BIN:-docker}"
 readonly CURL_BIN="${CURL_BIN:-curl}"
 readonly NODE_BIN="${NODE_BIN:-node}"
-readonly DOCKERFILE_PATH='./Dockerfile'
-readonly BUILD_CONTEXT='.'
+readonly DOCKERFILE_PATH="$REPO_ROOT/Dockerfile"
+readonly BUILD_CONTEXT="$REPO_ROOT"
 readonly CONTAINER_HEALTH_PORT='3100'
 readonly DEFAULT_IMAGE_TAG="kaivalo-hub-smoke:${GITHUB_RUN_ID:-local}-$$"
 readonly IMAGE_TAG="${PRODUCTION_IMAGE_SMOKE_TAG:-$DEFAULT_IMAGE_TAG}"
@@ -51,6 +54,8 @@ cleanup() {
 }
 
 trap cleanup EXIT
+
+cd -- "$REPO_ROOT"
 
 fail_with_container_logs() {
 	local message="$1"
