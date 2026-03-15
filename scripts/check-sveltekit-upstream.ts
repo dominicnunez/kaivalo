@@ -8,9 +8,40 @@ const LOCKFILE_PATH = resolve(REPO_ROOT, 'package-lock.json');
 const ISSUE_TITLE = 'Track upstream @sveltejs/kit updates for cookie advisory';
 const REGISTRY_LATEST_URL = 'https://registry.npmjs.org/@sveltejs%2fkit/latest';
 export const FETCH_TIMEOUT_MS = 10_000;
+export const FETCH_MAX_ATTEMPTS = 3;
+export const FETCH_RETRY_DELAY_MS = 1_000;
 const REGISTRY_METADATA_PARSE_ERROR_PREFIX =
 	'Failed to parse latest @sveltejs/kit metadata';
 const REGISTRY_METADATA_VALIDATION_ERROR_MESSAGE = `${REGISTRY_METADATA_PARSE_ERROR_PREFIX}: expected a valid semver version string`;
+const RETRYABLE_FETCH_ERROR_CODES = new Set([
+	'ETIMEDOUT',
+	'EAI_AGAIN',
+	'ENOTFOUND',
+	'ECONNRESET',
+	'ECONNREFUSED',
+	'EHOSTUNREACH',
+	'ENETUNREACH',
+	'ERR_SOCKET_TIMEOUT'
+]);
+const RETRYABLE_FETCH_STATUSES = new Set([429, 500, 502, 503, 504]);
+
+type LatestMetadata = {
+	version: string;
+	cookieRange: string;
+};
+
+type ReadLatestMetadataOptions = {
+	fetchImpl?: typeof fetch;
+	maxAttempts?: number;
+	retryDelayMs?: number;
+	sleepImpl?: (delayMs: number) => Promise<void>;
+};
+
+type RegistryFetchError = Error & {
+	code?: string;
+	cause?: unknown;
+	status?: number;
+};
 
 function createMetadataParseError(detail, cause) {
 	return cause === undefined
@@ -205,7 +236,79 @@ export function createFetchErrorMessage(error) {
 	return `Failed to fetch latest @sveltejs/kit metadata: ${message}`;
 }
 
-export async function readLatestMetadata({ fetchImpl = fetch } = {}) {
+function createRegistryHttpError(status: number, statusText: string): Error {
+	const error = new Error(
+		`Failed to fetch latest @sveltejs/kit metadata: ${status} ${statusText}`
+	) as RegistryFetchError;
+	error.status = status;
+	return error;
+}
+
+function isRetryableDomException(error: unknown): boolean {
+	return (
+		error instanceof DOMException &&
+		(error.name === 'TimeoutError' || error.name === 'AbortError')
+	);
+}
+
+function readFetchErrorCode(error: unknown): string {
+	if (!error || typeof error !== 'object') {
+		return '';
+	}
+
+	const record = error as { code?: unknown; cause?: unknown };
+	if (typeof record.code === 'string') {
+		return record.code.trim().toUpperCase();
+	}
+
+	if (
+		record.cause &&
+		typeof record.cause === 'object' &&
+		'code' in record.cause &&
+		typeof record.cause.code === 'string'
+	) {
+		return record.cause.code.trim().toUpperCase();
+	}
+
+	return '';
+}
+
+function isRetryableFetchError(error: unknown): boolean {
+	if (isRetryableDomException(error)) {
+		return true;
+	}
+
+	if (
+		error &&
+		typeof error === 'object' &&
+		'status' in error &&
+		typeof error.status === 'number'
+	) {
+		return RETRYABLE_FETCH_STATUSES.has(error.status);
+	}
+
+	if (
+		error &&
+		typeof error === 'object' &&
+		'cause' in error &&
+		isRetryableDomException(error.cause)
+	) {
+		return true;
+	}
+
+	const errorCode = readFetchErrorCode(error);
+	return errorCode !== '' && RETRYABLE_FETCH_ERROR_CODES.has(errorCode);
+}
+
+function sleep(delayMs: number): Promise<void> {
+	return new Promise((resolve) => {
+		setTimeout(resolve, delayMs);
+	});
+}
+
+async function fetchLatestMetadata(
+	fetchImpl: typeof fetch
+): Promise<LatestMetadata> {
 	let response;
 	try {
 		response = await fetchImpl(REGISTRY_LATEST_URL, {
@@ -219,9 +322,7 @@ export async function readLatestMetadata({ fetchImpl = fetch } = {}) {
 	}
 
 	if (!response.ok) {
-		throw new Error(
-			`Failed to fetch latest @sveltejs/kit metadata: ${response.status} ${response.statusText}`
-		);
+		throw createRegistryHttpError(response.status, response.statusText);
 	}
 
 	let latestMetadata;
@@ -244,6 +345,34 @@ export async function readLatestMetadata({ fetchImpl = fetch } = {}) {
 				? latestMetadata.dependencies.cookie
 				: 'not declared'
 	};
+}
+
+export async function readLatestMetadata({
+	fetchImpl = fetch,
+	maxAttempts = FETCH_MAX_ATTEMPTS,
+	retryDelayMs = FETCH_RETRY_DELAY_MS,
+	sleepImpl = sleep
+}: ReadLatestMetadataOptions = {}): Promise<LatestMetadata> {
+	if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
+		throw new Error('maxAttempts must be a positive integer');
+	}
+	if (!Number.isInteger(retryDelayMs) || retryDelayMs < 0) {
+		throw new Error('retryDelayMs must be a non-negative integer');
+	}
+
+	for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+		try {
+			return await fetchLatestMetadata(fetchImpl);
+		} catch (error) {
+			if (attempt === maxAttempts || !isRetryableFetchError(error)) {
+				throw error;
+			}
+
+			await sleepImpl(retryDelayMs * attempt);
+		}
+	}
+
+	throw new Error('Failed to fetch latest @sveltejs/kit metadata');
 }
 
 function buildSummary(result) {

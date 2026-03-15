@@ -6,6 +6,8 @@ import assert from 'node:assert/strict';
 
 import {
 	FETCH_TIMEOUT_MS,
+	FETCH_MAX_ATTEMPTS,
+	FETCH_RETRY_DELAY_MS,
 	createGithubOutputDelimiter,
 	createFetchErrorMessage,
 	formatGithubOutputEntries,
@@ -87,6 +89,7 @@ describe('check-sveltekit-upstream', () => {
 			await assert.rejects(
 				() =>
 					readLatestMetadata({
+						maxAttempts: 1,
 						fetchImpl: (_url, options) =>
 							new Promise((_, reject) => {
 								options.signal.addEventListener(
@@ -139,6 +142,184 @@ describe('check-sveltekit-upstream', () => {
 			createFetchErrorMessage(networkError),
 			'Failed to fetch latest @sveltejs/kit metadata: socket hang up'
 		);
+	});
+
+	it('retries transient registry failures before succeeding', async () => {
+		const sleepMock = mock.fn(async () => undefined);
+		const transientError = Object.assign(new Error('lookup registry failed'), {
+			code: 'EAI_AGAIN'
+		});
+		let attempt = 0;
+		const fetchMock = mock.fn(async () => {
+			attempt += 1;
+			if (attempt === 1) {
+				throw transientError;
+			}
+
+			return {
+				ok: true,
+				async json() {
+					return {
+						version: '2.53.4',
+						dependencies: {
+							cookie: '^0.6.0'
+						}
+					};
+				}
+			};
+		});
+
+		const metadata = await readLatestMetadata({
+			fetchImpl: fetchMock,
+			sleepImpl: sleepMock
+		});
+
+		assert.deepStrictEqual(metadata, {
+			version: '2.53.4',
+			cookieRange: '^0.6.0'
+		});
+		assert.strictEqual(fetchMock.mock.calls.length, 2);
+		assert.strictEqual(sleepMock.mock.calls.length, 1);
+		assert.deepStrictEqual(sleepMock.mock.calls[0]?.arguments, [
+			FETCH_RETRY_DELAY_MS
+		]);
+	});
+
+	it('retries retryable registry status codes before succeeding', async () => {
+		const sleepMock = mock.fn(async () => undefined);
+		let attempt = 0;
+		const fetchMock = mock.fn(async () => {
+			attempt += 1;
+			if (attempt === 1) {
+				return {
+					ok: false,
+					status: 503,
+					statusText: 'Service Unavailable'
+				};
+			}
+
+			return {
+				ok: true,
+				async json() {
+					return {
+						version: '2.53.4',
+						dependencies: {
+							cookie: '^0.6.0'
+						}
+					};
+				}
+			};
+		});
+
+		const metadata = await readLatestMetadata({
+			fetchImpl: fetchMock,
+			sleepImpl: sleepMock
+		});
+
+		assert.deepStrictEqual(metadata, {
+			version: '2.53.4',
+			cookieRange: '^0.6.0'
+		});
+		assert.strictEqual(fetchMock.mock.calls.length, 2);
+		assert.strictEqual(sleepMock.mock.calls.length, 1);
+		assert.deepStrictEqual(sleepMock.mock.calls[0]?.arguments, [
+			FETCH_RETRY_DELAY_MS
+		]);
+	});
+
+	it('fails after the bounded retry budget on repeated transient outages', async () => {
+		const sleepMock = mock.fn(async () => undefined);
+		const transientError = Object.assign(new Error('socket hang up'), {
+			code: 'ECONNRESET'
+		});
+		const fetchMock = mock.fn(async () => {
+			throw transientError;
+		});
+
+		await assert.rejects(
+			() =>
+				readLatestMetadata({
+					fetchImpl: fetchMock,
+					sleepImpl: sleepMock
+				}),
+			(error) => {
+				assert.strictEqual(
+					error.message,
+					'Failed to fetch latest @sveltejs/kit metadata: socket hang up'
+				);
+				return true;
+			}
+		);
+
+		assert.strictEqual(fetchMock.mock.calls.length, FETCH_MAX_ATTEMPTS);
+		assert.deepStrictEqual(
+			sleepMock.mock.calls.map((call) => call.arguments[0]),
+			[FETCH_RETRY_DELAY_MS, FETCH_RETRY_DELAY_MS * 2]
+		);
+	});
+
+	it('retries timeout failures surfaced through the wrapped fetch error cause', async () => {
+		const sleepMock = mock.fn(async () => undefined);
+		let attempt = 0;
+		const fetchMock = mock.fn(async () => {
+			attempt += 1;
+			if (attempt === 1) {
+				throw new DOMException('The operation was aborted.', 'TimeoutError');
+			}
+
+			return {
+				ok: true,
+				async json() {
+					return {
+						version: '2.53.4',
+						dependencies: {
+							cookie: '^0.6.0'
+						}
+					};
+				}
+			};
+		});
+
+		const metadata = await readLatestMetadata({
+			fetchImpl: fetchMock,
+			sleepImpl: sleepMock
+		});
+
+		assert.deepStrictEqual(metadata, {
+			version: '2.53.4',
+			cookieRange: '^0.6.0'
+		});
+		assert.strictEqual(fetchMock.mock.calls.length, 2);
+		assert.deepStrictEqual(sleepMock.mock.calls[0]?.arguments, [
+			FETCH_RETRY_DELAY_MS
+		]);
+	});
+
+	it('does not retry non-retryable registry status codes', async () => {
+		const sleepMock = mock.fn(async () => undefined);
+		const fetchMock = mock.fn(async () => ({
+			ok: false,
+			status: 404,
+			statusText: 'Not Found'
+		}));
+
+		await assert.rejects(
+			() =>
+				readLatestMetadata({
+					fetchImpl: fetchMock,
+					sleepImpl: sleepMock
+				}),
+			(error) => {
+				assert.strictEqual(
+					error.message,
+					'Failed to fetch latest @sveltejs/kit metadata: 404 Not Found'
+				);
+				return true;
+			}
+		);
+
+		assert.strictEqual(fetchMock.mock.calls.length, 1);
+		assert.strictEqual(sleepMock.mock.calls.length, 0);
 	});
 
 	it('rejects malformed successful registry payloads with a validation error', async () => {
