@@ -4,17 +4,30 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    nodejslts-nix = {
+      url = "github:dominicnunez/nodejslts-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs = {
+    self,
+    nixpkgs,
+    flake-utils,
+    nodejslts-nix,
+  }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = nixpkgs.legacyPackages.${system};
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ nodejslts-nix.overlays.default ];
+        };
       in
       {
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
-            nodejs_24
+            nodejsLts
             git
             typescript-language-server
             svelte-language-server
