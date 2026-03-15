@@ -25,6 +25,16 @@ const TRUSTED_AUTH_ORIGIN = getTrustedWorkosAuthOrigin({
 });
 const AUTH_AUTHORIZE_PATH = '/user_management/authorize';
 const AUTH_ERROR_INCIDENT_ID = 'authcb_123e4567-e89b-12d3-a456-426614174000';
+const SECURITY_HEADERS = {
+	'x-frame-options': 'DENY',
+	'x-content-type-options': 'nosniff',
+	'referrer-policy': 'strict-origin-when-cross-origin',
+	'permissions-policy': 'camera=(), microphone=(), geolocation=()'
+} as const;
+const PUBLIC_DOCUMENT_CACHE_CONTROL =
+	'public, max-age=300, stale-while-revalidate=60';
+const PRIVATE_NO_STORE_CACHE_CONTROL = 'private, no-store';
+const HEALTH_CACHE_CONTROL = 'no-store';
 
 type RouteHandler = (request: http.IncomingMessage) => {
 	statusCode: number;
@@ -111,6 +121,10 @@ function createHealthyHandler(
 				return {
 					statusCode: 200,
 					headers: {
+						...SECURITY_HEADERS,
+						'cache-control': authError
+							? PRIVATE_NO_STORE_CACHE_CONTROL
+							: PUBLIC_DOCUMENT_CACHE_CONTROL,
 						'content-type': 'text/html; charset=utf-8'
 					},
 					body: authError
@@ -122,6 +136,8 @@ function createHealthyHandler(
 				return {
 					statusCode: 200,
 					headers: {
+						...SECURITY_HEADERS,
+						'cache-control': HEALTH_CACHE_CONTROL,
 						'content-type': 'text/plain; charset=utf-8'
 					},
 					body: 'ok'
@@ -130,6 +146,8 @@ function createHealthyHandler(
 				return {
 					statusCode: 303,
 					headers: {
+						...SECURITY_HEADERS,
+						'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL,
 						location: LOCAL_SIGN_IN_PATH
 					}
 				};
@@ -145,6 +163,8 @@ function createHealthyHandler(
 				return {
 					statusCode: 303,
 					headers: {
+						...SECURITY_HEADERS,
+						'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL,
 						location: location.toString()
 					}
 				};
@@ -153,6 +173,8 @@ function createHealthyHandler(
 				return {
 					statusCode: 303,
 					headers: {
+						...SECURITY_HEADERS,
+						'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL,
 						location: buildAuthErrorLandingRedirectLocation({
 							incidentId: AUTH_ERROR_INCIDENT_ID,
 							secret: AUTH_ERROR_SIGNING_SECRET,
@@ -278,6 +300,8 @@ describe('deploy health probe script', () => {
 				'/services': () => ({
 					statusCode: 303,
 					headers: {
+						...SECURITY_HEADERS,
+						'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL,
 						location: 'https://evil.example.test/login'
 					}
 				})
@@ -316,6 +340,8 @@ describe('deploy health probe script', () => {
 				'/auth/callback': () => ({
 					statusCode: 303,
 					headers: {
+						...SECURITY_HEADERS,
+						'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL,
 						location: 'https://evil.example.test/?welcome=1'
 					}
 				})
@@ -336,6 +362,8 @@ describe('deploy health probe script', () => {
 				'/auth/callback': () => ({
 					statusCode: 303,
 					headers: {
+						...SECURITY_HEADERS,
+						'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL,
 						location: '/?error=auth&incident=not-an-incident-id&ts=123&sig=abc'
 					}
 				})
@@ -367,6 +395,8 @@ describe('deploy health probe script', () => {
 					return {
 						statusCode: 303,
 						headers: {
+							...SECURITY_HEADERS,
+							'cache-control': PRIVATE_NO_STORE_CACHE_CONTROL,
 							location: location.toString()
 						}
 					};
@@ -379,6 +409,84 @@ describe('deploy health probe script', () => {
 		assert.match(
 			result.stderr,
 			/Expected callback landing page to render the verified auth error banner/
+		);
+	});
+
+	it('fails when the root document omits a security header', async () => {
+		const server = await startFixtureServer(
+			createHealthyHandler({
+				'/': (request) => {
+					const result = createHealthyHandler()(request);
+					return {
+						...result,
+						headers: {
+							...result.headers,
+							'x-frame-options': 'SAMEORIGIN'
+						}
+					};
+				}
+			})
+		);
+		const result = await runDeployHealthScript(server.origin);
+
+		assert.notStrictEqual(result.exitCode, 0);
+		assert.match(
+			result.stderr,
+			/Expected \/ to include x-frame-options: DENY, received SAMEORIGIN/
+		);
+	});
+
+	it('fails when the protected redirect becomes publicly cacheable', async () => {
+		const server = await startFixtureServer(
+			createHealthyHandler({
+				'/services': () => ({
+					statusCode: 303,
+					headers: {
+						...SECURITY_HEADERS,
+						'cache-control': PUBLIC_DOCUMENT_CACHE_CONTROL,
+						location: LOCAL_SIGN_IN_PATH
+					}
+				})
+			})
+		);
+		const result = await runDeployHealthScript(server.origin);
+
+		assert.notStrictEqual(result.exitCode, 0);
+		assert.match(
+			result.stderr,
+			/Expected \/services to include cache-control: private, no-store, received public, max-age=300, stale-while-revalidate=60/
+		);
+	});
+
+	it('fails when the auth-error landing page loses its no-store policy', async () => {
+		const server = await startFixtureServer(
+			createHealthyHandler({
+				'/': (request) => {
+					const requestOrigin = `http://${request.headers.host ?? '127.0.0.1'}`;
+					const requestUrl = new URL(request.url ?? '/', requestOrigin);
+					const authError = readVerifiedAuthError(requestUrl.searchParams, {
+						secret: AUTH_ERROR_SIGNING_SECRET
+					});
+					return {
+						statusCode: 200,
+						headers: {
+							...SECURITY_HEADERS,
+							'cache-control': PUBLIC_DOCUMENT_CACHE_CONTROL,
+							'content-type': 'text/html; charset=utf-8'
+						},
+						body: authError
+							? `<!doctype html><title>ok</title><div>${AUTH_ERROR_MESSAGE}</div><div>${authError.incidentId}</div>`
+							: '<!doctype html><title>ok</title>'
+					};
+				}
+			})
+		);
+		const result = await runDeployHealthScript(server.origin);
+
+		assert.notStrictEqual(result.exitCode, 0);
+		assert.match(
+			result.stderr,
+			/Expected callback landing page to include cache-control: private, no-store, received public, max-age=300, stale-while-revalidate=60/
 		);
 	});
 });

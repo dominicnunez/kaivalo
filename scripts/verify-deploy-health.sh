@@ -22,6 +22,14 @@ readonly PROBE_RETRY_COUNT="${DEPLOY_HEALTH_RETRY_COUNT:-6}"
 readonly PROBE_RETRY_DELAY_SECONDS="${DEPLOY_HEALTH_RETRY_DELAY_SECONDS:-10}"
 readonly PROBE_CONNECT_TIMEOUT_SECONDS="${DEPLOY_HEALTH_CONNECT_TIMEOUT_SECONDS:-10}"
 readonly PROBE_MAX_TIME_SECONDS="${DEPLOY_HEALTH_MAX_TIME_SECONDS:-20}"
+readonly PUBLIC_DOCUMENT_CACHE_CONTROL='public, max-age=300, stale-while-revalidate=60'
+readonly PRIVATE_NO_STORE_CACHE_CONTROL='private, no-store'
+readonly HEALTH_CACHE_CONTROL='no-store'
+readonly HSTS_HEADER_VALUE='max-age=63072000; includeSubDomains'
+readonly FRAME_OPTIONS_HEADER_VALUE='DENY'
+readonly CONTENT_TYPE_OPTIONS_HEADER_VALUE='nosniff'
+readonly REFERRER_POLICY_HEADER_VALUE='strict-origin-when-cross-origin'
+readonly PERMISSIONS_POLICY_HEADER_VALUE='camera=(), microphone=(), geolocation=()'
 
 cd "$REPO_ROOT"
 
@@ -239,11 +247,76 @@ run_probe() {
 	PROBE_LOCATION="$(
 		awk 'BEGIN { IGNORECASE = 1 } /^location:/ { sub(/^[^:]+:[[:space:]]*/, "", $0); sub(/\r$/, "", $0); print; exit }' "$header_file"
 	)"
+	PROBE_CACHE_CONTROL="$(
+		awk 'BEGIN { IGNORECASE = 1 } /^cache-control:/ { sub(/^[^:]+:[[:space:]]*/, "", $0); sub(/\r$/, "", $0); print; exit }' "$header_file"
+	)"
+	PROBE_STRICT_TRANSPORT_SECURITY="$(
+		awk 'BEGIN { IGNORECASE = 1 } /^strict-transport-security:/ { sub(/^[^:]+:[[:space:]]*/, "", $0); sub(/\r$/, "", $0); print; exit }' "$header_file"
+	)"
+	PROBE_X_FRAME_OPTIONS="$(
+		awk 'BEGIN { IGNORECASE = 1 } /^x-frame-options:/ { sub(/^[^:]+:[[:space:]]*/, "", $0); sub(/\r$/, "", $0); print; exit }' "$header_file"
+	)"
+	PROBE_X_CONTENT_TYPE_OPTIONS="$(
+		awk 'BEGIN { IGNORECASE = 1 } /^x-content-type-options:/ { sub(/^[^:]+:[[:space:]]*/, "", $0); sub(/\r$/, "", $0); print; exit }' "$header_file"
+	)"
+	PROBE_REFERRER_POLICY="$(
+		awk 'BEGIN { IGNORECASE = 1 } /^referrer-policy:/ { sub(/^[^:]+:[[:space:]]*/, "", $0); sub(/\r$/, "", $0); print; exit }' "$header_file"
+	)"
+	PROBE_PERMISSIONS_POLICY="$(
+		awk 'BEGIN { IGNORECASE = 1 } /^permissions-policy:/ { sub(/^[^:]+:[[:space:]]*/, "", $0); sub(/\r$/, "", $0); print; exit }' "$header_file"
+	)"
+}
+
+assert_probe_header() {
+	local pathname="$1"
+	local header_name="$2"
+	local actual_value="$3"
+	local expected_value="$4"
+
+	if [[ "$actual_value" != "$expected_value" ]]; then
+		echo "Expected $pathname to include $header_name: $expected_value, received ${actual_value:-<missing>}" >&2
+		exit 1
+	fi
+}
+
+assert_security_headers() {
+	local pathname="$1"
+	local expected_origin="$2"
+
+	if [[ "$expected_origin" == https://* ]]; then
+		assert_probe_header \
+			"$pathname" \
+			'strict-transport-security' \
+			"$PROBE_STRICT_TRANSPORT_SECURITY" \
+			"$HSTS_HEADER_VALUE"
+	fi
+
+	assert_probe_header \
+		"$pathname" \
+		'x-frame-options' \
+		"$PROBE_X_FRAME_OPTIONS" \
+		"$FRAME_OPTIONS_HEADER_VALUE"
+	assert_probe_header \
+		"$pathname" \
+		'x-content-type-options' \
+		"$PROBE_X_CONTENT_TYPE_OPTIONS" \
+		"$CONTENT_TYPE_OPTIONS_HEADER_VALUE"
+	assert_probe_header \
+		"$pathname" \
+		'referrer-policy' \
+		"$PROBE_REFERRER_POLICY" \
+		"$REFERRER_POLICY_HEADER_VALUE"
+	assert_probe_header \
+		"$pathname" \
+		'permissions-policy' \
+		"$PROBE_PERMISSIONS_POLICY" \
+		"$PERMISSIONS_POLICY_HEADER_VALUE"
 }
 
 assert_browser_navigation_redirect_probe() {
 	local url="$1"
 	local pathname="$2"
+	local expected_origin="$3"
 
 	run_probe "$url" "${BROWSER_NAVIGATION_PROBE_HEADERS[@]}"
 
@@ -261,6 +334,8 @@ assert_browser_navigation_redirect_probe() {
 		echo "Expected $pathname to include a redirect location" >&2
 		exit 1
 	fi
+
+	assert_security_headers "$pathname" "$expected_origin"
 }
 
 assert_callback_landing_probe() {
@@ -293,11 +368,20 @@ assert_callback_landing_probe() {
 		echo "Expected callback landing page to render the verified auth error banner" >&2
 		exit 1
 	fi
+
+	assert_security_headers 'callback landing page' "$expected_origin"
+	assert_probe_header \
+		'callback landing page' \
+		'cache-control' \
+		"$PROBE_CACHE_CONTROL" \
+		"$PRIVATE_NO_STORE_CACHE_CONTROL"
 }
 
 assert_no_redirect_probe() {
 	local url="$1"
 	local expected_status="$2"
+	local pathname="$3"
+	local expected_origin="$4"
 
 	run_probe "$url"
 
@@ -315,6 +399,8 @@ assert_no_redirect_probe() {
 		echo "Expected $url not to redirect, received location $PROBE_LOCATION" >&2
 		exit 1
 	fi
+
+	assert_security_headers "$pathname" "$expected_origin"
 }
 
 expected_origin="$(canonicalize_origin "$DEPLOY_ORIGIN_VALUE")"
@@ -322,21 +408,47 @@ expected_auth_origin="$(resolve_expected_auth_origin "$WORKOS_API_HOSTNAME_VALUE
 expected_callback_url="$(request_url "$expected_origin" "$CALLBACK_PATH")"
 
 root_url="$(request_url "$expected_origin" "$ROOT_PATH")"
-assert_no_redirect_probe "$root_url" "200"
+assert_no_redirect_probe "$root_url" "200" "$ROOT_PATH" "$expected_origin"
+assert_probe_header \
+	"$ROOT_PATH" \
+	'cache-control' \
+	"$PROBE_CACHE_CONTROL" \
+	"$PUBLIC_DOCUMENT_CACHE_CONTROL"
 
 health_url="$(request_url "$expected_origin" "$HEALTH_PATH")"
-assert_no_redirect_probe "$health_url" "200"
+assert_no_redirect_probe "$health_url" "200" "$HEALTH_PATH" "$expected_origin"
+assert_probe_header \
+	"$HEALTH_PATH" \
+	'cache-control' \
+	"$PROBE_CACHE_CONTROL" \
+	"$HEALTH_CACHE_CONTROL"
 if [[ "$PROBE_BODY" != "$EXPECTED_HEALTH_BODY" ]]; then
 	echo "Expected $HEALTH_PATH to return plain-text $EXPECTED_HEALTH_BODY" >&2
 	exit 1
 fi
 
 services_url="$(request_url "$expected_origin" "$SERVICES_PATH")"
-assert_browser_navigation_redirect_probe "$services_url" "$SERVICES_PATH"
+assert_browser_navigation_redirect_probe \
+	"$services_url" \
+	"$SERVICES_PATH" \
+	"$expected_origin"
+assert_probe_header \
+	"$SERVICES_PATH" \
+	'cache-control' \
+	"$PROBE_CACHE_CONTROL" \
+	"$PRIVATE_NO_STORE_CACHE_CONTROL"
 validate_services_redirect "$expected_origin" "$PROBE_LOCATION" "$SIGN_IN_PATH"
 
 sign_in_url="$(request_url "$expected_origin" "$SIGN_IN_PATH")"
-assert_browser_navigation_redirect_probe "$sign_in_url" "$SIGN_IN_PATH"
+assert_browser_navigation_redirect_probe \
+	"$sign_in_url" \
+	"$SIGN_IN_PATH" \
+	"$expected_origin"
+assert_probe_header \
+	"$SIGN_IN_PATH" \
+	'cache-control' \
+	"$PROBE_CACHE_CONTROL" \
+	"$PRIVATE_NO_STORE_CACHE_CONTROL"
 validate_sign_in_redirect \
 	"$expected_origin" \
 	"$expected_auth_origin" \
@@ -345,7 +457,15 @@ validate_sign_in_redirect \
 	"$PROBE_LOCATION"
 
 callback_url="$(request_url "$expected_origin" "$CALLBACK_PATH")"
-assert_browser_navigation_redirect_probe "$callback_url" "$CALLBACK_PATH"
+assert_browser_navigation_redirect_probe \
+	"$callback_url" \
+	"$CALLBACK_PATH" \
+	"$expected_origin"
+assert_probe_header \
+	"$CALLBACK_PATH" \
+	'cache-control' \
+	"$PROBE_CACHE_CONTROL" \
+	"$PRIVATE_NO_STORE_CACHE_CONTROL"
 validate_callback_redirect \
 	"$expected_origin" \
 	"$PROBE_LOCATION"
