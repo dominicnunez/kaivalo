@@ -43,7 +43,10 @@ jobs:
               state: 'open',
               per_page: 100
             });
-            const match = issues.find((issue) => issue.title === title) ?? null;
+            const match =
+              issues.find(
+                (issue) => !issue.pull_request && issue.title === title
+              ) ?? null;
             core.setOutput('issue_number', match ? String(match.number) : '');
         env:
           ISSUE_TITLE: ${{ steps.check.outputs.issue_title }}
