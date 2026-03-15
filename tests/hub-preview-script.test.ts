@@ -1,7 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import http from 'node:http';
 import { spawn } from 'node:child_process';
 import {
 	AUTH_ERROR_INCIDENT_QUERY_NAME,
@@ -16,18 +15,21 @@ import {
 	getHubHealthUrl,
 	isHubHealthResponse
 } from './helpers/hub-health.ts';
-import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
+import { httpGet, httpPost, startHubPreview } from './helpers/hub-preview.ts';
 import { assertHubBuildAvailable } from './helpers/hub-build.ts';
 import { reserveLocalPort } from './helpers/network.ts';
 import { createHubPreviewScriptEnv } from './helpers/hub-runtime-env.ts';
 import {
+	beginWorkosAuthFlow,
+	completeWorkosCodeExchange,
+	primeWorkosCallbackStateCookie,
+	signInThroughWorkosCallback
+} from './helpers/workos-auth-flow.ts';
+import {
 	assertSessionCookieContract,
 	getSetCookieHeaders
 } from './helpers/session-cookie.ts';
-import {
-	buildWorkosCallbackState,
-	withWorkosCallbackStateCookie
-} from './helpers/workos-callback-state.ts';
+import { buildWorkosCallbackState } from './helpers/workos-callback-state.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const STARTUP_TIMEOUT_MS = 15000;
@@ -65,41 +67,6 @@ type StartedPreviewScript = {
 
 function delay(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function post(url: string, headers: Record<string, string> = {}) {
-	return new Promise<{
-		statusCode: number | undefined;
-		headers: http.IncomingHttpHeaders;
-		data: string;
-	}>((resolve, reject) => {
-		const req = http.request(
-			url,
-			{
-				method: 'POST',
-				headers
-			},
-			(response) => {
-				let data = '';
-				response.on('data', (chunk) => {
-					data += chunk;
-				});
-				response.on('end', () => {
-					resolve({
-						statusCode: response.statusCode,
-						headers: response.headers,
-						data
-					});
-				});
-			}
-		);
-
-		req.on('error', reject);
-		req.setTimeout(5000, () => {
-			req.destroy(new Error('Request timeout'));
-		});
-		req.end();
-	});
 }
 
 function setProcessEnv(
@@ -145,7 +112,7 @@ async function assertPreviewAuthRoutes(
 	baseUrl: string,
 	expectedAuthOrigin = 'https://api.workos.com'
 ): Promise<void> {
-	const signOutResponse = await post(`${baseUrl}/auth/sign-out`, {
+	const signOutResponse = await httpPost(`${baseUrl}/auth/sign-out`, {
 		origin: baseUrl,
 		'sec-fetch-site': 'same-origin'
 	});
@@ -182,16 +149,13 @@ async function assertAuthenticatedPreviewSession(
 		'/services?welcome=1',
 		'signed-in-state'
 	);
-	const callbackResponse = await httpGet(
-		`${baseUrl}/auth/callback?code=test-code&state=${signedInState}`,
-		withWorkosCallbackStateCookie(
-			{
-				accept: 'text/html',
-				'sec-fetch-mode': 'navigate'
-			},
-			'signed-in-state'
-		)
-	);
+	const cookieJar = await primeWorkosCallbackStateCookie(baseUrl, {
+		state: 'signed-in-state'
+	});
+	const callbackResponse = await completeWorkosCodeExchange(baseUrl, {
+		cookieJar,
+		state: signedInState
+	});
 	assert.strictEqual(callbackResponse.statusCode, 302);
 	assert.ok(callbackResponse.headers.location, 'Expected callback redirect');
 
@@ -202,13 +166,15 @@ async function assertAuthenticatedPreviewSession(
 	assert.strictEqual(redirectLocation.pathname, '/services');
 	assert.strictEqual(redirectLocation.searchParams.get('welcome'), '1');
 
-	const sessionCookie = assertSessionCookieContract(callbackResponse.headers, {
+	assertSessionCookieContract(callbackResponse.headers, {
 		cookieName: AUTHKIT_COOKIE_NAME
 	});
 
 	const servicesResponse = await httpGet(`${baseUrl}/services`, {
-		accept: 'text/html',
-		cookie: sessionCookie
+		headers: {
+			accept: 'text/html'
+		},
+		cookieJar
 	});
 	assert.strictEqual(servicesResponse.statusCode, 200);
 	assert.match(servicesResponse.data, /Preview User/i);
@@ -424,19 +390,20 @@ describe('hub preview script', () => {
 		});
 
 		try {
-			const browserResponse = await httpGet(
-				`${preview.baseUrl}/auth/callback?code=test-code&state=test-state`,
-				withWorkosCallbackStateCookie({
-					accept: 'text/html',
-					'sec-fetch-mode': 'navigate'
-				})
+			const browserFlow = await beginWorkosAuthFlow(preview.baseUrl);
+			const browserResponse = await completeWorkosCodeExchange(
+				preview.baseUrl,
+				{
+					cookieJar: browserFlow.cookieJar,
+					state: browserFlow.state
+				}
 			);
-			const apiResponse = await httpGet(
-				`${preview.baseUrl}/auth/callback?code=test-code&state=test-state`,
-				withWorkosCallbackStateCookie({
-					accept: 'application/json'
-				})
-			);
+			const apiFlow = await beginWorkosAuthFlow(preview.baseUrl);
+			const apiResponse = await completeWorkosCodeExchange(preview.baseUrl, {
+				cookieJar: apiFlow.cookieJar,
+				state: apiFlow.state,
+				accept: 'application/json'
+			});
 
 			assert.strictEqual(browserResponse.statusCode, 303);
 			const browserLocation = new URL(
@@ -468,7 +435,7 @@ describe('hub preview script', () => {
 				'private, no-store'
 			);
 			assert.deepStrictEqual(getSetCookieHeaders(browserResponse.headers), [
-				'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0; HttpOnly; Secure; SameSite=Lax'
+				'__Host-wos_callback_state=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax'
 			]);
 
 			const apiFailure = JSON.parse(apiResponse.data) as { message: string };
@@ -495,26 +462,21 @@ describe('hub preview script', () => {
 		});
 
 		try {
-			const callbackResponse = await httpGet(
-				`${preview.baseUrl}/auth/callback?code=test-code&state=test-state`,
-				withWorkosCallbackStateCookie({
-					accept: 'text/html',
-					'sec-fetch-mode': 'navigate'
-				})
+			const { callbackResponse, cookieJar } = await signInThroughWorkosCallback(
+				preview.baseUrl
 			);
 			assert.strictEqual(callbackResponse.statusCode, 302);
-			const sessionCookie = assertSessionCookieContract(
-				callbackResponse.headers,
-				{
-					cookieName: AUTHKIT_COOKIE_NAME
-				}
-			);
+			assertSessionCookieContract(callbackResponse.headers, {
+				cookieName: AUTHKIT_COOKIE_NAME
+			});
 
-			const response = await post(`${preview.baseUrl}/auth/sign-out`, {
-				origin: preview.baseUrl,
-				accept: 'application/json',
-				'sec-fetch-site': 'same-origin',
-				cookie: sessionCookie
+			const response = await httpPost(`${preview.baseUrl}/auth/sign-out`, {
+				headers: {
+					origin: preview.baseUrl,
+					accept: 'application/json',
+					'sec-fetch-site': 'same-origin'
+				},
+				cookieJar
 			});
 
 			const failure = JSON.parse(response.data) as { message: string };

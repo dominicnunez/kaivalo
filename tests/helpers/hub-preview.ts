@@ -2,6 +2,7 @@ import http from 'node:http';
 import https from 'node:https';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { CookieJar } from 'tough-cookie';
 import { ensureHubBuild } from './hub-build.ts';
 import {
 	getHubHealthResponseViolations,
@@ -18,6 +19,21 @@ const PREVIEW_HEALTH_RETRY_DELAY_MS = 300;
 const PREVIEW_PORT_RETRY_COUNT = 5;
 const PREVIEW_SHUTDOWN_TIMEOUT_MS = 5000;
 const PREVIEW_FORCE_KILL_TIMEOUT_MS = 2000;
+
+type RequestHeaders = Record<string, string>;
+type SameSiteContext = 'strict' | 'lax' | 'none';
+type HttpRequestOptions = {
+	headers?: RequestHeaders;
+	cookieJar?: CookieJar;
+	sameSiteContext?: SameSiteContext;
+};
+
+export type PreviewHttpResponse = {
+	statusCode: number | undefined;
+	data: string;
+	body: Buffer;
+	headers: http.IncomingHttpHeaders;
+};
 
 function delay(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -42,39 +58,147 @@ function shouldUseSharedPreview(options = {}) {
 	return options.shared !== false && !hasCustomEnv && !hasCustomImports;
 }
 
-export function httpGet(url, headers = {}) {
-	return new Promise((resolve, reject) => {
-		const client = url.startsWith('https://') ? https : http;
-		const req = client.get(url, { headers }, (res) => {
-			const chunks = [];
-			let totalBytes = 0;
-			res.on('data', (chunk) => {
-				const chunkBuffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-				totalBytes += chunkBuffer.length;
-				if (totalBytes > MAX_RESPONSE_BYTES) {
-					res.destroy(
-						new Error(`Response exceeded ${MAX_RESPONSE_BYTES} bytes`)
-					);
-					return;
-				}
-				chunks.push(chunkBuffer);
-			});
-			res.on('end', () => {
-				const body = Buffer.concat(chunks);
-				resolve({
-					statusCode: res.statusCode,
-					data: decodeTextBody(body, res.headers['content-type']),
-					body,
-					headers: res.headers
-				});
-			});
-		});
+function normalizeRequestOptions(
+	headersOrOptions: RequestHeaders | HttpRequestOptions = {}
+): HttpRequestOptions {
+	if (
+		'headers' in headersOrOptions ||
+		'cookieJar' in headersOrOptions ||
+		'sameSiteContext' in headersOrOptions
+	) {
+		return headersOrOptions;
+	}
 
-		req.on('error', reject);
-		req.setTimeout(REQUEST_TIMEOUT_MS, () => {
-			req.destroy(new Error('Request timeout'));
-		});
+	return {
+		headers: headersOrOptions
+	};
+}
+
+function getSetCookieHeaders(headers: http.IncomingHttpHeaders): string[] {
+	const values = headers['set-cookie'];
+	if (!values) {
+		return [];
+	}
+
+	return Array.isArray(values) ? values : [values];
+}
+
+async function buildRequestHeaders(
+	url: string,
+	{ headers = {}, cookieJar, sameSiteContext = 'strict' }: HttpRequestOptions
+): Promise<RequestHeaders> {
+	if (!cookieJar) {
+		return { ...headers };
+	}
+
+	const cookieHeader = await cookieJar.getCookieString(url, {
+		sameSiteContext
 	});
+	if (!cookieHeader) {
+		return { ...headers };
+	}
+
+	return {
+		...headers,
+		cookie: headers.cookie ? `${headers.cookie}; ${cookieHeader}` : cookieHeader
+	};
+}
+
+async function storeResponseCookies(
+	url: string,
+	headers: http.IncomingHttpHeaders,
+	cookieJar: CookieJar | undefined
+): Promise<void> {
+	if (!cookieJar) {
+		return;
+	}
+
+	for (const setCookieHeader of getSetCookieHeaders(headers)) {
+		await cookieJar.setCookie(setCookieHeader, url);
+	}
+}
+
+export function createBrowserCookieJar(): CookieJar {
+	return new CookieJar(undefined, {
+		prefixSecurity: 'strict'
+	});
+}
+
+export function httpRequest(
+	url: string,
+	method: string,
+	requestOptions: HttpRequestOptions = {}
+): Promise<PreviewHttpResponse> {
+	return new Promise((resolve, reject) => {
+		void (async () => {
+			const client = url.startsWith('https://') ? https : http;
+			const headers = await buildRequestHeaders(url, requestOptions);
+			const req = client.request(
+				url,
+				{
+					method,
+					headers
+				},
+				(res) => {
+					const chunks = [];
+					let totalBytes = 0;
+					res.on('data', (chunk) => {
+						const chunkBuffer = Buffer.isBuffer(chunk)
+							? chunk
+							: Buffer.from(chunk);
+						totalBytes += chunkBuffer.length;
+						if (totalBytes > MAX_RESPONSE_BYTES) {
+							res.destroy(
+								new Error(`Response exceeded ${MAX_RESPONSE_BYTES} bytes`)
+							);
+							return;
+						}
+						chunks.push(chunkBuffer);
+					});
+					res.on('end', () => {
+						void (async () => {
+							try {
+								const body = Buffer.concat(chunks);
+								await storeResponseCookies(
+									url,
+									res.headers,
+									requestOptions.cookieJar
+								);
+								resolve({
+									statusCode: res.statusCode,
+									data: decodeTextBody(body, res.headers['content-type']),
+									body,
+									headers: res.headers
+								});
+							} catch (error) {
+								reject(error);
+							}
+						})();
+					});
+				}
+			);
+
+			req.on('error', reject);
+			req.setTimeout(REQUEST_TIMEOUT_MS, () => {
+				req.destroy(new Error('Request timeout'));
+			});
+			req.end();
+		})().catch(reject);
+	});
+}
+
+export function httpGet(
+	url: string,
+	headersOrOptions: RequestHeaders | HttpRequestOptions = {}
+): Promise<PreviewHttpResponse> {
+	return httpRequest(url, 'GET', normalizeRequestOptions(headersOrOptions));
+}
+
+export function httpPost(
+	url: string,
+	headersOrOptions: RequestHeaders | HttpRequestOptions = {}
+): Promise<PreviewHttpResponse> {
+	return httpRequest(url, 'POST', normalizeRequestOptions(headersOrOptions));
 }
 
 function decodeTextBody(body, contentTypeHeader) {

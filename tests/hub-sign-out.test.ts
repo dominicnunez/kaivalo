@@ -1,56 +1,20 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
-import http from 'node:http';
 import { createSignOutPostHandler } from '../apps/hub/src/lib/auth/sign-out-handler.ts';
 import { isHttpError, isRedirect } from '@sveltejs/kit';
-import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
+import { httpGet, httpPost, startHubPreview } from './helpers/hub-preview.ts';
+import { signInThroughWorkosCallback } from './helpers/workos-auth-flow.ts';
 import {
 	assertClearedSessionCookieContract,
 	assertSessionCookieContract,
 	getSetCookieHeaders
 } from './helpers/session-cookie.ts';
-import { withWorkosCallbackStateCookie } from './helpers/workos-callback-state.ts';
 
 const AUTHKIT_COOKIE_NAME = '__Host-wos_session';
 const previewFixtureImport = new URL(
 	'./helpers/hub-preview-fixtures.mts',
 	import.meta.url
 ).href;
-
-/**
- * @param {string} url
- * @param {Record<string, string>} headers
- */
-function post(url, headers = {}) {
-	return new Promise((resolve, reject) => {
-		const req = http.request(
-			url,
-			{
-				method: 'POST',
-				headers
-			},
-			(response) => {
-				let data = '';
-				response.on('data', (chunk) => {
-					data += chunk;
-				});
-				response.on('end', () => {
-					resolve({
-						statusCode: response.statusCode,
-						headers: response.headers,
-						data
-					});
-				});
-			}
-		);
-
-		req.on('error', reject);
-		req.setTimeout(5000, () => {
-			req.destroy(new Error('request timeout'));
-		});
-		req.end();
-	});
-}
 
 describe('sign-out handler unit behavior', () => {
 	it('allows same-origin requests', async () => {
@@ -828,7 +792,7 @@ describe('sign-out route integration behavior', () => {
 	});
 
 	it('rejects cross-site POST requests', async () => {
-		const response = await post(`${preview.baseUrl}/auth/sign-out`, {
+		const response = await httpPost(`${preview.baseUrl}/auth/sign-out`, {
 			origin: 'https://evil.example',
 			'sec-fetch-site': 'cross-site',
 			cookie: 'wos_session=test-fixture'
@@ -838,7 +802,7 @@ describe('sign-out route integration behavior', () => {
 	});
 
 	it('accepts same-origin POST requests at route level', async () => {
-		const response = await post(`${preview.baseUrl}/auth/sign-out`, {
+		const response = await httpPost(`${preview.baseUrl}/auth/sign-out`, {
 			origin: preview.baseUrl,
 			'sec-fetch-site': 'same-origin'
 		});
@@ -865,7 +829,7 @@ describe('sign-out route integration behavior', () => {
 	});
 
 	it('accepts route-level POST requests without origin when same-origin referer is present', async () => {
-		const response = await post(`${preview.baseUrl}/auth/sign-out`, {
+		const response = await httpPost(`${preview.baseUrl}/auth/sign-out`, {
 			referer: `${preview.baseUrl}/`,
 			'sec-fetch-site': 'same-origin'
 		});
@@ -892,7 +856,7 @@ describe('sign-out route integration behavior', () => {
 	});
 
 	it('rejects route-level POST requests with an opaque null origin', async () => {
-		const response = await post(`${preview.baseUrl}/auth/sign-out`, {
+		const response = await httpPost(`${preview.baseUrl}/auth/sign-out`, {
 			origin: 'null',
 			'sec-fetch-site': 'same-origin',
 			cookie: 'wos_session=test-fixture'
@@ -903,7 +867,7 @@ describe('sign-out route integration behavior', () => {
 
 	it('rejects route-level POST requests with malformed referer fallback values', async () => {
 		for (const referer of ['https://', 'not a url']) {
-			const response = await post(`${preview.baseUrl}/auth/sign-out`, {
+			const response = await httpPost(`${preview.baseUrl}/auth/sign-out`, {
 				referer,
 				'sec-fetch-site': 'same-origin'
 			});
@@ -913,7 +877,7 @@ describe('sign-out route integration behavior', () => {
 	});
 
 	it('rejects route-level POST requests with opaque null referer fallback values', async () => {
-		const response = await post(`${preview.baseUrl}/auth/sign-out`, {
+		const response = await httpPost(`${preview.baseUrl}/auth/sign-out`, {
 			referer: 'null',
 			'sec-fetch-site': 'same-origin'
 		});
@@ -926,7 +890,7 @@ describe('sign-out route integration behavior', () => {
 			`${preview.baseUrl}/account`,
 			preview.baseUrl.replace('://', '://user@')
 		]) {
-			const response = await post(`${preview.baseUrl}/auth/sign-out`, {
+			const response = await httpPost(`${preview.baseUrl}/auth/sign-out`, {
 				origin,
 				'sec-fetch-site': 'same-origin'
 			});
@@ -936,7 +900,7 @@ describe('sign-out route integration behavior', () => {
 	});
 
 	it('rejects route-level POST requests with credentialed referer fallback values', async () => {
-		const response = await post(`${preview.baseUrl}/auth/sign-out`, {
+		const response = await httpPost(`${preview.baseUrl}/auth/sign-out`, {
 			referer: `${preview.baseUrl.replace('://', '://user:pass@')}/account`,
 			'sec-fetch-site': 'same-origin'
 		});
@@ -945,7 +909,7 @@ describe('sign-out route integration behavior', () => {
 	});
 
 	it('rejects route-level POST requests when origin and referer disagree', async () => {
-		const response = await post(`${preview.baseUrl}/auth/sign-out`, {
+		const response = await httpPost(`${preview.baseUrl}/auth/sign-out`, {
 			origin: preview.baseUrl,
 			referer: 'https://evil.example/account',
 			'sec-fetch-site': 'same-origin'
@@ -964,26 +928,24 @@ describe('sign-out route integration behavior', () => {
 		});
 
 		try {
-			const callbackResponse = await httpGet(
-				`${fixturePreview.baseUrl}/auth/callback?code=test-code&state=test-state`,
-				withWorkosCallbackStateCookie({
-					accept: 'text/html',
-					'sec-fetch-mode': 'navigate'
-				})
+			const { callbackResponse, cookieJar } = await signInThroughWorkosCallback(
+				fixturePreview.baseUrl
 			);
 			assert.strictEqual(callbackResponse.statusCode, 302);
-			const sessionCookie = assertSessionCookieContract(
-				callbackResponse.headers,
+			assertSessionCookieContract(callbackResponse.headers, {
+				cookieName: AUTHKIT_COOKIE_NAME
+			});
+
+			const response = await httpPost(
+				`${fixturePreview.baseUrl}/auth/sign-out`,
 				{
-					cookieName: AUTHKIT_COOKIE_NAME
+					headers: {
+						origin: fixturePreview.baseUrl,
+						'sec-fetch-site': 'same-origin'
+					},
+					cookieJar
 				}
 			);
-
-			const response = await post(`${fixturePreview.baseUrl}/auth/sign-out`, {
-				origin: fixturePreview.baseUrl,
-				'sec-fetch-site': 'same-origin',
-				cookie: sessionCookie
-			});
 
 			assert.strictEqual(response.statusCode, 302);
 			const logoutLocation = new URL(
@@ -1003,16 +965,15 @@ describe('sign-out route integration behavior', () => {
 				logoutLocation.searchParams.get('return_to'),
 				fixturePreview.baseUrl
 			);
-			const clearedSessionCookie = assertClearedSessionCookieContract(
-				response.headers,
-				AUTHKIT_COOKIE_NAME
-			);
+			assertClearedSessionCookieContract(response.headers, AUTHKIT_COOKIE_NAME);
 
 			const servicesResponse = await httpGet(
 				`${fixturePreview.baseUrl}/services`,
 				{
-					accept: 'text/html',
-					cookie: clearedSessionCookie
+					headers: {
+						accept: 'text/html'
+					},
+					cookieJar
 				}
 			);
 			assert.strictEqual(servicesResponse.statusCode, 303);

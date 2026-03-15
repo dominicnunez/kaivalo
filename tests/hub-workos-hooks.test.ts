@@ -10,7 +10,8 @@ import {
 	PROXY_HSTS_CONFIGURATION_ERROR_MESSAGE
 } from '../apps/hub/src/lib/server/workos-security.ts';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
-import { withWorkosCallbackStateCookie } from './helpers/workos-callback-state.ts';
+import { signInThroughWorkosCallback } from './helpers/workos-auth-flow.ts';
+import { assertSessionCookieContract } from './helpers/session-cookie.ts';
 
 const validEnv = {
 	WORKOS_CLIENT_ID: 'client_123',
@@ -63,19 +64,6 @@ function assertVaryOmits(varyHeader, unexpectedTokens) {
 			`Expected Vary to omit ${token}`
 		);
 	}
-}
-
-/**
- * @param {import('node:http').IncomingHttpHeaders} headers
- * @returns {string[]}
- */
-function getSetCookieHeaders(headers) {
-	const values = headers['set-cookie'];
-	if (!values) {
-		return [];
-	}
-
-	return Array.isArray(values) ? values : [values];
 }
 
 describe('WorkOS env validation', () => {
@@ -1123,23 +1111,18 @@ describe('Security headers on preview responses', () => {
 		});
 
 		try {
-			const callbackResponse = await httpGet(
-				`${fixturePreview.baseUrl}/auth/callback?code=test-code&state=test-state`,
-				withWorkosCallbackStateCookie({
-					accept: 'text/html',
-					'sec-fetch-mode': 'navigate'
-				})
+			const { callbackResponse, cookieJar } = await signInThroughWorkosCallback(
+				fixturePreview.baseUrl
 			);
-			const sessionCookie = getSetCookieHeaders(
-				callbackResponse.headers
-			)[0]?.split(';', 1)[0];
 
 			assert.strictEqual(callbackResponse.statusCode, 302);
-			assert.ok(sessionCookie, 'Expected a session cookie from callback');
+			assertSessionCookieContract(callbackResponse.headers);
 
 			const homepage = await httpGet(fixturePreview.baseUrl, {
-				accept: 'text/html',
-				cookie: sessionCookie
+				headers: {
+					accept: 'text/html'
+				},
+				cookieJar
 			});
 
 			assert.strictEqual(homepage.statusCode, 200);

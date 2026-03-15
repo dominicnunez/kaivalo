@@ -2,8 +2,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { toAvatarProxyUrl } from '../apps/hub/src/lib/server/avatar-url.ts';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
+import { signInThroughWorkosCallback } from './helpers/workos-auth-flow.ts';
 import { assertSessionCookieContract } from './helpers/session-cookie.ts';
-import { withWorkosCallbackStateCookie } from './helpers/workos-callback-state.ts';
 
 const PREVIEW_FIXTURE_IMPORT = new URL(
 	'./helpers/hub-preview-fixtures.mts',
@@ -41,17 +41,13 @@ async function hitAvatar(preview, headers = {}) {
 	return httpGet(getAvatarUrl(preview.baseUrl), headers);
 }
 
-async function createSignedInSessionCookie(preview) {
-	const callbackResponse = await httpGet(
-		`${preview.baseUrl}/auth/callback?code=test-code&state=test-state`,
-		withWorkosCallbackStateCookie({
-			accept: 'text/html',
-			'sec-fetch-mode': 'navigate'
-		})
+async function createSignedInSession(preview) {
+	const { callbackResponse, cookieJar } = await signInThroughWorkosCallback(
+		preview.baseUrl
 	);
-
 	assert.strictEqual(callbackResponse.statusCode, 302);
-	return assertSessionCookieContract(callbackResponse.headers);
+	assertSessionCookieContract(callbackResponse.headers);
+	return cookieJar;
 }
 
 async function consumeAvatarQuota(preview, requestCount, headers = {}) {
@@ -125,9 +121,9 @@ describe('avatar proxy preview behavior', () => {
 		});
 
 		try {
-			const sessionCookie = await createSignedInSessionCookie(preview);
+			const cookieJar = await createSignedInSession(preview);
 			const response = await hitAvatar(preview, {
-				cookie: sessionCookie
+				cookieJar
 			});
 
 			assert.strictEqual(response.statusCode, 200);

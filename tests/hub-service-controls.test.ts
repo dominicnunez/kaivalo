@@ -2,8 +2,8 @@ import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
+import { signInThroughWorkosCallback } from './helpers/workos-auth-flow.ts';
 import { assertSessionCookieContract } from './helpers/session-cookie.ts';
-import { withWorkosCallbackStateCookie } from './helpers/workos-callback-state.ts';
 
 const AUTHKIT_COOKIE_NAME = '__Host-wos_session';
 const previewFixtureImport = new URL(
@@ -18,6 +18,7 @@ let servicesPage;
 let publicDom;
 let signedInDom;
 let servicesDom;
+let authCookieJar;
 
 function findLinkByText(
 	container: ParentNode,
@@ -63,27 +64,25 @@ describe('hub preview service controls', () => {
 		publicHomepage = await httpGet(preview.baseUrl);
 		publicDom = new JSDOM(publicHomepage.data, { url: preview.baseUrl });
 
-		const callbackResponse = await httpGet(
-			`${preview.baseUrl}/auth/callback?code=test-code&state=test-state`,
-			withWorkosCallbackStateCookie({
-				accept: 'text/html',
-				'sec-fetch-mode': 'navigate'
-			})
+		const { callbackResponse, cookieJar } = await signInThroughWorkosCallback(
+			preview.baseUrl
 		);
-		const sessionCookie = assertSessionCookieContract(
-			callbackResponse.headers,
-			{
-				cookieName: AUTHKIT_COOKIE_NAME
-			}
-		);
+		authCookieJar = cookieJar;
+		assertSessionCookieContract(callbackResponse.headers, {
+			cookieName: AUTHKIT_COOKIE_NAME
+		});
 
 		signedInHomepage = await httpGet(preview.baseUrl, {
-			accept: 'text/html',
-			cookie: sessionCookie
+			headers: {
+				accept: 'text/html'
+			},
+			cookieJar: authCookieJar
 		});
 		servicesPage = await httpGet(`${preview.baseUrl}/services`, {
-			accept: 'text/html',
-			cookie: sessionCookie
+			headers: {
+				accept: 'text/html'
+			},
+			cookieJar: authCookieJar
 		});
 
 		signedInDom = new JSDOM(signedInHomepage.data, { url: preview.baseUrl });

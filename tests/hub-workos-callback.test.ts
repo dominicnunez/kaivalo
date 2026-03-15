@@ -18,6 +18,11 @@ import {
 import { isHttpError, isRedirect } from '@sveltejs/kit';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 import {
+	beginWorkosAuthFlow,
+	completeWorkosCodeExchange,
+	completeWorkosErrorCallback
+} from './helpers/workos-auth-flow.ts';
+import {
 	buildWorkosCallbackState,
 	withWorkosCallbackStateCookie
 } from './helpers/workos-callback-state.ts';
@@ -843,17 +848,16 @@ describe('WorkOS Auth Callback Route', () => {
 		it('surfaces validated access_denied callbacks as a landing-page notice', async () => {
 			const preview = await startHubPreview();
 			try {
-				const response = await httpGet(
-					`${preview.baseUrl}/auth/callback?error=access_denied&state=${buildWorkosCallbackState('/services')}`,
-					withWorkosCallbackStateCookie({
-						accept: 'text/html',
-						'sec-fetch-mode': 'navigate'
-					})
-				);
+				const flow = await beginWorkosAuthFlow(preview.baseUrl);
+				const response = await completeWorkosErrorCallback(preview.baseUrl, {
+					cookieJar: flow.cookieJar,
+					state: flow.state,
+					errorCode: 'access_denied'
+				});
 
 				assert.strictEqual(response.statusCode, 302);
 				assert.deepStrictEqual(getSetCookieHeaders(response.headers), [
-					'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0; HttpOnly; Secure; SameSite=Lax'
+					'__Host-wos_callback_state=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax'
 				]);
 				const location = new URL(
 					response.headers.location ?? '/',
@@ -882,12 +886,11 @@ describe('WorkOS Auth Callback Route', () => {
 		it('uses the real WorkOS callback handler contract for code exchanges', async () => {
 			const preview = await startHubPreview();
 			try {
-				const response = await httpGet(
-					`${preview.baseUrl}/auth/callback?code=test-code&state=test-state`,
-					withWorkosCallbackStateCookie({
-						accept: 'text/html'
-					})
-				);
+				const flow = await beginWorkosAuthFlow(preview.baseUrl);
+				const response = await completeWorkosCodeExchange(preview.baseUrl, {
+					cookieJar: flow.cookieJar,
+					state: flow.state
+				});
 
 				assert.strictEqual(response.statusCode, 303);
 				const location = new URL(
@@ -931,9 +934,33 @@ describe('WorkOS Auth Callback Route', () => {
 				assert.deepStrictEqual(
 					getSetCookieHeaders(response.headers),
 					[
-						'__Secure-wos_callback_state=; Path=/auth/callback; Max-Age=0; HttpOnly; Secure; SameSite=Lax'
+						'__Host-wos_callback_state=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax'
 					],
 					'failed upstream exchanges should clear the one-time callback state without minting a session cookie'
+				);
+			} finally {
+				await preview.stop();
+			}
+		});
+
+		it('clears validated callback state on non-browser code exchange failures', async () => {
+			const preview = await startHubPreview();
+			try {
+				const flow = await beginWorkosAuthFlow(preview.baseUrl);
+				const response = await completeWorkosCodeExchange(preview.baseUrl, {
+					cookieJar: flow.cookieJar,
+					state: flow.state,
+					accept: 'application/json'
+				});
+
+				assert.strictEqual(response.statusCode, 503);
+				assert.deepStrictEqual(getSetCookieHeaders(response.headers), [
+					'__Host-wos_callback_state=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax'
+				]);
+				const failure = JSON.parse(response.data) as { message: string };
+				assert.match(
+					failure.message,
+					/^Auth callback failed\. Reference: authcb_[0-9a-f-]+$/
 				);
 			} finally {
 				await preview.stop();
