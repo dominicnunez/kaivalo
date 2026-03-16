@@ -12,7 +12,12 @@ const DAILY_FULL_SUITE_WORKFLOW_PATH = path.join(
 	'workflows',
 	'daily-full-suite.yml'
 );
-const DEPLOY_WORKFLOW_PATH = path.join(ROOT, '.github', 'workflows', 'deploy.yml');
+const DEPLOY_WORKFLOW_PATH = path.join(
+	ROOT,
+	'.github',
+	'workflows',
+	'deploy.yml'
+);
 const DOCKERFILE_PATH = path.join(ROOT, 'Dockerfile');
 const PACKAGE_JSON_PATH = path.join(ROOT, 'package.json');
 const PRE_PUSH_HOOK_PATH = path.join(ROOT, '.husky', 'pre-push');
@@ -363,7 +368,9 @@ describe('deployment runtime guardrails', () => {
 			getWorkflowJobCondition(workflow, 'smoke_test'),
 			DEPLOYABLE_REF_CONDITION
 		);
-		assert.ok(runCommands.includes('./scripts/build-production-image-smoke.sh'));
+		assert.ok(
+			runCommands.includes('./scripts/build-production-image-smoke.sh')
+		);
 		assert.strictEqual(
 			smokeProbeStep.env.PRODUCTION_IMAGE_SMOKE_SKIP_BUILD,
 			'true'
@@ -397,8 +404,14 @@ describe('deployment runtime guardrails', () => {
 		);
 
 		const verifyStep = deploySteps[verifyIndex];
-		assert.ok(verifyStep, 'deploy job should define a health verification step');
-		assert.strictEqual(verifyStep.env.DEPLOY_ORIGIN, '${{ vars.DEPLOY_ORIGIN }}');
+		assert.ok(
+			verifyStep,
+			'deploy job should define a health verification step'
+		);
+		assert.strictEqual(
+			verifyStep.env.DEPLOY_ORIGIN,
+			'${{ vars.DEPLOY_ORIGIN }}'
+		);
 		assert.strictEqual(
 			verifyStep.env.WORKOS_API_HOSTNAME,
 			'${{ vars.WORKOS_API_HOSTNAME }}'
@@ -418,7 +431,9 @@ describe('deployment runtime guardrails', () => {
 		assert.deepStrictEqual(getWorkflowJobNeeds(workflow, 'docker_smoke'), [
 			'verify'
 		]);
-		assert.ok(smokeCommands.includes('./scripts/build-production-image-smoke.sh'));
+		assert.ok(
+			smokeCommands.includes('./scripts/build-production-image-smoke.sh')
+		);
 	});
 
 	it('keeps workflow permissions scoped to the minimum required access', () => {
@@ -450,13 +465,10 @@ describe('deployment runtime guardrails', () => {
 		assert.deepStrictEqual(getWorkflowJobPermissions(deployWorkflow, 'test'), {
 			contents: 'read'
 		});
-		assert.deepStrictEqual(
-			getWorkflowJobPermissions(deployWorkflow, 'build'),
-			{
-				contents: 'read',
-				packages: 'write'
-			}
-		);
+		assert.deepStrictEqual(getWorkflowJobPermissions(deployWorkflow, 'build'), {
+			contents: 'read',
+			packages: 'write'
+		});
 		assert.deepStrictEqual(
 			getWorkflowJobPermissions(deployWorkflow, 'smoke_test'),
 			{
@@ -486,7 +498,9 @@ describe('deployment runtime guardrails', () => {
 		const fullInvocations = getNpmRunInvocations(scripts['test:full']);
 
 		assert.ok(getNpmRunInvocations(scripts['test:ci']).includes('test:fast'));
-		assert.ok(getNpmRunInvocations(scripts['test:deploy']).includes('test:full'));
+		assert.ok(
+			getNpmRunInvocations(scripts['test:deploy']).includes('test:full')
+		);
 		assert.ok(fastInvocations.includes('lint'));
 		assert.ok(fastInvocations.includes('test:core'));
 		assert.ok(fullInvocations.includes('test:fast'));
