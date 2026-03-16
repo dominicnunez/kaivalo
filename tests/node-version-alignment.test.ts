@@ -15,7 +15,6 @@ const ROOT = path.resolve(import.meta.dirname, '..');
 const DOCKERFILE_PATH = path.join(ROOT, 'Dockerfile');
 const DOCKERIGNORE_PATH = path.join(ROOT, '.dockerignore');
 const PACKAGE_JSON_PATH = path.join(ROOT, 'package.json');
-const PACKAGE_LOCK_PATH = path.join(ROOT, 'package-lock.json');
 const HUB_PACKAGE_JSON_PATH = path.join(ROOT, 'apps', 'hub', 'package.json');
 const DOCKER_NODE_VERSION_PATTERN = /^FROM node:(\d+\.\d+\.\d+)-/m;
 
@@ -72,24 +71,17 @@ describe('node runtime version alignment', () => {
 	it('pins package metadata to the Docker runtime patch version', () => {
 		const pinnedNodeVersion = readPinnedDockerNodeVersion();
 		const packageJson = JSON.parse(readFileSync(PACKAGE_JSON_PATH, 'utf8')) as {
+			packageManager?: unknown;
 			engines?: {
 				node?: unknown;
 			};
 		};
-		const packageLock = JSON.parse(readFileSync(PACKAGE_LOCK_PATH, 'utf8')) as {
-			packages?: {
-				'': {
-					engines?: {
-						node?: unknown;
-					};
-				};
-			};
-		};
 
 		assert.strictEqual(packageJson.engines?.node, pinnedNodeVersion);
-		assert.strictEqual(
-			packageLock.packages?.['']?.engines?.node,
-			pinnedNodeVersion
+		assert.match(
+			String(packageJson.packageManager ?? ''),
+			/^pnpm@\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/,
+			'package.json should pin the pnpm package manager version'
 		);
 		assert.strictEqual(readPinnedNodeVersion(), pinnedNodeVersion);
 		assert.doesNotThrow(() =>

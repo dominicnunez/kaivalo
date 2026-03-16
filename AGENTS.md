@@ -15,4 +15,4 @@ The verification split in this repository is a hard rule and must not be changed
 
 ## Change Guardrail
 
-When editing Husky hooks, npm scripts, or GitHub workflows, preserve this fast-vs-full split. Do not move the full suite back into `pre-push` or regular CI unless the user explicitly requests that behavior change.
+When editing Husky hooks, pnpm scripts, or GitHub workflows, preserve this fast-vs-full split. Do not move the full suite back into `pre-push` or regular CI unless the user explicitly requests that behavior change.

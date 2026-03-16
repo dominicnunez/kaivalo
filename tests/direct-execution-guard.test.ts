@@ -29,7 +29,7 @@ describe('direct execution guards', () => {
 		);
 
 		try {
-			const scriptPath = path.join(tempDir, 'check#npm%audit.ts');
+			const scriptPath = path.join(tempDir, 'check#pnpm%audit.ts');
 
 			assert.strictEqual(
 				isExecutedDirectly(pathToFileURL(scriptPath).href, [

@@ -39,7 +39,7 @@ const ALLOWLIST_PATH = resolve(
 	ROOT,
 	'audit',
 	'exceptions',
-	'npm-audit-allowlist.json'
+	'pnpm-audit-allowlist.json'
 );
 
 /**
@@ -72,7 +72,7 @@ const ALLOWLIST_PATH = resolve(
 export function readAllowlist(filePath = ALLOWLIST_PATH) {
 	const parsed = JSON.parse(readFileSync(filePath, 'utf8'));
 	if (!Array.isArray(parsed)) {
-		throw new Error('npm audit allowlist must be an array');
+		throw new Error('pnpm audit allowlist must be an array');
 	}
 
 	return parsed.map((entry, index) => validateAllowlistEntry(entry, index));
@@ -87,7 +87,7 @@ export function readAllowlist(filePath = ALLOWLIST_PATH) {
 function readRequiredAllowlistString(value, fieldName, entryIndex) {
 	if (typeof value !== 'string' || value.trim() === '') {
 		throw new Error(
-			`npm audit allowlist entry ${entryIndex + 1} must include a non-empty ${fieldName}`
+			`pnpm audit allowlist entry ${entryIndex + 1} must include a non-empty ${fieldName}`
 		);
 	}
 
@@ -116,14 +116,14 @@ function readOptionalAllowlistString(value, fieldName, entryIndex) {
 function validateAllowlistEntry(entry, entryIndex) {
 	if (!entry || typeof entry !== 'object') {
 		throw new Error(
-			`npm audit allowlist entry ${entryIndex + 1} must be an object`
+			`pnpm audit allowlist entry ${entryIndex + 1} must be an object`
 		);
 	}
 
 	const record = /** @type {Record<string, unknown>} */ entry;
 	if (!Number.isInteger(record.source)) {
 		throw new Error(
-			`npm audit allowlist entry ${entryIndex + 1} must include an integer source`
+			`pnpm audit allowlist entry ${entryIndex + 1} must include an integer source`
 		);
 	}
 
@@ -161,12 +161,96 @@ function readSeverity(value, fallback = 'unknown') {
  * @returns {AuditAdvisory[]}
  */
 export function collectAuditAdvisories(report) {
-	if (!report || typeof report !== 'object' || !('vulnerabilities' in report)) {
-		throw new Error('npm audit did not return a vulnerabilities report');
+	if (!report || typeof report !== 'object') {
+		throw new Error('pnpm audit did not return an advisories report');
 	}
 
 	/** @type {AuditAdvisory[]} */
 	const advisories = [];
+
+	if ('advisories' in report) {
+		const advisoryMap = report.advisories;
+		if (!advisoryMap || typeof advisoryMap !== 'object') {
+			return advisories;
+		}
+
+		for (const advisory of Object.values(advisoryMap)) {
+			if (!advisory || typeof advisory !== 'object') {
+				continue;
+			}
+
+			const source =
+				'id' in advisory && typeof advisory.id === 'number'
+					? advisory.id
+					: null;
+			const title =
+				'title' in advisory && typeof advisory.title === 'string'
+					? advisory.title
+					: null;
+			if (source === null || title === null) {
+				continue;
+			}
+
+			const packageName =
+				'module_name' in advisory && typeof advisory.module_name === 'string'
+					? advisory.module_name
+					: 'unknown';
+			const severity =
+				'severity' in advisory ? readSeverity(advisory.severity) : 'unknown';
+			const url =
+				'url' in advisory && typeof advisory.url === 'string'
+					? advisory.url
+					: undefined;
+			const findings =
+				'findings' in advisory && Array.isArray(advisory.findings)
+					? advisory.findings
+					: [];
+			let emitted = false;
+
+			for (const finding of findings) {
+				if (!finding || typeof finding !== 'object') {
+					continue;
+				}
+
+				const paths =
+					'paths' in finding && Array.isArray(finding.paths)
+						? finding.paths.filter((path) => typeof path === 'string')
+						: [];
+				if (paths.length === 0) {
+					continue;
+				}
+
+				emitted = true;
+				for (const path of paths) {
+					advisories.push({
+						package: packageName,
+						source,
+						severity,
+						title,
+						url,
+						path
+					});
+				}
+			}
+
+			if (!emitted) {
+				advisories.push({
+					package: packageName,
+					source,
+					severity,
+					title,
+					url
+				});
+			}
+		}
+
+		return advisories;
+	}
+
+	if (!('vulnerabilities' in report)) {
+		throw new Error('pnpm audit did not return an advisories report');
+	}
+
 	const vulnerabilities = report.vulnerabilities;
 	if (!vulnerabilities || typeof vulnerabilities !== 'object') {
 		return advisories;
@@ -286,18 +370,18 @@ function formatAdvisories(advisories) {
 function buildAuditFailureMessage(auditResult) {
 	const stderr = auditResult.stderr?.trim();
 	if (stderr) {
-		return `npm audit failed: ${stderr}`;
+		return `pnpm audit failed: ${stderr}`;
 	}
 
 	if (auditResult.signal) {
-		return `npm audit failed: terminated by ${auditResult.signal}`;
+		return `pnpm audit failed: terminated by ${auditResult.signal}`;
 	}
 
 	if (typeof auditResult.status === 'number') {
-		return `npm audit failed with exit status ${auditResult.status}`;
+		return `pnpm audit failed with exit status ${auditResult.status}`;
 	}
 
-	return 'npm audit failed';
+	return 'pnpm audit failed';
 }
 
 /**
@@ -308,7 +392,7 @@ function parseAuditReport(output) {
 	try {
 		return JSON.parse(output);
 	} catch (error) {
-		throw new Error('npm audit returned invalid JSON', { cause: error });
+		throw new Error('pnpm audit returned invalid JSON', { cause: error });
 	}
 }
 
@@ -367,11 +451,13 @@ function throwRetryableAuditFailure(
 ) {
 	if (isTimeout) {
 		throw new Error(
-			`npm audit exceeded ${timeoutMs}ms timeout after ${maxAttempts} attempts`
+			`pnpm audit exceeded ${timeoutMs}ms timeout after ${maxAttempts} attempts`
 		);
 	}
 
-	throw new Error(`npm audit failed after ${maxAttempts} attempts: ${message}`);
+	throw new Error(
+		`pnpm audit failed after ${maxAttempts} attempts: ${message}`
+	);
 }
 
 export function runAudit({
@@ -382,11 +468,11 @@ export function runAudit({
 	sleepImpl = sleepSync
 } = {}) {
 	if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
-		throw new Error('npm audit maxAttempts must be a positive integer');
+		throw new Error('pnpm audit maxAttempts must be a positive integer');
 	}
 
 	for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-		const auditResult = spawnSyncImpl('npm', AUDIT_COMMAND_ARGS, {
+		const auditResult = spawnSyncImpl('pnpm', AUDIT_COMMAND_ARGS, {
 			cwd: ROOT,
 			encoding: 'utf8',
 			timeout: timeoutMs
@@ -407,7 +493,7 @@ export function runAudit({
 				continue;
 			}
 
-			throw new Error(`npm audit failed: ${auditResult.error.message}`, {
+			throw new Error(`pnpm audit failed: ${auditResult.error.message}`, {
 				cause: auditResult.error
 			});
 		}
@@ -434,14 +520,14 @@ export function runAudit({
 				throw new Error(buildAuditFailureMessage(auditResult));
 			}
 
-			throw new Error('npm audit did not return JSON output');
+			throw new Error('pnpm audit did not return JSON output');
 		}
 
 		return parseAuditReport(stdout);
 	}
 
 	throw new Error(
-		`npm audit exceeded ${timeoutMs}ms timeout after ${maxAttempts} attempts`
+		`pnpm audit exceeded ${timeoutMs}ms timeout after ${maxAttempts} attempts`
 	);
 }
 
@@ -481,13 +567,13 @@ export function mainWithDependencies({
 
 	if (unallowlistedAdvisories.length === 0) {
 		writeStdout(
-			`npm audit passed with ${advisories.length} allowlisted advisories`
+			`pnpm audit passed with ${advisories.length} allowlisted advisories`
 		);
 		return;
 	}
 
 	writeStderr(
-		`npm audit reported unallowlisted advisories:\n${formatAdvisories(unallowlistedAdvisories)}`
+		`pnpm audit reported unallowlisted advisories:\n${formatAdvisories(unallowlistedAdvisories)}`
 	);
 	setExitCode(1);
 }
@@ -500,7 +586,7 @@ export function reportCliFailure(
 	}: Pick<CliDependencies, 'writeStderr' | 'setExitCode'> = {}
 ): void {
 	const message =
-		error instanceof Error ? error.message : 'npm audit failed unexpectedly';
+		error instanceof Error ? error.message : 'pnpm audit failed unexpectedly';
 	writeStderr(message);
 	setExitCode(1);
 }

@@ -237,7 +237,7 @@ async function startPreviewScript({
 		}
 	};
 
-	const preview = spawn('npm', ['--prefix', 'apps/hub', 'run', 'preview'], {
+	const preview = spawn('pnpm', ['--dir', 'apps/hub', 'run', 'preview'], {
 		cwd: ROOT,
 		stdio: ['ignore', 'pipe', 'pipe'],
 		detached: true,

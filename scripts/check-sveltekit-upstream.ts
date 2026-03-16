@@ -1,10 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { parse } from 'yaml';
 import { isExecutedDirectly } from './is-executed-directly.ts';
 
 export const REPO_ROOT = resolve(import.meta.dirname, '..');
-const LOCKFILE_PATH = resolve(REPO_ROOT, 'package-lock.json');
+const LOCKFILE_PATH = resolve(REPO_ROOT, 'pnpm-lock.yaml');
 const ISSUE_TITLE = 'Track upstream @sveltejs/kit updates for cookie advisory';
 const REGISTRY_LATEST_URL = 'https://registry.npmjs.org/@sveltejs%2fkit/latest';
 export const FETCH_TIMEOUT_MS = 10_000;
@@ -212,15 +213,52 @@ export function formatGithubOutputEntries(result, createToken = randomUUID) {
 
 export async function readCurrentVersion(lockfilePath = LOCKFILE_PATH) {
 	const raw = await readFile(lockfilePath, 'utf8');
-	const lockfile = JSON.parse(raw);
-	const currentVersion =
-		lockfile?.packages?.['node_modules/@sveltejs/kit']?.version;
+	const lockfile = parse(raw) as {
+		importers?: {
+			[importerPath: string]: {
+				dependencies?: Record<
+					string,
+					{ version?: unknown } | string | undefined
+				>;
+				devDependencies?: Record<
+					string,
+					{ version?: unknown } | string | undefined
+				>;
+			};
+		};
+	};
+	const hubImporter = lockfile?.importers?.['apps/hub'];
+	const currentVersion = readLockedDependencyVersion(
+		hubImporter?.dependencies?.['@sveltejs/kit'] ??
+			hubImporter?.devDependencies?.['@sveltejs/kit']
+	);
 	if (!currentVersion) {
 		throw new Error(
-			'Could not find resolved @sveltejs/kit version in package-lock.json'
+			'Could not find resolved @sveltejs/kit version in pnpm-lock.yaml'
 		);
 	}
 	return currentVersion;
+}
+
+function readLockedDependencyVersion(
+	entry:
+		| {
+				version?: unknown;
+		  }
+		| string
+		| undefined
+) {
+	const rawVersion =
+		typeof entry === 'string'
+			? entry
+			: typeof entry?.version === 'string'
+				? entry.version
+				: '';
+	const match = rawVersion.match(
+		/^(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?:$|\()/
+	);
+
+	return match?.[1] ?? null;
 }
 
 export function createFetchErrorMessage(error) {

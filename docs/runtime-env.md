@@ -5,7 +5,7 @@ This document covers the production runtime environment expected by the Kaivalo 
 For a development-oriented starting point, see `apps/hub/.env.example`.
 
 The image build is designed for placeholder-safe image builds. Use
-`HUB_BUILD_ALLOW_PLACEHOLDERS=true npm --prefix apps/hub run build` for local
+`HUB_BUILD_ALLOW_PLACEHOLDERS=true pnpm --dir apps/hub run build` for local
 smoke builds, CI image assembly, and deploy build jobs that should not receive
 live auth credentials.
 

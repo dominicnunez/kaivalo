@@ -261,9 +261,9 @@ function getPackageScripts() {
 	return packageJson.scripts;
 }
 
-function getNpmRunInvocations(value: string): string[] {
+function getPnpmRunInvocations(value: string): string[] {
 	return Array.from(
-		normalizeShellScript(value).matchAll(/\bnpm\s+run\s+([a-z0-9:-]+)/gi),
+		normalizeShellScript(value).matchAll(/\bpnpm\s+run\s+([a-z0-9:-]+)/gi),
 		(match) => match[1]
 	);
 }
@@ -276,8 +276,8 @@ describe('deployment runtime guardrails', () => {
 
 		assert.ok(triggers.has('push'));
 		assert.ok(triggers.has('pull_request'));
-		assert.ok(runCommands.includes('npm run test:ci'));
-		assert.ok(!runCommands.includes('npm run test:full'));
+		assert.ok(runCommands.includes('pnpm run test:ci'));
+		assert.ok(!runCommands.includes('pnpm run test:full'));
 	});
 
 	it('pins every workflow node setup step to the Docker runtime patch version', () => {
@@ -337,7 +337,7 @@ describe('deployment runtime guardrails', () => {
 		const workflow = readWorkflow(DEPLOY_WORKFLOW_PATH);
 		const runCommands = getWorkflowRunCommands(workflow, 'test');
 
-		assert.ok(runCommands.includes('npm run test:deploy'));
+		assert.ok(runCommands.includes('pnpm run test:deploy'));
 		assert.deepStrictEqual(getWorkflowJobNeeds(workflow, 'build'), ['test']);
 		assert.deepStrictEqual(getWorkflowJobNeeds(workflow, 'smoke_test'), [
 			'build'
@@ -427,7 +427,7 @@ describe('deployment runtime guardrails', () => {
 
 		assert.ok(triggers.has('workflow_dispatch'));
 		assert.ok(schedule.length > 0, 'daily full suite should define a schedule');
-		assert.ok(verifyCommands.includes('npm run test:full'));
+		assert.ok(verifyCommands.includes('pnpm run test:full'));
 		assert.deepStrictEqual(getWorkflowJobNeeds(workflow, 'docker_smoke'), [
 			'verify'
 		]);
@@ -486,7 +486,7 @@ describe('deployment runtime guardrails', () => {
 
 	it('keeps the pre-push hook on the fast verification lane', () => {
 		const hook = readFileSync(PRE_PUSH_HOOK_PATH, 'utf8');
-		const hookInvocations = getNpmRunInvocations(hook);
+		const hookInvocations = getPnpmRunInvocations(hook);
 
 		assert.ok(hookInvocations.includes('test:fast'));
 		assert.ok(!hookInvocations.includes('test:full'));
@@ -494,12 +494,12 @@ describe('deployment runtime guardrails', () => {
 
 	it('defines the fast and full verification scripts from the canonical lanes', () => {
 		const scripts = getPackageScripts();
-		const fastInvocations = getNpmRunInvocations(scripts['test:fast']);
-		const fullInvocations = getNpmRunInvocations(scripts['test:full']);
+		const fastInvocations = getPnpmRunInvocations(scripts['test:fast']);
+		const fullInvocations = getPnpmRunInvocations(scripts['test:full']);
 
-		assert.ok(getNpmRunInvocations(scripts['test:ci']).includes('test:fast'));
+		assert.ok(getPnpmRunInvocations(scripts['test:ci']).includes('test:fast'));
 		assert.ok(
-			getNpmRunInvocations(scripts['test:deploy']).includes('test:full')
+			getPnpmRunInvocations(scripts['test:deploy']).includes('test:full')
 		);
 		assert.ok(fastInvocations.includes('lint'));
 		assert.ok(fastInvocations.includes('test:core'));

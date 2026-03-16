@@ -27,7 +27,7 @@ type EnsureBuildFreshOptions = BuildFreshnessOptions & {
 export function getHubBuildInputPaths() {
 	return [
 		join(ROOT, 'package.json'),
-		join(ROOT, 'package-lock.json'),
+		join(ROOT, 'pnpm-lock.yaml'),
 		join(ROOT, 'packages', 'ui'),
 		join(HUB_DIR, 'src'),
 		join(HUB_DIR, 'scripts'),
@@ -73,7 +73,7 @@ export function ensureHubBuild() {
 		buildEntry: BUILD_ENTRY,
 		inputPaths: getHubBuildInputPaths(),
 		runBuild: () =>
-			execSync('npm run build 2>&1', {
+			execSync('pnpm run build 2>&1', {
 				cwd: HUB_DIR,
 				timeout: 180000,
 				encoding: 'utf8',
@@ -94,7 +94,7 @@ export function assertHubBuildAvailable() {
 		})
 	) {
 		throw new Error(
-			'Hub preview tests require an up-to-date build. Run `npm run test:build:hub` first.'
+			'Hub preview tests require an up-to-date build. Run `pnpm run test:build:hub` first.'
 		);
 	}
 }

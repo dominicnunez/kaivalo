@@ -4,6 +4,7 @@
 	"type": "module",
 	"private": true,
 	"description": "Kaivalo.com services hub monorepo",
+	"packageManager": "pnpm@10.32.1",
 	"workspaces": [
 		"apps/*",
 		"packages/*"
@@ -11,21 +12,21 @@
 	"scripts": {
 		"prepare": "husky",
 		"node:check": "node scripts/check-node-version.ts",
-		"check": "npm run node:check && npm --prefix packages/ui run check && npm --prefix apps/hub run check",
-		"audit:deps": "npm run node:check && node scripts/check-npm-audit.ts",
-		"test:core": "npm run node:check && npm run check && npm --prefix packages/ui run test && npm --prefix apps/hub run test:unit && node --test tests/check-sveltekit-upstream.test.ts tests/deploy-health-probe-script.test.ts tests/deployment-runtime-guardrails.test.ts tests/direct-execution-guard.test.ts tests/gitignore.test.ts tests/hub-build-freshness.test.ts tests/hub-env-example.test.ts tests/hub-node-server-port-validation.test.ts tests/hub-node-server-static-assets.test.ts tests/hub-node-server.test.ts tests/hub-runtime-env.test.ts tests/node-version-alignment.test.ts tests/npm-audit-gate.test.ts tests/production-image-smoke-build-script.test.ts tests/workflow-hardening.test.ts",
-		"test:build:hub": "npm run node:check && npm --prefix apps/hub run test:build",
-		"test:preview:hub": "npm run node:check && node --test tests/hub-preview-script.test.ts",
+		"check": "pnpm run node:check && pnpm --dir packages/ui run check && pnpm --dir apps/hub run check",
+		"audit:deps": "pnpm run node:check && node scripts/check-pnpm-audit.ts",
+		"test:core": "pnpm run node:check && pnpm run check && pnpm --dir packages/ui run test && pnpm --dir apps/hub run test:unit && node --test tests/check-sveltekit-upstream.test.ts tests/deploy-health-probe-script.test.ts tests/deployment-runtime-guardrails.test.ts tests/direct-execution-guard.test.ts tests/gitignore.test.ts tests/hub-build-freshness.test.ts tests/hub-env-example.test.ts tests/hub-node-server-port-validation.test.ts tests/hub-node-server-static-assets.test.ts tests/hub-node-server.test.ts tests/hub-runtime-env.test.ts tests/node-version-alignment.test.ts tests/pnpm-audit-gate.test.ts tests/production-image-smoke-build-script.test.ts tests/workflow-hardening.test.ts",
+		"test:build:hub": "pnpm run node:check && pnpm --dir apps/hub run test:build",
+		"test:preview:hub": "pnpm run node:check && node --test tests/hub-preview-script.test.ts",
 		"lint": "eslint . --ext .js,.mjs,.mts,.cjs,.ts,.svelte",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
-		"test": "npm run test:full",
-		"test:fast": "npm run node:check && npm run lint && npm run test:core",
-		"test:full": "npm run test:fast && npm run test:build:hub && npm run test:preview:hub && npm run test:production && npm run test:integration && npm run audit:deps",
-		"test:production": "npm run node:check && node --test --test-concurrency=1 tests/docker-build-context.test.ts tests/hub-adapter-node.test.ts tests/production-image-smoke-build.integration.test.ts",
-		"test:integration": "npm run node:check && node --test --test-concurrency=1 tests/hub-auth-landing.test.ts tests/hub-avatar.test.ts tests/hub-favicon.test.ts tests/hub-links.test.ts tests/hub-service-controls.test.ts tests/hub-og-image.test.ts tests/hub-seo-meta.test.ts tests/hub-sign-out.test.ts tests/hub-tailwind.test.ts tests/hub-workos-callback.test.ts tests/hub-workos-hooks.test.ts",
-		"test:ci": "npm run test:fast",
-		"test:deploy": "npm run test:full"
+		"test": "pnpm run test:full",
+		"test:fast": "pnpm run node:check && pnpm run lint && pnpm run test:core",
+		"test:full": "pnpm run test:fast && pnpm run test:build:hub && pnpm run test:preview:hub && pnpm run test:production && pnpm run test:integration && pnpm run audit:deps",
+		"test:production": "pnpm run node:check && node --test --test-concurrency=1 tests/docker-build-context.test.ts tests/hub-adapter-node.test.ts tests/production-image-smoke-build.integration.test.ts",
+		"test:integration": "pnpm run node:check && node --test --test-concurrency=1 tests/hub-auth-landing.test.ts tests/hub-avatar.test.ts tests/hub-favicon.test.ts tests/hub-links.test.ts tests/hub-service-controls.test.ts tests/hub-og-image.test.ts tests/hub-seo-meta.test.ts tests/hub-sign-out.test.ts tests/hub-tailwind.test.ts tests/hub-workos-callback.test.ts tests/hub-workos-hooks.test.ts",
+		"test:ci": "pnpm run test:fast",
+		"test:deploy": "pnpm run test:full"
 	},
 	"engines": {
 		"node": "24.14.0"

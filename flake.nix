@@ -28,6 +28,7 @@
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
             nodejsLts
+            pnpm
             git
             typescript-language-server
             svelte-language-server

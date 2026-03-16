@@ -65,7 +65,7 @@ function reserveLocalPort(host = '127.0.0.1') {
 
 function runBuildWithDiagnostics() {
 	try {
-		execSync('npm run build', {
+		execSync('pnpm run build', {
 			cwd: hubDir,
 			stdio: 'pipe',
 			encoding: 'utf8',
@@ -81,8 +81,8 @@ function runBuildWithDiagnostics() {
 		const diagnostics = [stdout, stderr].filter(Boolean).join('\n\n');
 		throw new Error(
 			diagnostics
-				? `npm run build failed\n\n${diagnostics}`
-				: `npm run build failed: ${error instanceof Error ? error.message : String(error)}`,
+				? `pnpm run build failed\n\n${diagnostics}`
+				: `pnpm run build failed: ${error instanceof Error ? error.message : String(error)}`,
 			{
 				cause: error
 			}

@@ -2,4 +2,4 @@
 
 set -e
 
-npm run test:fast
+pnpm run test:fast

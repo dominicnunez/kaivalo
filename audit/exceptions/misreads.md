@@ -26,7 +26,7 @@ No commit history exists for `apps/hub/.env`, so this is not a committed reposit
 **Date:** 2026-03-08
 
 **Reason:** The current test file always runs the build assertion through `runBuildWithDiagnostics()`.
-`npm --prefix apps/hub run test -- src/build.test.ts` and `npm --prefix apps/hub run test:build` both execute `src/build.test.ts` and pass in the current workspace.
+`pnpm --dir apps/hub run test -- src/build.test.ts` and `pnpm --dir apps/hub run test:build` both execute `src/build.test.ts` and pass in the current workspace.
 The test file does not reference `manifest-full.js`, so the reported ENOENT does not match current code or reproduced runtime behavior.
 
 ### Docker builds upload the entire repository because no `.dockerignore` exists
@@ -61,19 +61,19 @@ The narrower `tests/hub-node-server-port-validation.test.ts` file does focus on 
 
 ### The cookie advisory allowlist is masking a repo-controlled dependency fix
 
-**Location:** `audit/exceptions/npm-audit-allowlist.json:2` — allowlisted `cookie` advisory in production audit gating
+**Location:** `audit/exceptions/pnpm-audit-allowlist.json:2` — allowlisted `cookie` advisory in production audit gating
 
 **Reason:** The allowlist entry reflects an existing upstream constraint that is already documented in `audit/exceptions/risks.md`.
 Current registry metadata still reports `@sveltejs/kit@2.53.4` as the latest stable release, and it still depends on `cookie@^0.6.0`.
-`npm audit --omit=dev --json` still reports `fixAvailable: false`, so there is no in-repo package upgrade available to remove the advisory today.
+`pnpm audit --prod --json` still reports `fixAvailable: false`, so there is no in-repo package upgrade available to remove the advisory today.
 The actionable repo-controlled work was to keep the exception accurate and continue monitoring upstream, not to remove the allowlist immediately.
 
 ### The dependency audit gate stays green because the active production advisory is allowlisted
 
-**Location:** `audit/exceptions/npm-audit-allowlist.json:2` — allowlisted `cookie` advisory in production audit gating
+**Location:** `audit/exceptions/pnpm-audit-allowlist.json:2` — allowlisted `cookie` advisory in production audit gating
 
 **Reason:** The audit missed the repo's existing review loop for this exception.
-`docs/development.md` already documents that `npm run audit:deps` allows accepted upstream-only production advisories while failing new ones, and the exception is tracked in `audit/exceptions/risks.md`.
+`docs/development.md` already documents that `pnpm run audit:deps` allows accepted upstream-only production advisories while failing new ones, and the exception is tracked in `audit/exceptions/risks.md`.
 The repository also has a scheduled upstream monitor in `.github/workflows/track-sveltekit-upstream.yml` backed by `scripts/check-sveltekit-upstream.ts`, which opens or updates a tracking issue whenever a newer `@sveltejs/kit` release appears.
 Because the exception is already documented and actively revisited, the audit's claim that the allowlist creates a false sense of security unless it is revisited is a misread of the current repo controls.
 
@@ -99,7 +99,7 @@ That is not stale documentation for a live runtime switch; it is a regression te
 **Location:** `apps/hub/package.json:7` — build is exercised by `apps/hub/src/build.test.ts`
 
 **Reason:** This does not reproduce in the current repository state.
-Running `npm test` in `apps/hub` passes, including `src/build.test.ts`, and the build test successfully generates the documented Node/server artifacts.
+Running `pnpm --dir apps/hub test` passes, including `src/build.test.ts`, and the build test successfully generates the documented Node/server artifacts.
 The cited `manifest-full.js` ENOENT is not referenced by the current test file and did not occur during validation.
 
 ### Invalid WorkOS runtime configuration is silently downgraded into a generic auth outage
@@ -154,7 +154,7 @@ The broader `tests/hub-sign-out.test.ts` suite exercises CSRF, redirect normaliz
 
 ### Vulnerable production cookie dependency is still shipped through @sveltejs/kit
 
-**Location:** `package-lock.json:1417`
+**Location:** `pnpm-lock.yaml`
 
 **Reason:** The lockfile does resolve `cookie` through `@sveltejs/kit`, but this item is already an upstream-only exception rather than a repo-controlled defect.
 The current `@sveltejs/kit` release in the workspace still declares `cookie@^0.6.0`, and the report itself notes that no direct fix is available.
@@ -216,8 +216,8 @@ When forwarded data is malformed, the code falls back to the shared empty-key bu
 **Location:** `apps/hub/scripts/prepare-runtime.ts:9` — runtime helper copy step
 
 **Reason:** The audit stopped at `prepare-runtime.ts` and missed the surrounding build behavior.
-`npm --prefix apps/hub run build` runs `vite build` before `node scripts/prepare-runtime.ts`, and the real build clears `apps/hub/build` before the runtime helper copy step.
-Seeding `apps/hub/build/runtime/server/__audit_stale_helper__.ts` and then running `HUB_BUILD_ALLOW_PLACEHOLDERS=true npm --prefix apps/hub run build` removed the stale file, so the obsolete helper does not persist into the artifact later copied by `Dockerfile`.
+`pnpm --dir apps/hub run build` runs `vite build` before `node scripts/prepare-runtime.ts`, and the real build clears `apps/hub/build` before the runtime helper copy step.
+Seeding `apps/hub/build/runtime/server/__audit_stale_helper__.ts` and then running `HUB_BUILD_ALLOW_PLACEHOLDERS=true pnpm --dir apps/hub run build` removed the stale file, so the obsolete helper does not persist into the artifact later copied by `Dockerfile`.
 
 ### Loopback-IP HTTP auth flows can never persist the WorkOS cookies
 
@@ -232,7 +232,7 @@ The repo's allowed loopback-IP auth flows therefore do not "can never persist" t
 **Location:** `scripts/check-node-version.ts:42` — runtime preflight compared against the repo-pinned Docker/CI patch version
 
 **Reason:** `assertSupportedNodeVersion()` does reject `24.14.1` and other patch releases, but the repository deliberately enforces that exact patch-level alignment.
-`package.json`, `package-lock.json`, `Dockerfile`, GitHub workflow `node-version` settings, and `tests/node-version-alignment.test.ts` all pin and verify the same `24.14.0` runtime.
+`package.json`, `pnpm-lock.yaml`, `Dockerfile`, GitHub workflow `node-version` settings, and `tests/node-version-alignment.test.ts` all pin and verify the same `24.14.0` runtime.
 The audit described real behavior, but misclassified this reproducibility guardrail as an accidental compatibility bug.
 
 ### Real WorkOS sign-out handling only exercises the happy path

@@ -13,31 +13,27 @@ import {
 	readAllowlist,
 	runCli,
 	runAudit
-} from '../scripts/check-npm-audit.ts';
+} from '../scripts/check-pnpm-audit.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
 
-describe('npm audit gate', () => {
-	it('collects concrete advisory records from npm audit output', () => {
+describe('pnpm audit gate', () => {
+	it('collects concrete advisory records from pnpm audit output', () => {
 		const advisories = collectAuditAdvisories({
-			vulnerabilities: {
-				cookie: {
+			advisories: {
+				1103907: {
+					id: 1103907,
+					module_name: 'cookie',
 					severity: 'low',
-					nodes: ['node_modules/cookie'],
-					via: [
+					title:
+						'cookie accepts cookie name, path, and domain with out of bounds characters',
+					url: 'https://github.com/advisories/GHSA-pxg6-pf52-xh8x',
+					findings: [
 						{
-							source: 1103907,
-							name: 'cookie',
-							title:
-								'cookie accepts cookie name, path, and domain with out of bounds characters',
-							url: 'https://github.com/advisories/GHSA-pxg6-pf52-xh8x'
+							version: '0.6.0',
+							paths: ['apps__hub>@sveltejs/kit>cookie']
 						}
 					]
-				},
-				'@sveltejs/kit': {
-					severity: 'low',
-					nodes: ['node_modules/@sveltejs/kit'],
-					via: ['cookie']
 				}
 			}
 		});
@@ -50,7 +46,7 @@ describe('npm audit gate', () => {
 				title:
 					'cookie accepts cookie name, path, and domain with out of bounds characters',
 				url: 'https://github.com/advisories/GHSA-pxg6-pf52-xh8x',
-				path: 'node_modules/cookie'
+				path: 'apps__hub>@sveltejs/kit>cookie'
 			}
 		]);
 	});
@@ -159,7 +155,7 @@ describe('npm audit gate', () => {
 	});
 
 	it('rejects allowlist entries missing reviewed advisory metadata', () => {
-		const tempDir = mkdtempSync(join(tmpdir(), 'npm-audit-allowlist-'));
+		const tempDir = mkdtempSync(join(tmpdir(), 'pnpm-audit-allowlist-'));
 		const allowlistPath = join(tempDir, 'allowlist.json');
 
 		try {
@@ -183,7 +179,7 @@ describe('npm audit gate', () => {
 		}
 	});
 
-	it('retries transient npm audit timeouts before succeeding', () => {
+	it('retries transient pnpm audit timeouts before succeeding', () => {
 		const retryDelays: number[] = [];
 		let attemptCount = 0;
 
@@ -214,7 +210,7 @@ describe('npm audit gate', () => {
 		assert.deepStrictEqual(retryDelays, [AUDIT_RETRY_DELAY_MS]);
 	});
 
-	it('retries transient npm audit network errors before succeeding', () => {
+	it('retries transient pnpm audit network errors before succeeding', () => {
 		const retryDelays: number[] = [];
 		let attemptCount = 0;
 
@@ -259,8 +255,7 @@ describe('npm audit gate', () => {
 					return {
 						status: 1,
 						stdout: '',
-						stderr:
-							'npm ERR! code E503\nnpm ERR! 503 Service Unavailable - POST https://registry.npmjs.org/-/npm/v1/security/audits/quick'
+						stderr: 'ERR_PNPM_AUDIT_FETCH 503 Service Unavailable'
 					};
 				}
 
@@ -300,7 +295,7 @@ describe('npm audit gate', () => {
 					}
 				}),
 			new Error(
-				`npm audit exceeded ${AUDIT_TIMEOUT_MS}ms timeout after ${AUDIT_MAX_ATTEMPTS} attempts`
+				`pnpm audit exceeded ${AUDIT_TIMEOUT_MS}ms timeout after ${AUDIT_MAX_ATTEMPTS} attempts`
 			)
 		);
 
@@ -311,7 +306,7 @@ describe('npm audit gate', () => {
 		]);
 	});
 
-	it('fails immediately on non-timeout npm audit errors', () => {
+	it('fails immediately on non-timeout pnpm audit errors', () => {
 		let attemptCount = 0;
 
 		assert.throws(
@@ -329,7 +324,7 @@ describe('npm audit gate', () => {
 						throw new Error('non-timeout failures should not sleep');
 					}
 				}),
-			new Error('npm audit failed: spawn ENOENT')
+			new Error('pnpm audit failed: spawn ENOENT')
 		);
 
 		assert.strictEqual(attemptCount, 1);
@@ -351,11 +346,11 @@ describe('npm audit gate', () => {
 		});
 
 		assert.deepStrictEqual(report, { vulnerabilities: {} });
-		assert.strictEqual(command, 'npm');
+		assert.strictEqual(command, 'pnpm');
 		assert.deepStrictEqual(args, ['audit', '--json']);
 	});
 
-	it('rejects malformed JSON output from npm audit', () => {
+	it('rejects malformed JSON output from pnpm audit', () => {
 		assert.throws(
 			() =>
 				runAudit({
@@ -366,13 +361,13 @@ describe('npm audit gate', () => {
 					})
 				}),
 			(error) => {
-				assert.match(error.message, /npm audit returned invalid JSON/);
+				assert.match(error.message, /pnpm audit returned invalid JSON/);
 				return true;
 			}
 		);
 	});
 
-	it('surfaces abnormal npm audit exits when no report is returned', () => {
+	it('surfaces abnormal pnpm audit exits when no report is returned', () => {
 		assert.throws(
 			() =>
 				runAudit({
@@ -383,7 +378,7 @@ describe('npm audit gate', () => {
 						stderr: ''
 					})
 				}),
-			new Error('npm audit failed: terminated by SIGTERM')
+			new Error('pnpm audit failed: terminated by SIGTERM')
 		);
 	});
 
@@ -394,7 +389,7 @@ describe('npm audit gate', () => {
 
 		runCli({
 			runAuditImpl: () => {
-				throw new Error('npm audit failed: spawnSync npm ENOENT');
+				throw new Error('pnpm audit failed: spawnSync pnpm ENOENT');
 			},
 			writeStdout: (message: string) => {
 				stdout.push(message);
@@ -409,19 +404,25 @@ describe('npm audit gate', () => {
 
 		assert.strictEqual(exitCode, 1);
 		assert.deepStrictEqual(stdout, []);
-		assert.deepStrictEqual(stderr, ['npm audit failed: spawnSync npm ENOENT']);
+		assert.deepStrictEqual(stderr, [
+			'pnpm audit failed: spawnSync pnpm ENOENT'
+		]);
 		assert.doesNotMatch(stderr[0] ?? '', /^\s+at /m);
 	});
 
 	it('reports top-level cli failures without an uncaught stack trace', (t) => {
-		const result = spawnSync(process.execPath, ['scripts/check-npm-audit.ts'], {
-			cwd: ROOT,
-			env: {
-				...process.env,
-				PATH: '/definitely/missing'
-			},
-			encoding: 'utf8'
-		});
+		const result = spawnSync(
+			process.execPath,
+			['scripts/check-pnpm-audit.ts'],
+			{
+				cwd: ROOT,
+				env: {
+					...process.env,
+					PATH: '/definitely/missing'
+				},
+				encoding: 'utf8'
+			}
+		);
 
 		if (result.error?.code === 'EPERM') {
 			t.skip('sandbox blocks child process spawning');
@@ -429,7 +430,7 @@ describe('npm audit gate', () => {
 		}
 
 		assert.strictEqual(result.status, 1);
-		assert.match(result.stderr, /npm audit failed: spawnSync npm ENOENT/);
+		assert.match(result.stderr, /pnpm audit failed: spawnSync pnpm ENOENT/);
 		assert.doesNotMatch(result.stderr, /^\s+at /m);
 	});
 });

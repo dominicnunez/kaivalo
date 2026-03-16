@@ -15,7 +15,7 @@ for (const artifactPath of REQUIRED_PREVIEW_ARTIFACTS) {
 	}
 
 	throw new Error(
-		'Preview requires a built hub runtime. Run `npm run build` first.'
+		'Preview requires a built hub runtime. Run `pnpm run build` first.'
 	);
 }
 
