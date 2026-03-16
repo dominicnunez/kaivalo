@@ -435,7 +435,8 @@ describe('hub preview script', () => {
 				'private, no-store'
 			);
 			assert.deepStrictEqual(getSetCookieHeaders(browserResponse.headers), [
-				'__Host-wos_callback_state=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax'
+				'__Host-wos_callback_state=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax',
+				'__Secure-wos_callback_state=; Max-Age=0; Path=/auth/callback; HttpOnly; Secure; SameSite=Lax'
 			]);
 
 			const apiFailure = JSON.parse(apiResponse.data) as { message: string };
@@ -453,11 +454,10 @@ describe('hub preview script', () => {
 		}
 	});
 
-	it('returns sanitized 503 responses when preview sign-out fails unexpectedly', async () => {
+	it('redirects authenticated preview sign-out through the hosted WorkOS logout flow', async () => {
 		const preview = await startPreviewScript({
 			envOverrides: {
-				HUB_PREVIEW_CALLBACK_FIXTURE_MODE: 'signed-in',
-				HUB_PREVIEW_SIGN_OUT_FIXTURE_MODE: 'throw'
+				HUB_PREVIEW_CALLBACK_FIXTURE_MODE: 'signed-in'
 			}
 		});
 
@@ -479,21 +479,28 @@ describe('hub preview script', () => {
 				cookieJar
 			});
 
-			const failure = JSON.parse(response.data) as { message: string };
-			assert.strictEqual(response.statusCode, 503);
+			assert.strictEqual(response.statusCode, 302);
 			assert.strictEqual(
 				response.headers['cache-control'],
 				'private, no-store'
 			);
-			assert.match(
-				failure.message,
-				/^Sign-out failed\. Reference: authso_[0-9a-f-]+$/
+			const logoutLocation = new URL(
+				String(response.headers.location),
+				preview.baseUrl
 			);
-			assert.ok(
-				!failure.message.includes('preview secret'),
-				'sign-out failures should not leak upstream error details'
+			assert.strictEqual(logoutLocation.origin, 'https://api.workos.com');
+			assert.strictEqual(
+				logoutLocation.pathname,
+				'/user_management/sessions/logout'
 			);
-			assert.deepStrictEqual(getSetCookieHeaders(response.headers), []);
+			assert.strictEqual(
+				logoutLocation.searchParams.get('return_to'),
+				preview.baseUrl
+			);
+			assert.deepStrictEqual(getSetCookieHeaders(response.headers), [
+				'__Host-wos_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax'
+			]);
+			assert.strictEqual(response.data, '');
 		} finally {
 			await assertCleanPreviewShutdown(preview);
 		}
