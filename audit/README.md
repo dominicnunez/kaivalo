@@ -1,0 +1,43 @@
+# Audit Format
+
+This directory centralizes audit findings by referenced file.
+
+## Categories
+
+### Design
+
+Findings that describe behavior which is correct by design.
+
+### Misreads
+
+Findings where the audit misread the code or described behavior that does not occur.
+
+### Risks
+
+Real findings consciously accepted because the architectural cost, external constraints, or implementation effort are disproportionate to the severity.
+
+## Path Rule
+
+Audit files live under `audit/<category>/` and mirror the referenced repository path.
+
+- File targets replace the source extension with `.md`
+- Directory targets use `index.md`
+- Multi-file findings are duplicated into each referenced file bucket
+- Findings whose referenced source no longer exists are deleted rather than preserved as compatibility buckets
+
+## Entry Format
+
+Each per-file audit document consists only of finding entries. Entries use this format:
+
+```md
+### <Plain language description>
+
+**Location:** `line(s)` — optional context
+
+**Reason:** Explanation (can be multiple lines)
+```
+
+If a finding references multiple files in its `**Location:**` line, the same
+entry is duplicated into each corresponding per-file bucket so auditors can
+compare one code file against its matching audit file without cross-referencing
+other buckets.

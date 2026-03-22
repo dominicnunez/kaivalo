@@ -704,7 +704,7 @@ export function buildIssueBody(result: DependencySweepResult): string {
 			`- Current resolved repo version: \`${result.svelteKitUpstream.currentVersion}\``,
 			`- Latest published upstream version: \`${result.svelteKitUpstream.latestVersion}\``,
 			`- Latest upstream \`cookie\` dependency range: \`${result.svelteKitUpstream.latestCookieRange}\``,
-			'- Cookie advisory exception: `audit/exceptions/risks.md`',
+			'- Cookie advisory exception: `audit/risks/pnpm-lock.md`',
 			''
 		);
 	} else {

@@ -35,12 +35,7 @@ const AUDIT_RETRYABLE_STDERR_PATTERNS = [
 	/\brequest timeout\b/i,
 	/\btoo many requests\b/i
 ];
-const ALLOWLIST_PATH = resolve(
-	ROOT,
-	'audit',
-	'exceptions',
-	'pnpm-audit-allowlist.json'
-);
+const ALLOWLIST_PATH = resolve(ROOT, 'audit', 'pnpm-audit-allowlist.json');
 
 /**
  * @typedef {{
