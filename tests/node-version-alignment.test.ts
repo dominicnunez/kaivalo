@@ -16,6 +16,7 @@ const DOCKERFILE_PATH = path.join(ROOT, 'Dockerfile');
 const DOCKERIGNORE_PATH = path.join(ROOT, '.dockerignore');
 const PACKAGE_JSON_PATH = path.join(ROOT, 'package.json');
 const HUB_PACKAGE_JSON_PATH = path.join(ROOT, 'apps', 'hub', 'package.json');
+const PNPM_WORKSPACE_PATH = path.join(ROOT, 'pnpm-workspace.yaml');
 const DOCKER_NODE_VERSION_PATTERN = /^FROM node:(\d+\.\d+\.\d+)-/m;
 
 function escapeRegExp(value: string): string {
@@ -170,6 +171,7 @@ describe('node runtime version alignment', () => {
 
 	it('installs production dependencies without interactive pruning in Docker', () => {
 		const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
+		const workspaceConfig = readFileSync(PNPM_WORKSPACE_PATH, 'utf8');
 
 		assert.doesNotMatch(
 			dockerfile,
@@ -178,8 +180,18 @@ describe('node runtime version alignment', () => {
 		);
 		assert.match(
 			dockerfile,
-			/\bpnpm install --prod --frozen-lockfile --ignore-scripts\b/,
-			'Dockerfile should install production dependencies directly'
+			/\bpnpm --filter @kaivalo\/hub deploy --prod \/out\b/,
+			'Dockerfile should package the hub app with pnpm deploy'
+		);
+		assert.doesNotMatch(
+			dockerfile,
+			/COPY --from=.*\/app\/node_modules \.\/node_modules/,
+			'Dockerfile should not copy a shared workspace node_modules tree into runtime'
+		);
+		assert.match(
+			workspaceConfig,
+			/^injectWorkspacePackages:\s*true$/m,
+			'pnpm workspace config should enable injected workspace packages for deploy packaging'
 		);
 	});
 
