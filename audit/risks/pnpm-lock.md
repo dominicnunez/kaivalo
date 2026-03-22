@@ -1,21 +1,6 @@
-# Risks
-
-> Real findings consciously accepted — architectural cost, external constraints, disproportionate effort.
-> Managed by sfk willie. Follow the entry format below.
->
-> Entry format:
->
-> ### Plain language description
->
-> **Location:** `file/path:line` — optional context
-
-> **Reason:** Explanation (can be multiple lines)
-
 ### The SvelteKit dependency tree still resolves cookie 0.6.0 from upstream
 
-**Location:** `pnpm-lock.yaml` — `@sveltejs/kit@2.55.0` depends on `cookie@^0.6.0`
-
-**Date:** 2026-03-08
+**Location:** `N/A`
 
 **Reason:** `pnpm audit --json` reports GHSA-pxg6-pf52-xh8x against the transitive `cookie` dependency through `@sveltejs/kit`, and currently reports `fixAvailable: false`.
 This is an upstream dependency constraint rather than an application-code defect: the latest published `@sveltejs/kit` in use here still depends on `cookie@^0.6.0`.

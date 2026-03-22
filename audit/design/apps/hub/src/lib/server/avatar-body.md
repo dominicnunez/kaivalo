@@ -1,19 +1,6 @@
-# Design
-
-> Findings that describe behavior which is correct by design.
-> Managed by sfk willie. Follow the entry format below.
->
-> Entry format:
->
-> ### Plain language description
->
-> **Location:** `file/path:line` — optional context
-
-> **Reason:** Explanation (can be multiple lines)
-
 ### Avatar responses are fully validated in a bounded buffer before the proxy sends bytes
 
-**Location:** `apps/hub/src/lib/server/avatar-body.ts:42` — avatar proxy body handling
+**Location:** `42`
 
 **Reason:** The proxy intentionally validates the full upstream body against
 `AVATAR_MAX_RESPONSE_BYTES` before returning a `200` response so oversized
