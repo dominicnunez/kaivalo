@@ -39,7 +39,7 @@ jobs:
 
       - name: Find existing tracking issue
         id: find_issue
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
         with:
           script: |
             const title = process.env.ISSUE_TITLE;
@@ -61,7 +61,7 @@ jobs:
 
       - name: Create tracking issue
         if: steps.check.outputs.has_items_to_review == 'true' && steps.find_issue.outputs.issue_number == ''
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
         with:
           script: |
             await github.rest.issues.create({
@@ -76,7 +76,7 @@ jobs:
 
       - name: Update tracking issue
         if: steps.check.outputs.has_items_to_review == 'true' && steps.find_issue.outputs.issue_number != ''
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
         with:
           script: |
             await github.rest.issues.update({
@@ -93,7 +93,7 @@ jobs:
 
       - name: Close resolved tracking issue
         if: steps.check.outputs.has_items_to_review != 'true' && steps.find_issue.outputs.issue_number != ''
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
         with:
           script: |
             const issueNumber = Number(process.env.ISSUE_NUMBER);
