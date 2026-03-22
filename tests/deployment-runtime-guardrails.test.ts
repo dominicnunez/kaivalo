@@ -449,13 +449,17 @@ describe('deployment runtime guardrails', () => {
 		);
 	});
 
-	it('runs scheduled dependency review outside regular ci', () => {
+	it('keeps dependency review as a manual workflow outside regular ci', () => {
 		const workflow = readWorkflow(DEPENDENCY_SWEEP_WORKFLOW_PATH);
 		const { triggers, schedule } = getWorkflowTriggers(workflow);
 		const runCommands = getWorkflowRunCommands(workflow, 'check');
 
 		assert.ok(triggers.has('workflow_dispatch'));
-		assert.ok(schedule.length > 0, 'dependency sweep should define a schedule');
+		assert.strictEqual(
+			schedule.length,
+			0,
+			'dependency sweep should not define a schedule'
+		);
 		assert.ok(
 			runCommands.includes('pnpm install --frozen-lockfile --ignore-scripts')
 		);

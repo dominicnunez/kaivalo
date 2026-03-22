@@ -2,8 +2,6 @@ name: Dependency Sweep
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 13 * * 1'
 
 permissions:
   contents: read
@@ -111,4 +109,4 @@ jobs:
             });
         env:
           ISSUE_NUMBER: ${{ steps.find_issue.outputs.issue_number }}
-          RESOLUTION_COMMENT: The weekly dependency sweep found no direct dependency updates or unallowlisted advisories requiring review, so this tracking issue no longer reflects outstanding dependency maintenance work.
+          RESOLUTION_COMMENT: The manual dependency sweep found no direct dependency updates or unallowlisted advisories requiring review, so this tracking issue no longer reflects outstanding dependency maintenance work.
