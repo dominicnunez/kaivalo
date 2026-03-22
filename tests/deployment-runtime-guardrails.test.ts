@@ -54,7 +54,7 @@ function readRecord(value: unknown, message: string): WorkflowRecord {
 }
 
 function readString(value: unknown, message: string): string {
-	assert.strictEqual(typeof value, 'string', message);
+	assert.ok(typeof value === 'string', message);
 	return value;
 }
 
@@ -141,7 +141,7 @@ function getWorkflowJobTimeoutMinutes(
 		'number',
 		`job ${jobName} should define timeout-minutes`
 	);
-	return timeoutMinutes;
+	return timeoutMinutes as number;
 }
 
 function getWorkflowPermissions(workflow: WorkflowRecord) {

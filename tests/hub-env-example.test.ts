@@ -32,8 +32,10 @@ if (!runtimeEnvExampleMatch) {
 const runtimeEnvExample = parseEnvTemplate(runtimeEnvExampleMatch[1]);
 const commentedEnvValues = parseCommentedEnvTemplate(content);
 
-function parseEnvTemplate(value) {
-	const parsed = {};
+type EnvTemplate = Record<string, string>;
+
+function parseEnvTemplate(value: string): EnvTemplate {
+	const parsed: EnvTemplate = {};
 	for (const line of value.split('\n')) {
 		const trimmed = line.trim();
 		if (!trimmed || trimmed.startsWith('#')) {
@@ -64,7 +66,7 @@ function parseCommentedEnvTemplate(value) {
 	);
 }
 
-function assertEnvValues(actual, expected) {
+function assertEnvValues(actual: EnvTemplate, expected: EnvTemplate) {
 	for (const [key, value] of Object.entries(expected)) {
 		assert.strictEqual(actual[key], value);
 	}

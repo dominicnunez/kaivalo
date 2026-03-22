@@ -22,6 +22,31 @@ const ROOT = path.resolve(import.meta.dirname, '..');
 const HUB_DIR = path.join(ROOT, 'apps', 'hub');
 const UI_DIR = path.join(ROOT, 'packages', 'ui');
 
+function createRegistryResponse(metadata: {
+	version: string;
+	dependencies: { cookie: string };
+}) {
+	return {
+		ok: true,
+		status: 200,
+		statusText: 'OK',
+		async json() {
+			return metadata;
+		}
+	};
+}
+
+function createRegistryFailureResponse(status: number, statusText: string) {
+	return {
+		ok: false,
+		status,
+		statusText,
+		async json() {
+			throw new Error('json should not be called for failed responses');
+		}
+	};
+}
+
 function readGithubMultilineOutputEntry(serialized: string, name: string) {
 	const entryHeader = new RegExp(`^${name}<<([^\\n]+)$`, 'm');
 	const entryHeaderMatch = serialized.match(entryHeader);
@@ -278,19 +303,17 @@ describe('dependency sweep reporting', () => {
 
 	it('uses a bounded timeout when fetching latest SvelteKit metadata', async () => {
 		const controller = new AbortController();
-		const fetchMock = mock.fn(async () => ({
-			ok: true,
-			async json() {
-				return {
-					version: '2.53.4',
-					dependencies: {
-						cookie: '^0.6.0'
-					}
-				};
-			}
-		}));
+		const fetchMock = mock.fn(async () =>
+			createRegistryResponse({
+				version: '2.53.4',
+				dependencies: {
+					cookie: '^0.6.0'
+				}
+			})
+		);
 		const originalTimeout = AbortSignal.timeout;
-		AbortSignal.timeout = mock.fn(() => controller.signal);
+		const timeoutMock = mock.fn(() => controller.signal);
+		AbortSignal.timeout = timeoutMock as typeof AbortSignal.timeout;
 
 		try {
 			const metadata = await readLatestSvelteKitMetadata({
@@ -302,8 +325,8 @@ describe('dependency sweep reporting', () => {
 				cookieRange: '^0.6.0'
 			});
 			assert.strictEqual(fetchMock.mock.calls.length, 1);
-			assert.strictEqual(AbortSignal.timeout.mock.calls.length, 1);
-			assert.deepStrictEqual(AbortSignal.timeout.mock.calls[0]?.arguments, [
+			assert.strictEqual(timeoutMock.mock.calls.length, 1);
+			assert.deepStrictEqual(timeoutMock.mock.calls[0]?.arguments, [
 				FETCH_TIMEOUT_MS
 			]);
 		} finally {
@@ -317,24 +340,15 @@ describe('dependency sweep reporting', () => {
 		const fetchMock = mock.fn(async () => {
 			attempt += 1;
 			if (attempt === 1) {
-				return {
-					ok: false,
-					status: 503,
-					statusText: 'Service Unavailable'
-				};
+				return createRegistryFailureResponse(503, 'Service Unavailable');
 			}
 
-			return {
-				ok: true,
-				async json() {
-					return {
-						version: '2.53.4',
-						dependencies: {
-							cookie: '^0.6.0'
-						}
-					};
+			return createRegistryResponse({
+				version: '2.53.4',
+				dependencies: {
+					cookie: '^0.6.0'
 				}
-			};
+			});
 		});
 
 		const metadata = await readLatestSvelteKitMetadata({

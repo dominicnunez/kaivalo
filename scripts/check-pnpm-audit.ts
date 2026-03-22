@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { resolve } from 'node:path';
 import { isExecutedDirectly } from './is-executed-directly.ts';
 
@@ -37,35 +37,62 @@ const AUDIT_RETRYABLE_STDERR_PATTERNS = [
 ];
 const ALLOWLIST_PATH = resolve(ROOT, 'audit', 'pnpm-audit-allowlist.json');
 
-/**
- * @typedef {{
- *   package: string;
- *   source: number;
- *   severity: string;
- *   title: string;
- *   path?: string;
- *   url?: string;
- *   reason?: string;
- * }} AuditAllowlistEntry
- */
+export type AuditAllowlistEntry = {
+	package: string;
+	source: number;
+	severity: string;
+	title: string;
+	path?: string;
+	url?: string;
+	reason?: string;
+};
 
-/**
- * @typedef {{
- *   package: string;
- *   source: number;
- *   severity: string;
- *   title: string;
- *   url?: string;
- *   path?: string;
- * }} AuditAdvisory
- */
+export type AuditAdvisory = {
+	package: string;
+	source: number;
+	severity: string;
+	title: string;
+	url?: string;
+	path?: string;
+};
 
-/**
- * @param {string} filePath
- * @returns {AuditAllowlistEntry[]}
- */
-export function readAllowlist(filePath = ALLOWLIST_PATH) {
-	const parsed = JSON.parse(readFileSync(filePath, 'utf8'));
+type AuditReport = {
+	advisories?: Record<string, unknown>;
+	vulnerabilities?: Record<string, unknown>;
+};
+
+type AuditSpawnResult = Pick<
+	SpawnSyncReturns<string>,
+	'error' | 'status' | 'signal' | 'stdout' | 'stderr'
+> & {
+	status?: number | null;
+	signal?: NodeJS.Signals | null;
+	stdout?: string;
+	stderr?: string;
+};
+
+type AuditSpawnSync = (
+	command: string,
+	args: readonly string[],
+	options: {
+		cwd: string;
+		encoding: 'utf8';
+		timeout: number;
+	}
+) => AuditSpawnResult;
+
+type RunAuditDependencies = {
+	spawnSyncImpl?: AuditSpawnSync;
+	timeoutMs?: number;
+	maxAttempts?: number;
+	retryDelayMs?: number;
+	sleepImpl?: (delayMs: number) => void;
+};
+
+export function readAllowlist(
+	filePath = ALLOWLIST_PATH
+): AuditAllowlistEntry[] {
+	const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as unknown;
 	if (!Array.isArray(parsed)) {
 		throw new Error('pnpm audit allowlist must be an array');
 	}
@@ -73,13 +100,11 @@ export function readAllowlist(filePath = ALLOWLIST_PATH) {
 	return parsed.map((entry, index) => validateAllowlistEntry(entry, index));
 }
 
-/**
- * @param {unknown} value
- * @param {string} fieldName
- * @param {number} entryIndex
- * @returns {string}
- */
-function readRequiredAllowlistString(value, fieldName, entryIndex) {
+function readRequiredAllowlistString(
+	value: unknown,
+	fieldName: string,
+	entryIndex: number
+): string {
 	if (typeof value !== 'string' || value.trim() === '') {
 		throw new Error(
 			`pnpm audit allowlist entry ${entryIndex + 1} must include a non-empty ${fieldName}`
@@ -89,13 +114,11 @@ function readRequiredAllowlistString(value, fieldName, entryIndex) {
 	return value.trim();
 }
 
-/**
- * @param {unknown} value
- * @param {string} fieldName
- * @param {number} entryIndex
- * @returns {string | undefined}
- */
-function readOptionalAllowlistString(value, fieldName, entryIndex) {
+function readOptionalAllowlistString(
+	value: unknown,
+	fieldName: string,
+	entryIndex: number
+): string | undefined {
 	if (value === undefined) {
 		return undefined;
 	}
@@ -103,19 +126,17 @@ function readOptionalAllowlistString(value, fieldName, entryIndex) {
 	return readRequiredAllowlistString(value, fieldName, entryIndex);
 }
 
-/**
- * @param {unknown} entry
- * @param {number} entryIndex
- * @returns {AuditAllowlistEntry}
- */
-function validateAllowlistEntry(entry, entryIndex) {
+function validateAllowlistEntry(
+	entry: unknown,
+	entryIndex: number
+): AuditAllowlistEntry {
 	if (!entry || typeof entry !== 'object') {
 		throw new Error(
 			`pnpm audit allowlist entry ${entryIndex + 1} must be an object`
 		);
 	}
 
-	const record = /** @type {Record<string, unknown>} */ entry;
+	const record = entry as Record<string, unknown>;
 	if (!Number.isInteger(record.source)) {
 		throw new Error(
 			`pnpm audit allowlist entry ${entryIndex + 1} must include an integer source`
@@ -124,7 +145,7 @@ function validateAllowlistEntry(entry, entryIndex) {
 
 	return {
 		package: readRequiredAllowlistString(record.package, 'package', entryIndex),
-		source: record.source,
+		source: record.source as number,
 		severity: readRequiredAllowlistString(
 			record.severity,
 			'severity',
@@ -137,12 +158,7 @@ function validateAllowlistEntry(entry, entryIndex) {
 	};
 }
 
-/**
- * @param {unknown} value
- * @param {string} fallback
- * @returns {string}
- */
-function readSeverity(value, fallback = 'unknown') {
+function readSeverity(value: unknown, fallback = 'unknown'): string {
 	if (typeof value !== 'string') {
 		return fallback;
 	}
@@ -151,20 +167,16 @@ function readSeverity(value, fallback = 'unknown') {
 	return normalized === '' ? fallback : normalized;
 }
 
-/**
- * @param {unknown} report
- * @returns {AuditAdvisory[]}
- */
-export function collectAuditAdvisories(report) {
+export function collectAuditAdvisories(report: unknown): AuditAdvisory[] {
 	if (!report || typeof report !== 'object') {
 		throw new Error('pnpm audit did not return an advisories report');
 	}
 
-	/** @type {AuditAdvisory[]} */
-	const advisories = [];
+	const advisories: AuditAdvisory[] = [];
+	const auditReport = report as AuditReport;
 
-	if ('advisories' in report) {
-		const advisoryMap = report.advisories;
+	if ('advisories' in auditReport) {
+		const advisoryMap = auditReport.advisories;
 		if (!advisoryMap || typeof advisoryMap !== 'object') {
 			return advisories;
 		}
@@ -209,7 +221,9 @@ export function collectAuditAdvisories(report) {
 
 				const paths =
 					'paths' in finding && Array.isArray(finding.paths)
-						? finding.paths.filter((path) => typeof path === 'string')
+						? finding.paths.filter(
+								(path: unknown): path is string => typeof path === 'string'
+							)
 						: [];
 				if (paths.length === 0) {
 					continue;
@@ -242,11 +256,11 @@ export function collectAuditAdvisories(report) {
 		return advisories;
 	}
 
-	if (!('vulnerabilities' in report)) {
+	if (!('vulnerabilities' in auditReport)) {
 		throw new Error('pnpm audit did not return an advisories report');
 	}
 
-	const vulnerabilities = report.vulnerabilities;
+	const vulnerabilities = auditReport.vulnerabilities;
 	if (!vulnerabilities || typeof vulnerabilities !== 'object') {
 		return advisories;
 	}
@@ -262,7 +276,9 @@ export function collectAuditAdvisories(report) {
 				: 'unknown';
 		const nodes =
 			'nodes' in vulnerability && Array.isArray(vulnerability.nodes)
-				? vulnerability.nodes.filter((node) => typeof node === 'string')
+				? vulnerability.nodes.filter(
+						(node): node is string => typeof node === 'string'
+					)
 				: [];
 		const via =
 			'via' in vulnerability && Array.isArray(vulnerability.via)
@@ -318,12 +334,10 @@ export function collectAuditAdvisories(report) {
 	return advisories;
 }
 
-/**
- * @param {AuditAdvisory} advisory
- * @param {AuditAllowlistEntry} allowlistEntry
- * @returns {boolean}
- */
-function matchesAllowlist(advisory, allowlistEntry) {
+function matchesAllowlist(
+	advisory: AuditAdvisory,
+	allowlistEntry: AuditAllowlistEntry
+): boolean {
 	return (
 		advisory.package === allowlistEntry.package &&
 		advisory.source === allowlistEntry.source &&
@@ -335,12 +349,10 @@ function matchesAllowlist(advisory, allowlistEntry) {
 	);
 }
 
-/**
- * @param {AuditAdvisory[]} advisories
- * @param {AuditAllowlistEntry[]} allowlist
- * @returns {AuditAdvisory[]}
- */
-export function findUnallowlistedAdvisories(advisories, allowlist) {
+export function findUnallowlistedAdvisories(
+	advisories: AuditAdvisory[],
+	allowlist: AuditAllowlistEntry[]
+): AuditAdvisory[] {
 	return advisories.filter(
 		(advisory) =>
 			!allowlist.some((allowlistEntry) =>
@@ -349,11 +361,7 @@ export function findUnallowlistedAdvisories(advisories, allowlist) {
 	);
 }
 
-/**
- * @param {AuditAdvisory[]} advisories
- * @returns {string}
- */
-function formatAdvisories(advisories) {
+function formatAdvisories(advisories: AuditAdvisory[]): string {
 	return advisories
 		.map((advisory) => {
 			const location = advisory.path ? ` at ${advisory.path}` : '';
@@ -362,7 +370,7 @@ function formatAdvisories(advisories) {
 		.join('\n');
 }
 
-function buildAuditFailureMessage(auditResult) {
+function buildAuditFailureMessage(auditResult: AuditSpawnResult): string {
 	const stderr = auditResult.stderr?.trim();
 	if (stderr) {
 		return `pnpm audit failed: ${stderr}`;
@@ -379,11 +387,7 @@ function buildAuditFailureMessage(auditResult) {
 	return 'pnpm audit failed';
 }
 
-/**
- * @param {string} output
- * @returns {unknown}
- */
-function parseAuditReport(output) {
+function parseAuditReport(output: string): unknown {
 	try {
 		return JSON.parse(output);
 	} catch (error) {
@@ -391,7 +395,7 @@ function parseAuditReport(output) {
 	}
 }
 
-function sleepSync(delayMs) {
+function sleepSync(delayMs: number): void {
 	if (delayMs <= 0) {
 		return;
 	}
@@ -399,7 +403,7 @@ function sleepSync(delayMs) {
 	Atomics.wait(AUDIT_SLEEP_BUFFER, 0, 0, delayMs);
 }
 
-function readAuditErrorCode(value) {
+function readAuditErrorCode(value: unknown): string | null {
 	if (typeof value !== 'string') {
 		return null;
 	}
@@ -408,7 +412,7 @@ function readAuditErrorCode(value) {
 	return normalized === '' ? null : normalized;
 }
 
-function isRetryableAuditError(error) {
+function isRetryableAuditError(error: Error & { code?: unknown }): boolean {
 	const code = readAuditErrorCode(error.code);
 	if (code && AUDIT_RETRYABLE_ERROR_CODES.has(code)) {
 		return true;
@@ -422,11 +426,13 @@ function isRetryableAuditError(error) {
 	);
 }
 
-function isTimeoutAuditError(error) {
+function isTimeoutAuditError(error: Error & { code?: unknown }): boolean {
 	return readAuditErrorCode(error.code) === 'ETIMEDOUT';
 }
 
-function readRetryableAuditFailureMessage(auditResult) {
+function readRetryableAuditFailureMessage(
+	auditResult: AuditSpawnResult
+): string | null {
 	const stderr = auditResult.stderr?.trim();
 	if (
 		stderr &&
@@ -439,11 +445,11 @@ function readRetryableAuditFailureMessage(auditResult) {
 }
 
 function throwRetryableAuditFailure(
-	message,
-	maxAttempts,
-	timeoutMs,
-	isTimeout
-) {
+	message: string,
+	maxAttempts: number,
+	timeoutMs: number,
+	isTimeout: boolean
+): never {
 	if (isTimeout) {
 		throw new Error(
 			`pnpm audit exceeded ${timeoutMs}ms timeout after ${maxAttempts} attempts`
@@ -461,7 +467,7 @@ export function runAudit({
 	maxAttempts = AUDIT_MAX_ATTEMPTS,
 	retryDelayMs = AUDIT_RETRY_DELAY_MS,
 	sleepImpl = sleepSync
-} = {}) {
+}: RunAuditDependencies = {}): unknown {
 	if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
 		throw new Error('pnpm audit maxAttempts must be a positive integer');
 	}
@@ -526,7 +532,7 @@ export function runAudit({
 	);
 }
 
-function setProcessExitCode(code) {
+function setProcessExitCode(code: number): void {
 	process.exitCode = code;
 }
 

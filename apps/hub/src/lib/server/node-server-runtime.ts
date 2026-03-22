@@ -355,17 +355,17 @@ export function createHubServer(options: HubServerOptions): {
 		};
 
 		const originalWriteHead = res.writeHead.bind(res);
-		const patchedWriteHead: typeof res.writeHead = (...args) => {
+		const patchedWriteHead = ((...args: Parameters<typeof res.writeHead>) => {
 			applyResponseSecurityHeaders(getWriteHeadOptions(args));
 			return Reflect.apply(originalWriteHead, res, args);
-		};
+		}) as typeof res.writeHead;
 		res.writeHead = patchedWriteHead;
 
 		const originalWrite = res.write.bind(res);
-		const patchedWrite: typeof res.write = (...args) => {
+		const patchedWrite = ((...args: Parameters<typeof res.write>) => {
 			applyResponseSecurityHeaders();
 			return Reflect.apply(originalWrite, res, args);
-		};
+		}) as typeof res.write;
 		res.write = patchedWrite;
 
 		const originalEnd = res.end.bind(res);

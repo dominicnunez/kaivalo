@@ -9,7 +9,7 @@ export function reserveLocalPort(host = '127.0.0.1') {
 		const reservation = net.createServer();
 		let released = false;
 		const release = () =>
-			new Promise((releaseResolve, releaseReject) => {
+			new Promise<void>((releaseResolve, releaseReject) => {
 				if (released) {
 					releaseResolve();
 					return;

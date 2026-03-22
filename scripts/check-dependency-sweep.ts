@@ -1,6 +1,6 @@
 import { appendFileSync, readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { relative, resolve } from 'node:path';
 import { parse } from 'yaml';
 import {
@@ -79,7 +79,7 @@ type LatestSvelteKitMetadata = {
 };
 
 type ReadLatestSvelteKitMetadataOptions = {
-	fetchImpl?: typeof fetch;
+	fetchImpl?: RegistryFetch;
 	maxAttempts?: number;
 	retryDelayMs?: number;
 	sleepImpl?: (delayMs: number) => Promise<void>;
@@ -112,8 +112,40 @@ type DependencySweepResult = {
 	readonly hasItemsToReview: boolean;
 };
 
+type OutdatedSpawnResult = Pick<
+	SpawnSyncReturns<string>,
+	'error' | 'status' | 'stdout' | 'stderr'
+>;
+
+type OutdatedSpawnSync = (
+	command: string,
+	args: readonly string[],
+	options: {
+		cwd: string;
+		encoding: 'utf8';
+		timeout: number;
+	}
+) => OutdatedSpawnResult;
+
+type RegistryFetchResponse = {
+	ok: boolean;
+	status: number;
+	statusText: string;
+	json(): Promise<unknown>;
+};
+
+type RegistryFetch = (
+	input: string,
+	init: {
+		headers: {
+			accept: string;
+		};
+		signal: AbortSignal;
+	}
+) => Promise<RegistryFetchResponse>;
+
 type RunOutdatedDependencies = {
-	spawnSyncImpl?: typeof spawnSync;
+	spawnSyncImpl?: OutdatedSpawnSync;
 	timeoutMs?: number;
 };
 
@@ -213,11 +245,14 @@ export function groupOutdatedDependenciesByWorkspace(
 	return Array.from(grouped.values())
 		.map((group) => ({
 			...group,
-			dependencies: group.dependencies.toSorted((left, right) =>
-				left.name.localeCompare(right.name)
+			dependencies: group.dependencies.toSorted(
+				(
+					left: WorkspaceOutdatedDependency,
+					right: WorkspaceOutdatedDependency
+				) => left.name.localeCompare(right.name)
 			)
 		}))
-		.toSorted((left, right) =>
+		.toSorted((left: WorkspaceOutdatedGroup, right: WorkspaceOutdatedGroup) =>
 			left.location === right.location
 				? left.name.localeCompare(right.name)
 				: left.location.localeCompare(right.location)
@@ -235,7 +270,22 @@ export function readPnpmOverrides(
 
 	return Object.entries(packageJson.pnpm?.overrides ?? {})
 		.map(([name, value]) => ({ name, value }))
-		.toSorted((left, right) => left.name.localeCompare(right.name));
+		.toSorted((left: PnpmOverride, right: PnpmOverride) =>
+			left.name.localeCompare(right.name)
+		);
+}
+
+type RegistryLatestMetadataRecord = {
+	version?: unknown;
+	dependencies?: {
+		cookie?: unknown;
+	};
+};
+
+function isRegistryLatestMetadataRecord(
+	value: unknown
+): value is RegistryLatestMetadataRecord {
+	return !!value && typeof value === 'object';
 }
 
 function parseVersion(version: string) {
@@ -469,7 +519,7 @@ function sleep(delayMs: number): Promise<void> {
 }
 
 async function fetchLatestSvelteKitMetadata(
-	fetchImpl: typeof fetch
+	fetchImpl: RegistryFetch
 ): Promise<LatestSvelteKitMetadata> {
 	let response;
 	try {
@@ -487,7 +537,7 @@ async function fetchLatestSvelteKitMetadata(
 		throw createRegistryHttpError(response.status, response.statusText);
 	}
 
-	let latestMetadata;
+	let latestMetadata: unknown;
 	try {
 		latestMetadata = await response.json();
 	} catch (error) {
@@ -496,12 +546,18 @@ async function fetchLatestSvelteKitMetadata(
 		throw createMetadataParseError(message, error);
 	}
 
-	if (!isValidSemverVersion(latestMetadata?.version)) {
+	if (
+		!isRegistryLatestMetadataRecord(latestMetadata) ||
+		typeof latestMetadata.version !== 'string' ||
+		!isValidSemverVersion(latestMetadata.version)
+	) {
 		throw new Error(REGISTRY_METADATA_VALIDATION_ERROR_MESSAGE);
 	}
 
+	const { version } = latestMetadata;
+
 	return {
-		version: latestMetadata.version,
+		version,
 		cookieRange:
 			typeof latestMetadata?.dependencies?.cookie === 'string'
 				? latestMetadata.dependencies.cookie

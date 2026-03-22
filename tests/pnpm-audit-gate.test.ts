@@ -17,6 +17,24 @@ import {
 
 const ROOT = resolve(import.meta.dirname, '..');
 
+function createSpawnAuditResult(
+	result: Partial<{
+		error: Error & { code?: string };
+		status: number | null;
+		signal: NodeJS.Signals | null;
+		stdout: string;
+		stderr: string;
+	}>
+) {
+	return {
+		error: result.error,
+		status: result.status,
+		signal: result.signal ?? null,
+		stdout: result.stdout ?? '',
+		stderr: result.stderr ?? ''
+	};
+}
+
 describe('pnpm audit gate', () => {
 	it('collects concrete advisory records from pnpm audit output', () => {
 		const advisories = collectAuditAdvisories({
@@ -187,18 +205,18 @@ describe('pnpm audit gate', () => {
 			spawnSyncImpl: () => {
 				attemptCount += 1;
 				if (attemptCount === 1) {
-					return {
+					return createSpawnAuditResult({
 						error: Object.assign(new Error('timed out'), {
 							code: 'ETIMEDOUT'
 						})
-					};
+					});
 				}
 
-				return {
+				return createSpawnAuditResult({
 					status: 0,
 					stdout: '{"vulnerabilities":{}}',
 					stderr: ''
-				};
+				});
 			},
 			sleepImpl: (delayMs) => {
 				retryDelays.push(delayMs);
@@ -218,21 +236,21 @@ describe('pnpm audit gate', () => {
 			spawnSyncImpl: () => {
 				attemptCount += 1;
 				if (attemptCount === 1) {
-					return {
+					return createSpawnAuditResult({
 						error: Object.assign(
 							new Error('getaddrinfo EAI_AGAIN registry.npmjs.org'),
 							{
 								code: 'EAI_AGAIN'
 							}
 						)
-					};
+					});
 				}
 
-				return {
+				return createSpawnAuditResult({
 					status: 0,
 					stdout: '{"vulnerabilities":{}}',
 					stderr: ''
-				};
+				});
 			},
 			sleepImpl: (delayMs) => {
 				retryDelays.push(delayMs);
@@ -252,18 +270,18 @@ describe('pnpm audit gate', () => {
 			spawnSyncImpl: () => {
 				attemptCount += 1;
 				if (attemptCount === 1) {
-					return {
+					return createSpawnAuditResult({
 						status: 1,
 						stdout: '',
 						stderr: 'ERR_PNPM_AUDIT_FETCH 503 Service Unavailable'
-					};
+					});
 				}
 
-				return {
+				return createSpawnAuditResult({
 					status: 0,
 					stdout: '{"vulnerabilities":{}}',
 					stderr: ''
-				};
+				});
 			},
 			sleepImpl: (delayMs) => {
 				retryDelays.push(delayMs);
@@ -284,11 +302,11 @@ describe('pnpm audit gate', () => {
 				runAudit({
 					spawnSyncImpl: () => {
 						attemptCount += 1;
-						return {
+						return createSpawnAuditResult({
 							error: Object.assign(new Error('timed out'), {
 								code: 'ETIMEDOUT'
 							})
-						};
+						});
 					},
 					sleepImpl: (delayMs) => {
 						retryDelays.push(delayMs);
@@ -314,11 +332,11 @@ describe('pnpm audit gate', () => {
 				runAudit({
 					spawnSyncImpl: () => {
 						attemptCount += 1;
-						return {
+						return createSpawnAuditResult({
 							error: Object.assign(new Error('spawn ENOENT'), {
 								code: 'ENOENT'
 							})
-						};
+						});
 					},
 					sleepImpl: () => {
 						throw new Error('non-timeout failures should not sleep');
@@ -337,11 +355,11 @@ describe('pnpm audit gate', () => {
 			spawnSyncImpl: (receivedCommand, receivedArgs) => {
 				command = receivedCommand;
 				args = receivedArgs;
-				return {
+				return createSpawnAuditResult({
 					status: 0,
 					stdout: '{"vulnerabilities":{}}',
 					stderr: ''
-				};
+				});
 			}
 		});
 
@@ -354,13 +372,14 @@ describe('pnpm audit gate', () => {
 		assert.throws(
 			() =>
 				runAudit({
-					spawnSyncImpl: () => ({
-						status: 1,
-						stdout: '{not json}',
-						stderr: ''
-					})
+					spawnSyncImpl: () =>
+						createSpawnAuditResult({
+							status: 1,
+							stdout: '{not json}',
+							stderr: ''
+						})
 				}),
-			(error) => {
+			(error: Error) => {
 				assert.match(error.message, /pnpm audit returned invalid JSON/);
 				return true;
 			}
@@ -371,12 +390,13 @@ describe('pnpm audit gate', () => {
 		assert.throws(
 			() =>
 				runAudit({
-					spawnSyncImpl: () => ({
-						status: null,
-						signal: 'SIGTERM',
-						stdout: '',
-						stderr: ''
-					})
+					spawnSyncImpl: () =>
+						createSpawnAuditResult({
+							status: null,
+							signal: 'SIGTERM',
+							stdout: '',
+							stderr: ''
+						})
 				}),
 			new Error('pnpm audit failed: terminated by SIGTERM')
 		);
@@ -424,7 +444,10 @@ describe('pnpm audit gate', () => {
 			}
 		);
 
-		if (result.error?.code === 'EPERM') {
+		if (
+			(result.error as (Error & { code?: string }) | undefined)?.code ===
+			'EPERM'
+		) {
 			t.skip('sandbox blocks child process spawning');
 			return;
 		}
