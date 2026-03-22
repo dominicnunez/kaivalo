@@ -33,6 +33,11 @@
 	},
 	"author": "Kai Valo",
 	"license": "MIT",
+	"pnpm": {
+		"overrides": {
+			"flatted": "3.4.2"
+		}
+	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
 		"eslint": "^10.0.3",
