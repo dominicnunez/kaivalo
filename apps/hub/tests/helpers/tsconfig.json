@@ -1,0 +1,25 @@
+{
+	"extends": "../../.svelte-kit/tsconfig.json",
+	"compilerOptions": {
+		"allowImportingTsExtensions": true,
+		"allowJs": false,
+		"esModuleInterop": true,
+		"forceConsistentCasingInFileNames": true,
+		"lib": ["ES2023", "DOM"],
+		"noImplicitAny": false,
+		"noEmit": true,
+		"resolveJsonModule": true,
+		"skipLibCheck": true,
+		"strict": false,
+		"target": "ES2023",
+		"types": ["node"],
+		"useUnknownInCatchVariables": false
+	},
+	"include": [
+		"./build-freshness.ts",
+		"./hub-build.ts",
+		"./hub-health.ts",
+		"./hub-runtime-env.ts",
+		"../../src/app.d.ts"
+	]
+}
