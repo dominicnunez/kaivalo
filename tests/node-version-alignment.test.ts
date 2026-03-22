@@ -168,6 +168,21 @@ describe('node runtime version alignment', () => {
 		}
 	});
 
+	it('installs production dependencies without interactive pruning in Docker', () => {
+		const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
+
+		assert.doesNotMatch(
+			dockerfile,
+			/\bpnpm prune --prod\b/,
+			'Dockerfile should not rely on interactive pnpm pruning in CI'
+		);
+		assert.match(
+			dockerfile,
+			/\bpnpm install --prod --frozen-lockfile --ignore-scripts\b/,
+			'Dockerfile should install production dependencies directly'
+		);
+	});
+
 	it('keeps the required shared build helpers in the Docker build context', () => {
 		const dockerignore = readFileSync(DOCKERIGNORE_PATH, 'utf8');
 
