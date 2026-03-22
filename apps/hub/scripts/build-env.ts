@@ -222,6 +222,7 @@ export function runHubBuildWithEnv({
 	assertNodeVersion();
 
 	const steps = [
+		['pnpm', 'exec', 'svelte-kit', 'sync'],
 		['vite', 'build'],
 		[process.execPath, 'scripts/prepare-runtime.ts']
 	] as const;
