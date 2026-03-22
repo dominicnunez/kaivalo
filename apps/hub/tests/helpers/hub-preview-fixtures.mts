@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { createSign, generateKeyPairSync } from 'node:crypto';
-import { AVATAR_MAX_RESPONSE_BYTES } from '../../apps/hub/src/lib/server/avatar-proxy.ts';
+import { AVATAR_MAX_RESPONSE_BYTES } from '../../src/lib/server/avatar-proxy.ts';
 
 const PEER_ADDRESS_OVERRIDE_HEADER = 'x-kaivalo-preview-peer-address';
 const PREVIEW_SESSION_COOKIE_VALUE = 'preview-session';

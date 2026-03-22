@@ -16,7 +16,7 @@ import {
 
 const AUTHKIT_COOKIE_NAME = '__Host-wos_session';
 const previewFixtureImport = new URL(
-	'../../../tests/helpers/hub-preview-fixtures.mts',
+	'./helpers/hub-preview-fixtures.mts',
 	import.meta.url
 ).href;
 

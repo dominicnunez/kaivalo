@@ -15,7 +15,7 @@ import {
 describe('auth landing page behavior', () => {
 	const trustedPathPrefixes = ['/auth/sign-in', '/user_management/authorize'];
 	const previewFixtureImport = new URL(
-		'../../../tests/helpers/hub-preview-fixtures.mts',
+		'./helpers/hub-preview-fixtures.mts',
 		import.meta.url
 	).href;
 	let preview;

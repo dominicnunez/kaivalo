@@ -9,7 +9,7 @@ import { signInThroughWorkosCallback } from './helpers/workos-auth-flow.ts';
 import { assertSessionCookieContract } from './helpers/session-cookie.ts';
 
 const PREVIEW_FIXTURE_IMPORT = new URL(
-	'../../../tests/helpers/hub-preview-fixtures.mts',
+	'./helpers/hub-preview-fixtures.mts',
 	import.meta.url
 ).href;
 const AVATAR_SOURCE =

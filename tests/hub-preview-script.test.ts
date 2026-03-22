@@ -37,7 +37,7 @@ const STARTUP_DELAY_MS = 250;
 const PROCESS_EXIT_TIMEOUT_MS = 5000;
 const MAX_STARTUP_OUTPUT_LINES = 120;
 const PREVIEW_FIXTURE_IMPORT = new URL(
-	'./helpers/hub-preview-fixtures.mts',
+	'../apps/hub/tests/helpers/hub-preview-fixtures.mts',
 	import.meta.url
 ).href;
 const AUTHKIT_COOKIE_NAME = '__Host-wos_session';
