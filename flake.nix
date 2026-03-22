@@ -23,6 +23,9 @@
           inherit system;
           overlays = [ nodejslts-nix.overlays.default ];
         };
+        dockerCompat = pkgs.writeShellScriptBin "docker" ''
+          exec ${pkgs.podman}/bin/podman "$@"
+        '';
       in
       {
         devShells.default = pkgs.mkShell {
@@ -30,6 +33,8 @@
             nodejsLts
             pnpm
             git
+            podman
+            dockerCompat
             typescript-language-server
             svelte-language-server
             python3
