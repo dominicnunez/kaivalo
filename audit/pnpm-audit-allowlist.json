@@ -5,6 +5,6 @@
 		"severity": "low",
 		"title": "cookie accepts cookie name, path, and domain with out of bounds characters",
 		"path": "apps__hub>@sveltejs/kit>cookie",
-		"reason": "Tracked in audit/exceptions/risks.md until @sveltejs/kit stops depending on cookie < 0.7.0."
+		"reason": "Tracked in audit/risks/pnpm-lock.md until @sveltejs/kit stops depending on cookie < 0.7.0."
 	}
 ]
