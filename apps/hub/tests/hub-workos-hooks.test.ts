@@ -8,8 +8,11 @@ import {
 	getValidatedWorkosEnv,
 	LOOPBACK_PROXY_TRUST_ERROR_MESSAGE,
 	PROXY_HSTS_CONFIGURATION_ERROR_MESSAGE
-} from '../apps/hub/src/lib/server/workos-security.ts';
-import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
+} from '../src/lib/server/workos-security.ts';
+import {
+	httpGet,
+	startHubPreview
+} from '../../../tests/helpers/hub-preview.ts';
 import { signInThroughWorkosCallback } from './helpers/workos-auth-flow.ts';
 import { assertSessionCookieContract } from './helpers/session-cookie.ts';
 
@@ -23,7 +26,7 @@ const validEnv = {
 	ORIGIN: 'https://kaivalo.test'
 };
 const PREVIEW_FIXTURE_IMPORT = new URL(
-	'./helpers/hub-preview-fixtures.mts',
+	'../../../tests/helpers/hub-preview-fixtures.mts',
 	import.meta.url
 ).href;
 

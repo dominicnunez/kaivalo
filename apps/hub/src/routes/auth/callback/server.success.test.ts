@@ -20,7 +20,7 @@ import { WORKOS_CALLBACK_STATE_COOKIE_NAME } from '$lib/server/workos-auth.ts';
 import {
 	assertSessionCookieContract,
 	getSetCookieHeaders
-} from '../../../../../../tests/helpers/session-cookie.ts';
+} from '../../../../tests/helpers/session-cookie.ts';
 import { createSign, generateKeyPairSync, type KeyObject } from 'node:crypto';
 
 const WORKOS_AUTHENTICATE_URL =

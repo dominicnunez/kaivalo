@@ -24,12 +24,12 @@ import {
 	completeWorkosCodeExchange,
 	primeWorkosCallbackStateCookie,
 	signInThroughWorkosCallback
-} from './helpers/workos-auth-flow.ts';
+} from '../apps/hub/tests/helpers/workos-auth-flow.ts';
 import {
 	assertSessionCookieContract,
 	getSetCookieHeaders
-} from './helpers/session-cookie.ts';
-import { buildWorkosCallbackState } from './helpers/workos-callback-state.ts';
+} from '../apps/hub/tests/helpers/session-cookie.ts';
+import { buildWorkosCallbackState } from '../apps/hub/tests/helpers/workos-callback-state.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const STARTUP_TIMEOUT_MS = 15000;

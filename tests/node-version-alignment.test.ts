@@ -145,7 +145,8 @@ describe('node runtime version alignment', () => {
 			'check:watch',
 			'pretest',
 			'test:unit',
-			'test:build'
+			'test:build',
+			'test:integration'
 		]) {
 			assertRunsNodePreflightFirst(
 				scriptName,

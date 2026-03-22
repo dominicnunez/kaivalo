@@ -1,4 +1,4 @@
-import { WORKOS_CALLBACK_STATE_COOKIE_NAME } from '../../apps/hub/src/lib/server/workos-auth.ts';
+import { WORKOS_CALLBACK_STATE_COOKIE_NAME } from '../../src/lib/server/workos-auth.ts';
 
 export function createWorkosCallbackStateCookie(state = 'test-state'): string {
 	return `${WORKOS_CALLBACK_STATE_COOKIE_NAME}=${state}`;

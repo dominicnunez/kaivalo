@@ -12,5 +12,6 @@
 		"strict": true,
 		"moduleResolution": "bundler",
 		"types": ["node", "vitest/globals"]
-	}
+	},
+	"exclude": ["tests"]
 }

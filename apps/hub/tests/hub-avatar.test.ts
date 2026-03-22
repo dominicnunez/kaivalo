@@ -1,12 +1,15 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { toAvatarProxyUrl } from '../apps/hub/src/lib/server/avatar-url.ts';
-import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
+import { toAvatarProxyUrl } from '../src/lib/server/avatar-url.ts';
+import {
+	httpGet,
+	startHubPreview
+} from '../../../tests/helpers/hub-preview.ts';
 import { signInThroughWorkosCallback } from './helpers/workos-auth-flow.ts';
 import { assertSessionCookieContract } from './helpers/session-cookie.ts';
 
 const PREVIEW_FIXTURE_IMPORT = new URL(
-	'./helpers/hub-preview-fixtures.mts',
+	'../../../tests/helpers/hub-preview-fixtures.mts',
 	import.meta.url
 ).href;
 const AVATAR_SOURCE =

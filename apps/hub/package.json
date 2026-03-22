@@ -11,8 +11,9 @@
 		"check:watch": "pnpm run node:check && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"pretest": "pnpm run node:check && svelte-kit sync",
 		"test": "pnpm run test:unit && pnpm run test:build",
-		"test:unit": "pnpm run node:check && vitest run --exclude src/build.test.ts",
+		"test:unit": "pnpm run node:check && vitest run src --exclude src/build.test.ts",
 		"test:build": "pnpm run node:check && vitest run src/build.test.ts",
+		"test:integration": "pnpm run node:check && node --test --test-concurrency=1 tests/hub-auth-landing.test.ts tests/hub-avatar.test.ts tests/hub-favicon.test.ts tests/hub-links.test.ts tests/hub-service-controls.test.ts tests/hub-og-image.test.ts tests/hub-seo-meta.test.ts tests/hub-sign-out.test.ts tests/hub-tailwind.test.ts tests/hub-workos-callback.test.ts tests/hub-workos-hooks.test.ts",
 		"test:watch": "vitest"
 	},
 	"devDependencies": {

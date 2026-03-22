@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { createAuthCallbackGetHandler } from '../apps/hub/src/lib/auth/callback-handler.ts';
-import { createWorkosCallbackRequestHandler } from '../apps/hub/src/lib/server/workos-auth.ts';
+import { createAuthCallbackGetHandler } from '../src/lib/auth/callback-handler.ts';
+import { createWorkosCallbackRequestHandler } from '../src/lib/server/workos-auth.ts';
 import {
 	AUTH_ERROR_INCIDENT_QUERY_NAME,
 	AUTH_ERROR_QUERY_NAME,
@@ -9,14 +9,17 @@ import {
 	AUTH_ERROR_SIGNATURE_QUERY_NAME,
 	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
 	readVerifiedAuthError
-} from '../apps/hub/src/lib/auth/auth-error-query.ts';
+} from '../src/lib/auth/auth-error-query.ts';
 import {
 	AUTH_NOTICE_QUERY_NAME,
 	AUTH_NOTICE_SIGN_IN_CANCELLED_MESSAGE,
 	AUTH_NOTICE_SIGN_IN_CANCELLED_VALUE
-} from '../apps/hub/src/lib/auth/auth-notice-query.ts';
+} from '../src/lib/auth/auth-notice-query.ts';
 import { isHttpError, isRedirect } from '@sveltejs/kit';
-import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
+import {
+	httpGet,
+	startHubPreview
+} from '../../../tests/helpers/hub-preview.ts';
 import {
 	beginWorkosAuthFlow,
 	completeWorkosCodeExchange,

@@ -1,13 +1,16 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
-import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
+import {
+	httpGet,
+	startHubPreview
+} from '../../../tests/helpers/hub-preview.ts';
 import { signInThroughWorkosCallback } from './helpers/workos-auth-flow.ts';
 import { assertSessionCookieContract } from './helpers/session-cookie.ts';
 
 const AUTHKIT_COOKIE_NAME = '__Host-wos_session';
 const previewFixtureImport = new URL(
-	'./helpers/hub-preview-fixtures.mts',
+	'../../../tests/helpers/hub-preview-fixtures.mts',
 	import.meta.url
 ).href;
 

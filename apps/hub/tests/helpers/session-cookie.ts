@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { AUTHKIT_COOKIE_NAME } from '../../apps/hub/src/lib/server/authkit-config.ts';
+import { AUTHKIT_COOKIE_NAME } from '../../src/lib/server/authkit-config.ts';
 
 const SESSION_COOKIE_MAX_AGE = String(60 * 60 * 24 * 400);
 

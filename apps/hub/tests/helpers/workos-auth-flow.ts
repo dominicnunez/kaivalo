@@ -4,7 +4,7 @@ import {
 	createBrowserCookieJar,
 	httpGet,
 	type PreviewHttpResponse
-} from './hub-preview.ts';
+} from '../../../../tests/helpers/hub-preview.ts';
 
 type StartedWorkosAuthFlow = {
 	cookieJar: CookieJar;

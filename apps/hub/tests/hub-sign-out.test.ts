@@ -1,8 +1,12 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
-import { createSignOutPostHandler } from '../apps/hub/src/lib/auth/sign-out-handler.ts';
+import { createSignOutPostHandler } from '../src/lib/auth/sign-out-handler.ts';
 import { isHttpError, isRedirect } from '@sveltejs/kit';
-import { httpGet, httpPost, startHubPreview } from './helpers/hub-preview.ts';
+import {
+	httpGet,
+	httpPost,
+	startHubPreview
+} from '../../../tests/helpers/hub-preview.ts';
 import { signInThroughWorkosCallback } from './helpers/workos-auth-flow.ts';
 import {
 	assertClearedSessionCookieContract,
@@ -12,7 +16,7 @@ import {
 
 const AUTHKIT_COOKIE_NAME = '__Host-wos_session';
 const previewFixtureImport = new URL(
-	'./helpers/hub-preview-fixtures.mts',
+	'../../../tests/helpers/hub-preview-fixtures.mts',
 	import.meta.url
 ).href;
 

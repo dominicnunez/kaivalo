@@ -6,6 +6,7 @@ import { svelteTesting } from '@testing-library/svelte/vite';
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit(), svelteTesting()],
 	test: {
+		include: ['src/**/*.test.ts'],
 		environment: 'jsdom',
 		globals: true
 	}

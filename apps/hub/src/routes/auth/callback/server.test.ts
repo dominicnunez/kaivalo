@@ -15,7 +15,7 @@ import {
 } from '$lib/auth/auth-notice-query.ts';
 import { AUTHKIT_COOKIE_NAME } from '$lib/server/authkit-config.ts';
 import { readVerifiedAvatarProxySource } from '$lib/server/avatar-url.ts';
-import { assertSessionCookieContract } from '../../../../../../tests/helpers/session-cookie.ts';
+import { assertSessionCookieContract } from '../../../../tests/helpers/session-cookie.ts';
 
 const SESSION_COOKIE_PAIR = `${AUTHKIT_COOKIE_NAME}=callback-session`;
 const SESSION_COOKIE_MAX_AGE = String(60 * 60 * 24 * 400);

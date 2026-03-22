@@ -24,7 +24,7 @@
 		"test:fast": "pnpm run node:check && pnpm run lint && pnpm run test:core",
 		"test:full": "pnpm run test:fast && pnpm run test:build:hub && pnpm run test:preview:hub && pnpm run test:production && pnpm run test:integration && pnpm run audit:deps",
 		"test:production": "pnpm run node:check && node --test --test-concurrency=1 tests/docker-build-context.test.ts tests/hub-adapter-node.test.ts tests/production-image-smoke-build.integration.test.ts",
-		"test:integration": "pnpm run node:check && node --test --test-concurrency=1 tests/hub-auth-landing.test.ts tests/hub-avatar.test.ts tests/hub-favicon.test.ts tests/hub-links.test.ts tests/hub-service-controls.test.ts tests/hub-og-image.test.ts tests/hub-seo-meta.test.ts tests/hub-sign-out.test.ts tests/hub-tailwind.test.ts tests/hub-workos-callback.test.ts tests/hub-workos-hooks.test.ts",
+		"test:integration": "pnpm run node:check && pnpm --dir apps/hub run test:integration",
 		"test:ci": "pnpm run test:fast",
 		"test:deploy": "pnpm run test:full"
 	},
