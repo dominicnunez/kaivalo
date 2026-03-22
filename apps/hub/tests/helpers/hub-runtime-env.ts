@@ -1,5 +1,5 @@
 import { isIP } from 'node:net';
-import { sanitizeHubRuntimeEnv as sanitizeHubRuntimeEnvBase } from '../../apps/hub/scripts/runtime-env.ts';
+import { sanitizeHubRuntimeEnv as sanitizeHubRuntimeEnvBase } from '../../scripts/runtime-env.ts';
 
 export const sanitizeHubRuntimeEnv = sanitizeHubRuntimeEnvBase;
 

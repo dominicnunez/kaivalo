@@ -27,6 +27,12 @@ const TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH = path.join(
 	'workflows',
 	'track-sveltekit-upstream.yml'
 );
+const DEPENDENCY_SWEEP_WORKFLOW_PATH = path.join(
+	ROOT,
+	'.github',
+	'workflows',
+	'dependency-sweep.yml'
+);
 const DEPLOYABLE_REF_CONDITION =
 	"github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')";
 const FULL_LENGTH_ACTION_REF_PATTERN =
@@ -286,7 +292,8 @@ describe('deployment runtime guardrails', () => {
 			CI_WORKFLOW_PATH,
 			DEPLOY_WORKFLOW_PATH,
 			DAILY_FULL_SUITE_WORKFLOW_PATH,
-			TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH
+			TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH,
+			DEPENDENCY_SWEEP_WORKFLOW_PATH
 		];
 
 		for (const workflowPath of workflowPaths) {
@@ -310,7 +317,8 @@ describe('deployment runtime guardrails', () => {
 			CI_WORKFLOW_PATH,
 			DEPLOY_WORKFLOW_PATH,
 			DAILY_FULL_SUITE_WORKFLOW_PATH,
-			TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH
+			TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH,
+			DEPENDENCY_SWEEP_WORKFLOW_PATH
 		];
 
 		for (const workflowPath of workflowPaths) {
@@ -436,12 +444,32 @@ describe('deployment runtime guardrails', () => {
 		);
 	});
 
+	it('runs scheduled dependency review outside regular ci', () => {
+		const workflow = readWorkflow(DEPENDENCY_SWEEP_WORKFLOW_PATH);
+		const { triggers, schedule } = getWorkflowTriggers(workflow);
+		const runCommands = getWorkflowRunCommands(workflow, 'check');
+
+		assert.ok(triggers.has('workflow_dispatch'));
+		assert.ok(schedule.length > 0, 'dependency sweep should define a schedule');
+		assert.ok(
+			runCommands.includes('pnpm install --frozen-lockfile --ignore-scripts')
+		);
+		assert.ok(
+			runCommands.includes(
+				'node scripts/check-dependency-sweep.ts --github-output'
+			)
+		);
+	});
+
 	it('keeps workflow permissions scoped to the minimum required access', () => {
 		const ciWorkflow = readWorkflow(CI_WORKFLOW_PATH);
 		const dailyFullSuiteWorkflow = readWorkflow(DAILY_FULL_SUITE_WORKFLOW_PATH);
 		const deployWorkflow = readWorkflow(DEPLOY_WORKFLOW_PATH);
 		const trackSvelteKitUpstreamWorkflow = readWorkflow(
 			TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH
+		);
+		const dependencySweepWorkflow = readWorkflow(
+			DEPENDENCY_SWEEP_WORKFLOW_PATH
 		);
 
 		assert.deepStrictEqual(getWorkflowPermissions(ciWorkflow), {
@@ -457,6 +485,10 @@ describe('deployment runtime guardrails', () => {
 				issues: 'write'
 			}
 		);
+		assert.deepStrictEqual(getWorkflowPermissions(dependencySweepWorkflow), {
+			contents: 'read',
+			issues: 'write'
+		});
 		assert.strictEqual(
 			deployWorkflow.permissions,
 			undefined,

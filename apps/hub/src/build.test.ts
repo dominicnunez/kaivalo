@@ -12,8 +12,8 @@ import {
 	getHubHealthResponseViolations,
 	getHubHealthUrl,
 	isHubHealthResponse
-} from '../../../tests/helpers/hub-health.ts';
-import { createHubBuiltRuntimeEnv } from '../../../tests/helpers/hub-runtime-env.ts';
+} from '../tests/helpers/hub-health.ts';
+import { createHubBuiltRuntimeEnv } from '../tests/helpers/hub-runtime-env.ts';
 
 const hubDir = process.cwd();
 const { buildDir, repoRoot } = getHubBuildPaths(hubDir);

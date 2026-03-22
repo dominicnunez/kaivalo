@@ -5,14 +5,14 @@ export {
 	HUB_HEALTH_CONTENT_TYPE,
 	HUB_HEALTH_PATH,
 	HUB_HEALTH_STATUS_CODE
-} from '../../apps/hub/src/lib/server/health-contract.ts';
+} from '../../src/lib/server/health-contract.ts';
 import {
 	HUB_HEALTH_BODY,
 	HUB_HEALTH_CACHE_CONTROL,
 	HUB_HEALTH_CONTENT_TYPE,
 	HUB_HEALTH_PATH,
 	HUB_HEALTH_STATUS_CODE
-} from '../../apps/hub/src/lib/server/health-contract.ts';
+} from '../../src/lib/server/health-contract.ts';
 
 type HeaderValue = string | number | readonly string[] | undefined;
 type HeaderCollection =

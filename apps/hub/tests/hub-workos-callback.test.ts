@@ -16,10 +16,7 @@ import {
 	AUTH_NOTICE_SIGN_IN_CANCELLED_VALUE
 } from '../src/lib/auth/auth-notice-query.ts';
 import { isHttpError, isRedirect } from '@sveltejs/kit';
-import {
-	httpGet,
-	startHubPreview
-} from '../../../tests/helpers/hub-preview.ts';
+import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 import {
 	beginWorkosAuthFlow,
 	completeWorkosCodeExchange,

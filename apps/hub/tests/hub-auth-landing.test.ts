@@ -7,10 +7,7 @@ import {
 	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
 	readVerifiedAuthError
 } from '../src/lib/auth/auth-error-query.ts';
-import {
-	startHubPreview,
-	httpGet
-} from '../../../tests/helpers/hub-preview.ts';
+import { startHubPreview, httpGet } from './helpers/hub-preview.ts';
 
 describe('auth landing page behavior', () => {
 	const trustedPathPrefixes = ['/auth/sign-in', '/user_management/authorize'];

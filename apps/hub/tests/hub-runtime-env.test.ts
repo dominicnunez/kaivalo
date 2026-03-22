@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
 	applyHubRuntimeEnv,
 	getHubPreviewBaseEnv
-} from '../apps/hub/scripts/runtime-env.ts';
+} from '../scripts/runtime-env.ts';
 import {
 	createHubBuiltRuntimeEnv,
 	createHubPreviewEnv,

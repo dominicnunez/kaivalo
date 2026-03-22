@@ -1,10 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { toAvatarProxyUrl } from '../src/lib/server/avatar-url.ts';
-import {
-	httpGet,
-	startHubPreview
-} from '../../../tests/helpers/hub-preview.ts';
+import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 import { signInThroughWorkosCallback } from './helpers/workos-auth-flow.ts';
 import { assertSessionCookieContract } from './helpers/session-cookie.ts';
 

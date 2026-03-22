@@ -4,13 +4,13 @@ import { join, resolve } from 'node:path';
 import {
 	RUNTIME_SERVER_FILES,
 	RUNTIME_SHARED_FILES
-} from '../../apps/hub/scripts/runtime-server-files.ts';
-import { getHubBuildEnv } from '../../apps/hub/scripts/build-env.ts';
+} from '../../scripts/runtime-server-files.ts';
+import { getHubBuildEnv } from '../../scripts/build-env.ts';
 import { clearNewestMtimeCache, getNewestMtimeMs } from './build-freshness.ts';
 import { sanitizeHubRuntimeEnv } from './hub-runtime-env.ts';
 
-const ROOT = resolve(import.meta.dirname, '..', '..');
-const HUB_DIR = join(ROOT, 'apps', 'hub');
+const HUB_DIR = resolve(import.meta.dirname, '..', '..');
+const ROOT = resolve(HUB_DIR, '..', '..');
 const BUILD_DIR = join(HUB_DIR, 'build');
 const BUILD_ENTRY = join(BUILD_DIR, 'index.js');
 

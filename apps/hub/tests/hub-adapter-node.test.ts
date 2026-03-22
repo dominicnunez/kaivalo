@@ -5,11 +5,10 @@ import { spawn } from 'node:child_process';
 import http from 'node:http';
 import { ensureHubBuild } from './helpers/hub-build.ts';
 import { httpGet } from './helpers/hub-preview.ts';
-import { reserveLocalPort } from './helpers/network.ts';
+import { reserveLocalPort } from '../../../tests/helpers/network.ts';
 import { createHubBuiltRuntimeEnv } from './helpers/hub-runtime-env.ts';
 
-const ROOT = path.resolve(import.meta.dirname, '..');
-const HUB_DIR = path.join(ROOT, 'apps', 'hub');
+const HUB_DIR = path.resolve(import.meta.dirname, '..');
 const BUILD_ENTRY = path.join(HUB_DIR, 'server.ts');
 const STARTUP_RETRY_COUNT = 40;
 const STARTUP_DELAY_MS = 250;

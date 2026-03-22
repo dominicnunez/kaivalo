@@ -17,6 +17,12 @@ const TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH = path.join(
 	'workflows',
 	'track-sveltekit-upstream.yml'
 );
+const DEPENDENCY_SWEEP_WORKFLOW_PATH = path.join(
+	ROOT,
+	'.github',
+	'workflows',
+	'dependency-sweep.yml'
+);
 const EXPECTED_DEPLOY_JOB_TIMEOUTS = {
 	test: 45,
 	build: 20,
@@ -140,6 +146,20 @@ describe('workflow hardening', () => {
 
 	it('ignores pull requests when reusing an upstream tracking issue', () => {
 		const workflow = readWorkflow(TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH);
+		const step = getWorkflowStep(
+			workflow,
+			'check',
+			'Find existing tracking issue'
+		);
+		const script = step.with.script ?? '';
+
+		assert.match(script, /issues\.listForRepo/);
+		assert.match(script, /!issue\.pull_request/);
+		assert.match(script, /issue\.title === title/);
+	});
+
+	it('ignores pull requests when reusing a dependency tracking issue', () => {
+		const workflow = readWorkflow(DEPENDENCY_SWEEP_WORKFLOW_PATH);
 		const step = getWorkflowStep(
 			workflow,
 			'check',

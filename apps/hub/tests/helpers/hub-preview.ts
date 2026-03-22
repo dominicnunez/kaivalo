@@ -9,7 +9,7 @@ import {
 	getHubHealthUrl,
 	isHubHealthResponse
 } from './hub-health.ts';
-import { reserveLocalPort } from './network.ts';
+import { reserveLocalPort } from '../../../../tests/helpers/network.ts';
 import { createHubPreviewEnv } from './hub-runtime-env.ts';
 
 const REQUEST_TIMEOUT_MS = 5000;
@@ -317,10 +317,7 @@ async function acquireSharedHubPreview(retryOnStale = true) {
 async function createHubPreview(options = {}) {
 	ensureHubBuild();
 
-	const hubDir = path.join(
-		path.resolve(import.meta.dirname, '..', '..'),
-		'apps/hub'
-	);
+	const hubDir = path.resolve(import.meta.dirname, '..', '..');
 	let lastError = null;
 
 	for (let attempt = 0; attempt < PREVIEW_PORT_RETRY_COUNT; attempt += 1) {

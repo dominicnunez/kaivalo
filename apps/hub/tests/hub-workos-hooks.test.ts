@@ -9,10 +9,7 @@ import {
 	LOOPBACK_PROXY_TRUST_ERROR_MESSAGE,
 	PROXY_HSTS_CONFIGURATION_ERROR_MESSAGE
 } from '../src/lib/server/workos-security.ts';
-import {
-	httpGet,
-	startHubPreview
-} from '../../../tests/helpers/hub-preview.ts';
+import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 import { signInThroughWorkosCallback } from './helpers/workos-auth-flow.ts';
 import { assertSessionCookieContract } from './helpers/session-cookie.ts';
 

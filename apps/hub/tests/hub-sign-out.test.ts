@@ -2,11 +2,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import { createSignOutPostHandler } from '../src/lib/auth/sign-out-handler.ts';
 import { isHttpError, isRedirect } from '@sveltejs/kit';
-import {
-	httpGet,
-	httpPost,
-	startHubPreview
-} from '../../../tests/helpers/hub-preview.ts';
+import { httpGet, httpPost, startHubPreview } from './helpers/hub-preview.ts';
 import { signInThroughWorkosCallback } from './helpers/workos-auth-flow.ts';
 import {
 	assertClearedSessionCookieContract,

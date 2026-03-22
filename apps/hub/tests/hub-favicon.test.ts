@@ -1,9 +1,6 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert';
-import {
-	httpGet,
-	startHubPreview
-} from '../../../tests/helpers/hub-preview.ts';
+import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 
 function assertStaticAssetHeaders(response) {
 	const contentLength = Number(response.headers['content-length'] ?? 0);

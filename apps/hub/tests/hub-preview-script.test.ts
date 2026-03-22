@@ -9,7 +9,7 @@ import {
 	AUTH_ERROR_QUERY_VALUE,
 	AUTH_ERROR_TIMESTAMP_QUERY_NAME,
 	readVerifiedAuthError
-} from '../apps/hub/src/lib/auth/auth-error-query.ts';
+} from '../src/lib/auth/auth-error-query.ts';
 import {
 	getHubHealthResponseViolations,
 	getHubHealthUrl,
@@ -17,27 +17,27 @@ import {
 } from './helpers/hub-health.ts';
 import { httpGet, httpPost, startHubPreview } from './helpers/hub-preview.ts';
 import { assertHubBuildAvailable } from './helpers/hub-build.ts';
-import { reserveLocalPort } from './helpers/network.ts';
+import { reserveLocalPort } from '../../../tests/helpers/network.ts';
 import { createHubPreviewScriptEnv } from './helpers/hub-runtime-env.ts';
 import {
 	beginWorkosAuthFlow,
 	completeWorkosCodeExchange,
 	primeWorkosCallbackStateCookie,
 	signInThroughWorkosCallback
-} from '../apps/hub/tests/helpers/workos-auth-flow.ts';
+} from './helpers/workos-auth-flow.ts';
 import {
 	assertSessionCookieContract,
 	getSetCookieHeaders
-} from '../apps/hub/tests/helpers/session-cookie.ts';
-import { buildWorkosCallbackState } from '../apps/hub/tests/helpers/workos-callback-state.ts';
+} from './helpers/session-cookie.ts';
+import { buildWorkosCallbackState } from './helpers/workos-callback-state.ts';
 
-const ROOT = path.resolve(import.meta.dirname, '..');
+const HUB_DIR = path.resolve(import.meta.dirname, '..');
 const STARTUP_TIMEOUT_MS = 15000;
 const STARTUP_DELAY_MS = 250;
 const PROCESS_EXIT_TIMEOUT_MS = 5000;
 const MAX_STARTUP_OUTPUT_LINES = 120;
 const PREVIEW_FIXTURE_IMPORT = new URL(
-	'../apps/hub/tests/helpers/hub-preview-fixtures.mts',
+	'./helpers/hub-preview-fixtures.mts',
 	import.meta.url
 ).href;
 const AUTHKIT_COOKIE_NAME = '__Host-wos_session';
@@ -237,8 +237,8 @@ async function startPreviewScript({
 		}
 	};
 
-	const preview = spawn('pnpm', ['--dir', 'apps/hub', 'run', 'preview'], {
-		cwd: ROOT,
+	const preview = spawn('pnpm', ['run', 'preview'], {
+		cwd: HUB_DIR,
 		stdio: ['ignore', 'pipe', 'pipe'],
 		detached: true,
 		env: createHubPreviewScriptEnv({

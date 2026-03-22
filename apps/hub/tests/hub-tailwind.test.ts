@@ -1,9 +1,6 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
-import {
-	httpGet,
-	startHubPreview
-} from '../../../tests/helpers/hub-preview.ts';
+import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 
 function getStylesheetHref(html) {
 	const linkTags = [...html.matchAll(/<link\b[^>]*>/gi)].map(
