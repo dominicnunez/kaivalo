@@ -142,8 +142,6 @@ describe('node runtime version alignment', () => {
 			'build',
 			'preview',
 			'check',
-			'check:watch',
-			'pretest',
 			'test:core',
 			'test:unit',
 			'test:build',

@@ -6,13 +6,11 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { isExecutedDirectly } from '../scripts/is-executed-directly.ts';
 
+const ROOT = path.resolve(import.meta.dirname, '..');
+
 describe('direct execution guards', () => {
 	it('matches the current module when the script is invoked directly', () => {
-		const scriptPath = path.join(
-			process.cwd(),
-			'scripts',
-			'check-node-version.ts'
-		);
+		const scriptPath = path.join(ROOT, 'scripts', 'check-node-version.ts');
 
 		assert.strictEqual(
 			isExecutedDirectly(pathToFileURL(scriptPath).href, [
@@ -44,11 +42,7 @@ describe('direct execution guards', () => {
 	});
 
 	it('fails closed when node did not receive a direct script entrypoint', () => {
-		const scriptPath = path.join(
-			process.cwd(),
-			'scripts',
-			'check-node-version.ts'
-		);
+		const scriptPath = path.join(ROOT, 'scripts', 'check-node-version.ts');
 
 		assert.strictEqual(
 			isExecutedDirectly(pathToFileURL(scriptPath).href, [process.execPath]),

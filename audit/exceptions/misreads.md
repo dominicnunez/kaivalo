@@ -74,7 +74,7 @@ The actionable repo-controlled work was to keep the exception accurate and conti
 
 **Reason:** The audit missed the repo's existing review loop for this exception.
 `docs/development.md` already documents that `pnpm run audit:deps` allows accepted upstream-only production advisories while failing new ones, and the exception is tracked in `audit/exceptions/risks.md`.
-The repository also has a scheduled upstream monitor in `.github/workflows/track-sveltekit-upstream.yml` backed by `scripts/check-sveltekit-upstream.ts`, which opens or updates a tracking issue whenever a newer `@sveltejs/kit` release appears.
+The repository also has a scheduled dependency monitor in `.github/workflows/dependency-sweep.yml` backed by `scripts/check-dependency-sweep.ts`, which opens or updates a tracking issue whenever direct dependency drift, new advisories, or a newer `@sveltejs/kit` release appears.
 Because the exception is already documented and actively revisited, the audit's claim that the allowlist creates a false sense of security unless it is revisited is a misread of the current repo controls.
 
 ### Test auth fixture return-to headers create an open redirect

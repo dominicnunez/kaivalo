@@ -2,6 +2,7 @@ import { appendFileSync, readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { relative, resolve } from 'node:path';
+import { parse } from 'yaml';
 import {
 	collectAuditAdvisories,
 	findUnallowlistedAdvisories,
@@ -11,10 +12,30 @@ import {
 import { isExecutedDirectly } from './is-executed-directly.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
+const LOCKFILE_PATH = resolve(ROOT, 'pnpm-lock.yaml');
 const PACKAGE_JSON_PATH = resolve(ROOT, 'package.json');
 const OUTDATED_COMMAND_ARGS = ['outdated', '-r', '--format', 'json'];
 const OUTDATED_TIMEOUT_MS = 90_000;
 const ISSUE_TITLE = 'Review weekly dependency maintenance';
+const SVELTEKIT_REGISTRY_LATEST_URL =
+	'https://registry.npmjs.org/@sveltejs%2fkit/latest';
+export const FETCH_TIMEOUT_MS = 10_000;
+export const FETCH_MAX_ATTEMPTS = 3;
+export const FETCH_RETRY_DELAY_MS = 1_000;
+const REGISTRY_METADATA_PARSE_ERROR_PREFIX =
+	'Failed to parse latest @sveltejs/kit metadata';
+const REGISTRY_METADATA_VALIDATION_ERROR_MESSAGE = `${REGISTRY_METADATA_PARSE_ERROR_PREFIX}: expected a valid semver version string`;
+const RETRYABLE_FETCH_ERROR_CODES = new Set([
+	'ETIMEDOUT',
+	'EAI_AGAIN',
+	'ENOTFOUND',
+	'ECONNRESET',
+	'ECONNREFUSED',
+	'EHOSTUNREACH',
+	'ENETUNREACH',
+	'ERR_SOCKET_TIMEOUT'
+]);
+const RETRYABLE_FETCH_STATUSES = new Set([429, 500, 502, 503, 504]);
 
 type DependentPackage = {
 	name: string;
@@ -52,6 +73,31 @@ type PnpmOverride = {
 	value: string;
 };
 
+type LatestSvelteKitMetadata = {
+	version: string;
+	cookieRange: string;
+};
+
+type ReadLatestSvelteKitMetadataOptions = {
+	fetchImpl?: typeof fetch;
+	maxAttempts?: number;
+	retryDelayMs?: number;
+	sleepImpl?: (delayMs: number) => Promise<void>;
+};
+
+type RegistryFetchError = Error & {
+	code?: string;
+	cause?: unknown;
+	status?: number;
+};
+
+type SvelteKitUpstreamStatus = {
+	currentVersion: string;
+	latestVersion: string;
+	latestCookieRange: string;
+	hasNewerUpstream: boolean;
+};
+
 type DependencySweepResult = {
 	readonly issueTitle: string;
 	readonly workspaceGroups: WorkspaceOutdatedGroup[];
@@ -62,6 +108,7 @@ type DependencySweepResult = {
 	>;
 	readonly allowlistEntries: ReturnType<typeof readAllowlist>;
 	readonly overrides: PnpmOverride[];
+	readonly svelteKitUpstream: SvelteKitUpstreamStatus;
 	readonly hasItemsToReview: boolean;
 };
 
@@ -191,16 +238,330 @@ export function readPnpmOverrides(
 		.toSorted((left, right) => left.name.localeCompare(right.name));
 }
 
+function parseVersion(version: string) {
+	const match = String(version)
+		.trim()
+		.match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/);
+	if (!match) {
+		throw new Error(`Invalid semver version: ${version}`);
+	}
+
+	return {
+		major: Number(match[1]),
+		minor: Number(match[2]),
+		patch: Number(match[3]),
+		prerelease: match[4] ? match[4].split('.') : []
+	};
+}
+
+function isValidSemverVersion(version: string): boolean {
+	try {
+		parseVersion(version);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+function compareIdentifiers(left: string, right: string): number {
+	const leftIsNumeric = /^\d+$/.test(left);
+	const rightIsNumeric = /^\d+$/.test(right);
+
+	if (leftIsNumeric && rightIsNumeric) {
+		return Number(left) - Number(right);
+	}
+
+	if (leftIsNumeric) {
+		return -1;
+	}
+
+	if (rightIsNumeric) {
+		return 1;
+	}
+
+	return left.localeCompare(right);
+}
+
+function compareVersions(leftVersion: string, rightVersion: string): number {
+	const left = parseVersion(leftVersion);
+	const right = parseVersion(rightVersion);
+
+	for (const key of ['major', 'minor', 'patch'] as const) {
+		if (left[key] !== right[key]) {
+			return left[key] - right[key];
+		}
+	}
+
+	if (left.prerelease.length === 0 && right.prerelease.length === 0) {
+		return 0;
+	}
+
+	if (left.prerelease.length === 0) {
+		return 1;
+	}
+
+	if (right.prerelease.length === 0) {
+		return -1;
+	}
+
+	const maxLength = Math.max(left.prerelease.length, right.prerelease.length);
+	for (let index = 0; index < maxLength; index += 1) {
+		const leftIdentifier = left.prerelease[index];
+		const rightIdentifier = right.prerelease[index];
+
+		if (leftIdentifier === undefined) {
+			return -1;
+		}
+		if (rightIdentifier === undefined) {
+			return 1;
+		}
+
+		const comparison = compareIdentifiers(leftIdentifier, rightIdentifier);
+		if (comparison !== 0) {
+			return comparison;
+		}
+	}
+
+	return 0;
+}
+
+function readLockedDependencyVersion(
+	entry:
+		| {
+				version?: unknown;
+		  }
+		| string
+		| undefined
+): string | null {
+	const rawVersion =
+		typeof entry === 'string'
+			? entry
+			: typeof entry?.version === 'string'
+				? entry.version
+				: '';
+	const match = rawVersion.match(
+		/^(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?:$|\()/
+	);
+
+	return match?.[1] ?? null;
+}
+
+export function readCurrentSvelteKitVersion(
+	lockfilePath = LOCKFILE_PATH
+): string {
+	const lockfile = parse(readFileSync(lockfilePath, 'utf8')) as {
+		importers?: {
+			[importerPath: string]: {
+				dependencies?: Record<
+					string,
+					{ version?: unknown } | string | undefined
+				>;
+				devDependencies?: Record<
+					string,
+					{ version?: unknown } | string | undefined
+				>;
+			};
+		};
+	};
+	const hubImporter = lockfile?.importers?.['apps/hub'];
+	const currentVersion = readLockedDependencyVersion(
+		hubImporter?.dependencies?.['@sveltejs/kit'] ??
+			hubImporter?.devDependencies?.['@sveltejs/kit']
+	);
+	if (!currentVersion) {
+		throw new Error(
+			'Could not find resolved @sveltejs/kit version in pnpm-lock.yaml'
+		);
+	}
+
+	return currentVersion;
+}
+
+function createMetadataParseError(detail: string, cause?: unknown): Error {
+	return cause === undefined
+		? new Error(`${REGISTRY_METADATA_PARSE_ERROR_PREFIX}: ${detail}`)
+		: new Error(`${REGISTRY_METADATA_PARSE_ERROR_PREFIX}: ${detail}`, {
+				cause
+			});
+}
+
+export function createFetchErrorMessage(error: unknown): string {
+	if (
+		error instanceof DOMException &&
+		(error.name === 'TimeoutError' || error.name === 'AbortError')
+	) {
+		return `Timed out fetching latest @sveltejs/kit metadata after ${FETCH_TIMEOUT_MS}ms`;
+	}
+
+	const message =
+		error instanceof Error && error.message ? error.message : String(error);
+	return `Failed to fetch latest @sveltejs/kit metadata: ${message}`;
+}
+
+function createRegistryHttpError(status: number, statusText: string): Error {
+	const error = new Error(
+		`Failed to fetch latest @sveltejs/kit metadata: ${status} ${statusText}`
+	) as RegistryFetchError;
+	error.status = status;
+	return error;
+}
+
+function isRetryableDomException(error: unknown): boolean {
+	return (
+		error instanceof DOMException &&
+		(error.name === 'TimeoutError' || error.name === 'AbortError')
+	);
+}
+
+function readFetchErrorCode(error: unknown): string {
+	if (!error || typeof error !== 'object') {
+		return '';
+	}
+
+	const record = error as { code?: unknown; cause?: unknown };
+	if (typeof record.code === 'string') {
+		return record.code.trim().toUpperCase();
+	}
+
+	if (
+		record.cause &&
+		typeof record.cause === 'object' &&
+		'code' in record.cause &&
+		typeof record.cause.code === 'string'
+	) {
+		return record.cause.code.trim().toUpperCase();
+	}
+
+	return '';
+}
+
+function isRetryableFetchError(error: unknown): boolean {
+	if (isRetryableDomException(error)) {
+		return true;
+	}
+
+	if (
+		error &&
+		typeof error === 'object' &&
+		'status' in error &&
+		typeof error.status === 'number'
+	) {
+		return RETRYABLE_FETCH_STATUSES.has(error.status);
+	}
+
+	if (
+		error &&
+		typeof error === 'object' &&
+		'cause' in error &&
+		isRetryableDomException(error.cause)
+	) {
+		return true;
+	}
+
+	const errorCode = readFetchErrorCode(error);
+	return errorCode !== '' && RETRYABLE_FETCH_ERROR_CODES.has(errorCode);
+}
+
+function sleep(delayMs: number): Promise<void> {
+	return new Promise((resolve) => {
+		setTimeout(resolve, delayMs);
+	});
+}
+
+async function fetchLatestSvelteKitMetadata(
+	fetchImpl: typeof fetch
+): Promise<LatestSvelteKitMetadata> {
+	let response;
+	try {
+		response = await fetchImpl(SVELTEKIT_REGISTRY_LATEST_URL, {
+			headers: {
+				accept: 'application/json'
+			},
+			signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
+		});
+	} catch (error) {
+		throw new Error(createFetchErrorMessage(error), { cause: error });
+	}
+
+	if (!response.ok) {
+		throw createRegistryHttpError(response.status, response.statusText);
+	}
+
+	let latestMetadata;
+	try {
+		latestMetadata = await response.json();
+	} catch (error) {
+		const message =
+			error instanceof Error && error.message ? error.message : String(error);
+		throw createMetadataParseError(message, error);
+	}
+
+	if (!isValidSemverVersion(latestMetadata?.version)) {
+		throw new Error(REGISTRY_METADATA_VALIDATION_ERROR_MESSAGE);
+	}
+
+	return {
+		version: latestMetadata.version,
+		cookieRange:
+			typeof latestMetadata?.dependencies?.cookie === 'string'
+				? latestMetadata.dependencies.cookie
+				: 'not declared'
+	};
+}
+
+export async function readLatestSvelteKitMetadata({
+	fetchImpl = fetch,
+	maxAttempts = FETCH_MAX_ATTEMPTS,
+	retryDelayMs = FETCH_RETRY_DELAY_MS,
+	sleepImpl = sleep
+}: ReadLatestSvelteKitMetadataOptions = {}): Promise<LatestSvelteKitMetadata> {
+	if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
+		throw new Error('maxAttempts must be a positive integer');
+	}
+	if (!Number.isInteger(retryDelayMs) || retryDelayMs < 0) {
+		throw new Error('retryDelayMs must be a non-negative integer');
+	}
+
+	for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+		try {
+			return await fetchLatestSvelteKitMetadata(fetchImpl);
+		} catch (error) {
+			if (attempt === maxAttempts || !isRetryableFetchError(error)) {
+				throw error;
+			}
+
+			await sleepImpl(retryDelayMs * attempt);
+		}
+	}
+
+	throw new Error('Failed to fetch latest @sveltejs/kit metadata');
+}
+
+export async function readSvelteKitUpstreamStatus(): Promise<SvelteKitUpstreamStatus> {
+	const currentVersion = readCurrentSvelteKitVersion();
+	const latestMetadata = await readLatestSvelteKitMetadata();
+
+	return {
+		currentVersion,
+		latestVersion: latestMetadata.version,
+		latestCookieRange: latestMetadata.cookieRange,
+		hasNewerUpstream:
+			compareVersions(latestMetadata.version, currentVersion) > 0
+	};
+}
+
 export function buildDependencySweepResult({
 	outdatedDependencies,
 	auditAdvisories,
 	allowlistEntries,
-	overrides
+	overrides,
+	svelteKitUpstream
 }: {
 	outdatedDependencies: OutdatedDependencyMap;
 	auditAdvisories: ReturnType<typeof collectAuditAdvisories>;
 	allowlistEntries: ReturnType<typeof readAllowlist>;
 	overrides: PnpmOverride[];
+	svelteKitUpstream: SvelteKitUpstreamStatus;
 }): DependencySweepResult {
 	const workspaceGroups =
 		groupOutdatedDependenciesByWorkspace(outdatedDependencies);
@@ -221,17 +582,21 @@ export function buildDependencySweepResult({
 		unallowlistedAdvisories,
 		allowlistEntries,
 		overrides,
+		svelteKitUpstream,
 		hasItemsToReview:
-			directDependencyCount > 0 || unallowlistedAdvisories.length > 0
+			directDependencyCount > 0 ||
+			unallowlistedAdvisories.length > 0 ||
+			svelteKitUpstream.hasNewerUpstream
 	};
 }
 
-export function runDependencySweep(): DependencySweepResult {
+export async function runDependencySweep(): Promise<DependencySweepResult> {
 	return buildDependencySweepResult({
 		outdatedDependencies: runOutdated(),
 		auditAdvisories: collectAuditAdvisories(runAudit()),
 		allowlistEntries: readAllowlist(),
-		overrides: readPnpmOverrides()
+		overrides: readPnpmOverrides(),
+		svelteKitUpstream: await readSvelteKitUpstreamStatus()
 	});
 }
 
@@ -245,6 +610,12 @@ export function buildSummary(result: DependencySweepResult): string {
 			result.allAuditAdvisories.length - result.unallowlistedAdvisories.length
 		}`,
 		`- Active pnpm overrides: ${result.overrides.length}`,
+		`- Current resolved @sveltejs/kit version: ${result.svelteKitUpstream.currentVersion}`,
+		`- Latest published @sveltejs/kit version: ${result.svelteKitUpstream.latestVersion}`,
+		`- Latest upstream cookie range: ${result.svelteKitUpstream.latestCookieRange}`,
+		`- Newer @sveltejs/kit upstream available: ${
+			result.svelteKitUpstream.hasNewerUpstream ? 'yes' : 'no'
+		}`,
 		result.hasItemsToReview
 			? '- Status: review recommended'
 			: '- Status: no dependency review required'
@@ -259,9 +630,7 @@ function formatOutdatedDependency(
 }
 
 function formatAuditAdvisory(
-	advisory: typeof buildDependencySweepResult extends never
-		? never
-		: DependencySweepResult['allAuditAdvisories'][number]
+	advisory: DependencySweepResult['allAuditAdvisories'][number]
 ): string {
 	const location = advisory.path ? ` at ${advisory.path}` : '';
 	return `- ${advisory.package} (${advisory.severity}) source ${advisory.source}${location}: ${advisory.title}`;
@@ -289,6 +658,9 @@ export function buildIssueBody(result: DependencySweepResult): string {
 			result.allAuditAdvisories.length - result.unallowlistedAdvisories.length
 		}`,
 		`- Active pnpm overrides: ${result.overrides.length}`,
+		`- Newer @sveltejs/kit upstream available: ${
+			result.svelteKitUpstream.hasNewerUpstream ? 'yes' : 'no'
+		}`,
 		''
 	];
 
@@ -324,6 +696,28 @@ export function buildIssueBody(result: DependencySweepResult): string {
 		);
 	}
 
+	sections.push('## SvelteKit upstream review');
+	if (result.svelteKitUpstream.hasNewerUpstream) {
+		sections.push(
+			'',
+			'A newer `@sveltejs/kit` release is available than the one currently resolved in this repository.',
+			`- Current resolved repo version: \`${result.svelteKitUpstream.currentVersion}\``,
+			`- Latest published upstream version: \`${result.svelteKitUpstream.latestVersion}\``,
+			`- Latest upstream \`cookie\` dependency range: \`${result.svelteKitUpstream.latestCookieRange}\``,
+			'- Cookie advisory exception: `audit/exceptions/risks.md`',
+			''
+		);
+	} else {
+		sections.push(
+			'',
+			'The repository already resolves the latest published `@sveltejs/kit` release.',
+			`- Current resolved repo version: \`${result.svelteKitUpstream.currentVersion}\``,
+			`- Latest published upstream version: \`${result.svelteKitUpstream.latestVersion}\``,
+			`- Latest upstream \`cookie\` dependency range: \`${result.svelteKitUpstream.latestCookieRange}\``,
+			''
+		);
+	}
+
 	sections.push('## Active audit allowlist entries');
 	if (result.allowlistEntries.length === 0) {
 		sections.push('', 'No audit allowlist entries are configured.', '');
@@ -339,7 +733,7 @@ export function buildIssueBody(result: DependencySweepResult): string {
 	}
 
 	sections.push(
-		'This issue is maintained by the scheduled dependency sweep workflow. It should stay open only while direct dependency updates or unallowlisted advisories require review.'
+		'This issue is maintained by the scheduled dependency sweep workflow. It should stay open only while direct dependency updates, unallowlisted advisories, or newer upstream `@sveltejs/kit` releases require review.'
 	);
 
 	return sections.join('\n');
@@ -387,15 +781,37 @@ export function formatGithubOutputEntries(
 			String(result.hasItemsToReview),
 			createToken
 		),
+		formatGithubOutputValue(
+			'has_newer_sveltekit_upstream',
+			String(result.svelteKitUpstream.hasNewerUpstream),
+			createToken
+		),
+		formatGithubOutputValue(
+			'current_sveltekit_version',
+			result.svelteKitUpstream.currentVersion,
+			createToken
+		),
+		formatGithubOutputValue(
+			'latest_sveltekit_version',
+			result.svelteKitUpstream.latestVersion,
+			createToken
+		),
+		formatGithubOutputValue(
+			'latest_sveltekit_cookie_range',
+			result.svelteKitUpstream.latestCookieRange,
+			createToken
+		),
 		formatGithubOutputValue('issue_title', result.issueTitle, createToken),
 		formatGithubOutputValue('summary', buildSummary(result), createToken),
 		formatGithubOutputValue('issue_body', buildIssueBody(result), createToken)
 	];
 }
 
-export function main(argv = process.argv.slice(2)): DependencySweepResult {
+export async function main(
+	argv = process.argv.slice(2)
+): Promise<DependencySweepResult> {
 	const options = parseArgs(argv);
-	const result = runDependencySweep();
+	const result = await runDependencySweep();
 
 	if (options.writeGithubOutput) {
 		const outputPath = process.env.GITHUB_OUTPUT;
@@ -414,9 +830,9 @@ export function main(argv = process.argv.slice(2)): DependencySweepResult {
 	return result;
 }
 
-export function runCli() {
+export async function runCli() {
 	try {
-		main();
+		await main();
 	} catch (error) {
 		const message =
 			error instanceof Error
@@ -428,5 +844,5 @@ export function runCli() {
 }
 
 if (isExecutedDirectly(import.meta.url)) {
-	runCli();
+	void runCli();
 }

@@ -21,12 +21,6 @@ const DEPLOY_WORKFLOW_PATH = path.join(
 const DOCKERFILE_PATH = path.join(ROOT, 'Dockerfile');
 const PACKAGE_JSON_PATH = path.join(ROOT, 'package.json');
 const PRE_PUSH_HOOK_PATH = path.join(ROOT, '.husky', 'pre-push');
-const TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH = path.join(
-	ROOT,
-	'.github',
-	'workflows',
-	'track-sveltekit-upstream.yml'
-);
 const DEPENDENCY_SWEEP_WORKFLOW_PATH = path.join(
 	ROOT,
 	'.github',
@@ -135,6 +129,19 @@ function getWorkflowTriggers(workflow: WorkflowRecord) {
 		triggers: new Set(Object.keys(triggerBlock)),
 		schedule
 	};
+}
+
+function getWorkflowJobTimeoutMinutes(
+	workflow: WorkflowRecord,
+	jobName: string
+): number {
+	const timeoutMinutes = getWorkflowJob(workflow, jobName)['timeout-minutes'];
+	assert.strictEqual(
+		typeof timeoutMinutes,
+		'number',
+		`job ${jobName} should define timeout-minutes`
+	);
+	return timeoutMinutes;
 }
 
 function getWorkflowPermissions(workflow: WorkflowRecord) {
@@ -292,7 +299,6 @@ describe('deployment runtime guardrails', () => {
 			CI_WORKFLOW_PATH,
 			DEPLOY_WORKFLOW_PATH,
 			DAILY_FULL_SUITE_WORKFLOW_PATH,
-			TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH,
 			DEPENDENCY_SWEEP_WORKFLOW_PATH
 		];
 
@@ -317,7 +323,6 @@ describe('deployment runtime guardrails', () => {
 			CI_WORKFLOW_PATH,
 			DEPLOY_WORKFLOW_PATH,
 			DAILY_FULL_SUITE_WORKFLOW_PATH,
-			TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH,
 			DEPENDENCY_SWEEP_WORKFLOW_PATH
 		];
 
@@ -465,9 +470,6 @@ describe('deployment runtime guardrails', () => {
 		const ciWorkflow = readWorkflow(CI_WORKFLOW_PATH);
 		const dailyFullSuiteWorkflow = readWorkflow(DAILY_FULL_SUITE_WORKFLOW_PATH);
 		const deployWorkflow = readWorkflow(DEPLOY_WORKFLOW_PATH);
-		const trackSvelteKitUpstreamWorkflow = readWorkflow(
-			TRACK_SVELTEKIT_UPSTREAM_WORKFLOW_PATH
-		);
 		const dependencySweepWorkflow = readWorkflow(
 			DEPENDENCY_SWEEP_WORKFLOW_PATH
 		);
@@ -478,13 +480,6 @@ describe('deployment runtime guardrails', () => {
 		assert.deepStrictEqual(getWorkflowPermissions(dailyFullSuiteWorkflow), {
 			contents: 'read'
 		});
-		assert.deepStrictEqual(
-			getWorkflowPermissions(trackSvelteKitUpstreamWorkflow),
-			{
-				contents: 'read',
-				issues: 'write'
-			}
-		);
 		assert.deepStrictEqual(getWorkflowPermissions(dependencySweepWorkflow), {
 			contents: 'read',
 			issues: 'write'
@@ -553,5 +548,32 @@ describe('deployment runtime guardrails', () => {
 			includesSensitiveSecretReference(getWorkflowJob(workflow, 'build')),
 			false
 		);
+	});
+
+	it('bounds every deploy workflow job with an explicit timeout', () => {
+		const workflow = readWorkflow(DEPLOY_WORKFLOW_PATH);
+
+		assert.strictEqual(getWorkflowJobTimeoutMinutes(workflow, 'test'), 45);
+		assert.strictEqual(getWorkflowJobTimeoutMinutes(workflow, 'build'), 20);
+		assert.strictEqual(
+			getWorkflowJobTimeoutMinutes(workflow, 'smoke_test'),
+			15
+		);
+		assert.strictEqual(getWorkflowJobTimeoutMinutes(workflow, 'deploy'), 15);
+	});
+
+	it('ignores pull requests when reusing a dependency tracking issue', () => {
+		const workflow = readWorkflow(DEPENDENCY_SWEEP_WORKFLOW_PATH);
+		const step = findWorkflowStep(
+			workflow,
+			'check',
+			(entry) => entry.name === 'Find existing tracking issue',
+			'the tracking issue lookup step'
+		);
+		const script = step.with.script ?? '';
+
+		assert.match(script, /issues\.listForRepo/);
+		assert.match(script, /!issue\.pull_request/);
+		assert.match(script, /issue\.title === title/);
 	});
 });

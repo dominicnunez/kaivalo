@@ -1,19 +1,45 @@
-import { describe, it } from 'node:test';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path, { join } from 'node:path';
+import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import path from 'node:path';
 import {
 	buildDependencySweepResult,
 	buildIssueBody,
 	buildSummary,
+	createFetchErrorMessage,
 	createGithubOutputDelimiter,
+	FETCH_RETRY_DELAY_MS,
+	FETCH_TIMEOUT_MS,
 	formatGithubOutputEntries,
 	groupOutdatedDependenciesByWorkspace,
-	parseOutdatedReport
+	parseOutdatedReport,
+	readCurrentSvelteKitVersion,
+	readLatestSvelteKitMetadata
 } from '../scripts/check-dependency-sweep.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const HUB_DIR = path.join(ROOT, 'apps', 'hub');
 const UI_DIR = path.join(ROOT, 'packages', 'ui');
+
+function readGithubMultilineOutputEntry(serialized: string, name: string) {
+	const entryHeader = new RegExp(`^${name}<<([^\\n]+)$`, 'm');
+	const entryHeaderMatch = serialized.match(entryHeader);
+	assert.ok(entryHeaderMatch, `expected ${name} output entry`);
+
+	const delimiter = entryHeaderMatch[1];
+	const entryPattern = new RegExp(
+		`^${name}<<${delimiter}\\n([\\s\\S]*?)\\n${delimiter}$`,
+		'm'
+	);
+	const entryMatch = serialized.match(entryPattern);
+	assert.ok(entryMatch, `expected complete ${name} output block`);
+
+	return {
+		delimiter,
+		value: entryMatch[1]
+	};
+}
 
 describe('dependency sweep reporting', () => {
 	it('parses empty and non-empty pnpm outdated reports', () => {
@@ -135,7 +161,7 @@ describe('dependency sweep reporting', () => {
 		);
 	});
 
-	it('builds issue content and github outputs from the dependency state', () => {
+	it('builds combined issue content and github outputs from dependency state', () => {
 		const result = buildDependencySweepResult({
 			outdatedDependencies: {
 				eslint: {
@@ -183,7 +209,13 @@ describe('dependency sweep reporting', () => {
 					reason: 'Tracked upstream via SvelteKit issue'
 				}
 			],
-			overrides: [{ name: 'flatted', value: '3.4.2' }]
+			overrides: [{ name: 'flatted', value: '3.4.2' }],
+			svelteKitUpstream: {
+				currentVersion: '2.20.0',
+				latestVersion: '2.20.1',
+				latestCookieRange: '^0.6.0',
+				hasNewerUpstream: true
+			}
 		});
 
 		assert.strictEqual(
@@ -197,6 +229,8 @@ describe('dependency sweep reporting', () => {
 		const summary = buildSummary(result);
 		assert.match(summary, /Direct dependency updates requiring review: 1/);
 		assert.match(summary, /Unallowlisted audit advisories requiring review: 1/);
+		assert.match(summary, /Current resolved @sveltejs\/kit version: 2\.20\.0/);
+		assert.match(summary, /Newer @sveltejs\/kit upstream available: yes/);
 
 		const issueBody = buildIssueBody(result);
 		assert.match(issueBody, /## Direct dependency updates/);
@@ -209,11 +243,18 @@ describe('dependency sweep reporting', () => {
 			issueBody,
 			/- flatted \(high\) source 1114934 at kaivalo > eslint > flat-cache > flatted: Prototype Pollution via parse\(\) in NodeJS flatted/
 		);
+		assert.match(issueBody, /## SvelteKit upstream review/);
+		assert.match(
+			issueBody,
+			/Latest upstream `cookie` dependency range: `\^0\.6\.0`/
+		);
 		assert.match(issueBody, /- flatted: 3\.4\.2/);
 
 		const fixedToken = () => 'fixed-token';
 		const entries = formatGithubOutputEntries(result, fixedToken).join('\n');
 		assert.match(entries, /^has_items_to_review=true$/m);
+		assert.match(entries, /^has_newer_sveltekit_upstream=true$/m);
+		assert.match(entries, /^current_sveltekit_version=2\.20\.0$/m);
 		assert.match(
 			entries,
 			/^issue_title=Review weekly dependency maintenance$/m
@@ -222,7 +263,108 @@ describe('dependency sweep reporting', () => {
 		assert.match(entries, /^issue_body<<kaivalo_output_fixed-token$/m);
 	});
 
-	it('generates a delimiter that does not collide with output content', () => {
+	it('reads the resolved SvelteKit version from the repository lockfile outside the cwd', () => {
+		const originalCwd = process.cwd();
+		const tempCwd = mkdtempSync(join(tmpdir(), 'kaivalo-sweep-check-'));
+
+		try {
+			process.chdir(tempCwd);
+			const version = readCurrentSvelteKitVersion();
+			assert.match(version, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
+		} finally {
+			process.chdir(originalCwd);
+		}
+	});
+
+	it('uses a bounded timeout when fetching latest SvelteKit metadata', async () => {
+		const controller = new AbortController();
+		const fetchMock = mock.fn(async () => ({
+			ok: true,
+			async json() {
+				return {
+					version: '2.53.4',
+					dependencies: {
+						cookie: '^0.6.0'
+					}
+				};
+			}
+		}));
+		const originalTimeout = AbortSignal.timeout;
+		AbortSignal.timeout = mock.fn(() => controller.signal);
+
+		try {
+			const metadata = await readLatestSvelteKitMetadata({
+				fetchImpl: fetchMock
+			});
+
+			assert.deepStrictEqual(metadata, {
+				version: '2.53.4',
+				cookieRange: '^0.6.0'
+			});
+			assert.strictEqual(fetchMock.mock.calls.length, 1);
+			assert.strictEqual(AbortSignal.timeout.mock.calls.length, 1);
+			assert.deepStrictEqual(AbortSignal.timeout.mock.calls[0]?.arguments, [
+				FETCH_TIMEOUT_MS
+			]);
+		} finally {
+			AbortSignal.timeout = originalTimeout;
+		}
+	});
+
+	it('retries transient upstream registry failures before succeeding', async () => {
+		const sleepMock = mock.fn(async () => undefined);
+		let attempt = 0;
+		const fetchMock = mock.fn(async () => {
+			attempt += 1;
+			if (attempt === 1) {
+				return {
+					ok: false,
+					status: 503,
+					statusText: 'Service Unavailable'
+				};
+			}
+
+			return {
+				ok: true,
+				async json() {
+					return {
+						version: '2.53.4',
+						dependencies: {
+							cookie: '^0.6.0'
+						}
+					};
+				}
+			};
+		});
+
+		const metadata = await readLatestSvelteKitMetadata({
+			fetchImpl: fetchMock,
+			sleepImpl: sleepMock
+		});
+
+		assert.deepStrictEqual(metadata, {
+			version: '2.53.4',
+			cookieRange: '^0.6.0'
+		});
+		assert.strictEqual(fetchMock.mock.calls.length, 2);
+		assert.deepStrictEqual(sleepMock.mock.calls[0]?.arguments, [
+			FETCH_RETRY_DELAY_MS
+		]);
+	});
+
+	it('turns aborts into an actionable fetch timeout message', () => {
+		const timeoutError = new DOMException(
+			'The operation was aborted.',
+			'TimeoutError'
+		);
+
+		assert.strictEqual(
+			createFetchErrorMessage(timeoutError),
+			`Timed out fetching latest @sveltejs/kit metadata after ${FETCH_TIMEOUT_MS}ms`
+		);
+	});
+
+	it('generates collision-safe multiline github output delimiters', () => {
 		const value = 'line one\nkaivalo_output_fixed-token\nline two';
 		let callCount = 0;
 		const delimiter = createGithubOutputDelimiter(value, () => {
@@ -232,5 +374,32 @@ describe('dependency sweep reporting', () => {
 
 		assert.notStrictEqual(delimiter, 'kaivalo_output_fixed-token');
 		assert.ok(!value.includes(delimiter));
+	});
+
+	it('emits valid multiline github output blocks for the combined summary and issue body', () => {
+		const result = buildDependencySweepResult({
+			outdatedDependencies: {},
+			auditAdvisories: [],
+			allowlistEntries: [],
+			overrides: [],
+			svelteKitUpstream: {
+				currentVersion: '2.20.1',
+				latestVersion: '2.20.1',
+				latestCookieRange: '^0.6.0',
+				hasNewerUpstream: false
+			}
+		});
+		const entries = formatGithubOutputEntries(result, () => 'safe-token').join(
+			'\n'
+		);
+
+		const summaryEntry = readGithubMultilineOutputEntry(entries, 'summary');
+		assert.match(summaryEntry.value, /Current resolved @sveltejs\/kit version/);
+
+		const issueBodyEntry = readGithubMultilineOutputEntry(
+			entries,
+			'issue_body'
+		);
+		assert.match(issueBodyEntry.value, /## SvelteKit upstream review/);
 	});
 });
