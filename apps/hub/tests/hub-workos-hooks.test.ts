@@ -10,6 +10,7 @@ import {
 	PROXY_HSTS_CONFIGURATION_ERROR_MESSAGE
 } from '../src/lib/server/workos-security.ts';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
+import { createRequestEvent } from './helpers/request-event.ts';
 import { signInThroughWorkosCallback } from './helpers/workos-auth-flow.ts';
 import { assertSessionCookieContract } from './helpers/session-cookie.ts';
 
@@ -26,12 +27,39 @@ const PREVIEW_FIXTURE_IMPORT = new URL(
 	'./helpers/hub-preview-fixtures.mts',
 	import.meta.url
 ).href;
+type PreviewHandle = Awaited<ReturnType<typeof startHubPreview>>;
+type SecurityHandle = ReturnType<typeof createSecurityHeadersHandle>;
+type SecurityHandleEvent = Parameters<SecurityHandle>[0]['event'];
 
-/**
- * @param {string | null} varyHeader
- * @param {string[]} expectedTokens
- */
-function assertVaryIncludes(varyHeader, expectedTokens) {
+type CreateEventOptions = {
+	request?: Request;
+	url?: URL;
+	getClientAddress?: SecurityHandleEvent['getClientAddress'];
+	platform?: SecurityHandleEvent['platform'];
+	locals?: Partial<App.Locals>;
+};
+
+function createEvent({
+	request = new Request('https://kaivalo.test/', { method: 'GET' }),
+	url = new URL(request.url),
+	getClientAddress,
+	platform,
+	locals
+}: CreateEventOptions = {}): SecurityHandleEvent {
+	return createRequestEvent({
+		requestUrl: url.toString(),
+		method: request.method,
+		headers: request.headers,
+		getClientAddress,
+		platform,
+		locals
+	});
+}
+
+function assertVaryIncludes(
+	varyHeader: string | null,
+	expectedTokens: string[]
+): void {
 	assert.notStrictEqual(varyHeader, null);
 	const present = new Set(
 		(varyHeader ?? '')
@@ -47,11 +75,10 @@ function assertVaryIncludes(varyHeader, expectedTokens) {
 	}
 }
 
-/**
- * @param {string | null} varyHeader
- * @param {string[]} unexpectedTokens
- */
-function assertVaryOmits(varyHeader, unexpectedTokens) {
+function assertVaryOmits(
+	varyHeader: string | null,
+	unexpectedTokens: string[]
+): void {
 	const present = new Set(
 		(varyHeader ?? '')
 			.split(',')
@@ -64,6 +91,11 @@ function assertVaryOmits(varyHeader, unexpectedTokens) {
 			`Expected Vary to omit ${token}`
 		);
 	}
+}
+
+function requirePreview(preview: PreviewHandle | undefined): PreviewHandle {
+	assert.ok(preview);
+	return preview;
 }
 
 describe('WorkOS env validation', () => {
@@ -443,7 +475,9 @@ describe('Security header handle behavior', () => {
 	it('adds security headers to the resolved response', async () => {
 		const handle = createSecurityHeadersHandle();
 		const response = await handle({
-			event: {},
+			event: createEvent({
+				request: new Request('http://kaivalo.test/', { method: 'GET' })
+			}),
 			resolve: async () => new Response('ok', { status: 200 })
 		});
 
@@ -467,21 +501,23 @@ describe('Security header handle behavior', () => {
 	it('rethrows unexpected downstream failures for centralized handling', async () => {
 		const handle = createSecurityHeadersHandle();
 		await assert.rejects(
-			() =>
+			async () =>
 				handle({
-					event: {
+					event: createEvent({
 						request: new Request('https://kaivalo.test/auth/callback', {
 							method: 'GET',
 							headers: { authorization: 'Bearer fixture-token' }
-						}),
-						url: new URL('https://kaivalo.test/auth/callback')
-					},
+						})
+					}),
 					resolve: async () => {
 						throw new Error('boom');
 					}
 				}),
-			(error) => {
-				assert.strictEqual(error?.message, 'boom');
+			(error: unknown) => {
+				assert.strictEqual(
+					error instanceof Error ? error.message : undefined,
+					'boom'
+				);
 				return true;
 			}
 		);
@@ -490,17 +526,18 @@ describe('Security header handle behavior', () => {
 	it('rethrows redirect responses from downstream handlers', async () => {
 		const handle = createSecurityHeadersHandle();
 		await assert.rejects(
-			() =>
+			async () =>
 				handle({
-					event: {
-						request: new Request('https://kaivalo.test/', { method: 'GET' }),
-						url: new URL('https://kaivalo.test/')
-					},
+					event: createEvent({
+						request: new Request('https://kaivalo.test/', { method: 'GET' })
+					}),
 					resolve: async () => redirect(303, '/sign-in')
 				}),
-			(error) => {
-				assert.strictEqual(error?.status, 303);
-				assert.strictEqual(error?.location, '/sign-in');
+			(error: unknown) => {
+				assert.ok(error && typeof error === 'object');
+				const redirectError = error as { location?: string; status?: number };
+				assert.strictEqual(redirectError.status, 303);
+				assert.strictEqual(redirectError.location, '/sign-in');
 				return true;
 			}
 		);
@@ -509,18 +546,18 @@ describe('Security header handle behavior', () => {
 	it('rethrows http errors from downstream handlers', async () => {
 		const handle = createSecurityHeadersHandle();
 		await assert.rejects(
-			() =>
+			async () =>
 				handle({
-					event: {
-						request: new Request('https://kaivalo.test/', { method: 'GET' }),
-						url: new URL('https://kaivalo.test/')
-					},
+					event: createEvent({
+						request: new Request('https://kaivalo.test/', { method: 'GET' })
+					}),
 					resolve: async () => {
 						httpError(404, 'Not Found');
 					}
 				}),
-			(error) => {
-				assert.strictEqual(error?.status, 404);
+			(error: unknown) => {
+				assert.ok(error && typeof error === 'object');
+				assert.strictEqual((error as { status?: number }).status, 404);
 				return true;
 			}
 		);
@@ -529,10 +566,9 @@ describe('Security header handle behavior', () => {
 	it('adds HSTS for secure requests', async () => {
 		const handle = createSecurityHeadersHandle();
 		const secureResponse = await handle({
-			event: {
-				request: new Request('https://kaivalo.test/', { method: 'GET' }),
-				url: new URL('https://kaivalo.test/')
-			},
+			event: createEvent({
+				request: new Request('https://kaivalo.test/', { method: 'GET' })
+			}),
 			resolve: async () => new Response('ok', { status: 200 })
 		});
 
@@ -549,36 +585,33 @@ describe('Security header handle behavior', () => {
 			trustedProxyIps: ['127.0.0.1']
 		});
 		const spoofedResponse = await defaultHandle({
-			event: {
+			event: createEvent({
 				request: new Request('http://kaivalo.test/', {
 					method: 'GET',
 					headers: { 'x-forwarded-proto': 'https' }
 				}),
-				url: new URL('http://kaivalo.test/'),
 				getClientAddress: () => '127.0.0.1'
-			},
+			}),
 			resolve: async () => new Response('ok', { status: 200 })
 		});
 		const untrustedProxyResponse = await trustedProxyHandle({
-			event: {
+			event: createEvent({
 				request: new Request('http://kaivalo.test/', {
 					method: 'GET',
 					headers: { 'x-forwarded-proto': 'https' }
 				}),
-				url: new URL('http://kaivalo.test/'),
 				getClientAddress: () => '203.0.113.15'
-			},
+			}),
 			resolve: async () => new Response('ok', { status: 200 })
 		});
 		const proxiedResponse = await trustedProxyHandle({
-			event: {
+			event: createEvent({
 				request: new Request('http://kaivalo.test/', {
 					method: 'GET',
 					headers: { 'x-forwarded-proto': 'https' }
 				}),
-				url: new URL('http://kaivalo.test/'),
 				getClientAddress: () => '::ffff:127.0.0.1'
-			},
+			}),
 			resolve: async () => new Response('ok', { status: 200 })
 		});
 
@@ -602,7 +635,7 @@ describe('Security header handle behavior', () => {
 			trustedProxyIps: ['203.0.113.10']
 		});
 		const proxiedResponse = await trustedProxyHandle({
-			event: {
+			event: createEvent({
 				request: new Request('http://kaivalo.test/', {
 					method: 'GET',
 					headers: {
@@ -610,7 +643,6 @@ describe('Security header handle behavior', () => {
 						'x-forwarded-proto': 'https'
 					}
 				}),
-				url: new URL('http://kaivalo.test/'),
 				getClientAddress: () => '198.51.100.24',
 				platform: {
 					req: {
@@ -619,7 +651,7 @@ describe('Security header handle behavior', () => {
 						}
 					}
 				}
-			},
+			}),
 			resolve: async () => new Response('ok', { status: 200 })
 		});
 
@@ -635,14 +667,13 @@ describe('Security header handle behavior', () => {
 			trustedProxyIps: ['2001:0db8:0000:0000:0000:ff00:0042:8329']
 		});
 		const proxiedResponse = await trustedProxyHandle({
-			event: {
+			event: createEvent({
 				request: new Request('http://kaivalo.test/', {
 					method: 'GET',
 					headers: { 'x-forwarded-proto': 'https' }
 				}),
-				url: new URL('http://kaivalo.test/'),
 				getClientAddress: () => '2001:db8::ff00:42:8329'
-			},
+			}),
 			resolve: async () => new Response('ok', { status: 200 })
 		});
 
@@ -655,10 +686,9 @@ describe('Security header handle behavior', () => {
 	it('applies reusable caching for public HTML documents', async () => {
 		const handle = createSecurityHeadersHandle();
 		const response = await handle({
-			event: {
-				request: new Request('https://kaivalo.test/', { method: 'GET' }),
-				url: new URL('https://kaivalo.test/')
-			},
+			event: createEvent({
+				request: new Request('https://kaivalo.test/', { method: 'GET' })
+			}),
 			resolve: async () =>
 				new Response('<!doctype html>', {
 					status: 200,
@@ -677,12 +707,11 @@ describe('Security header handle behavior', () => {
 	it('keeps HTML responses no-store for auth paths and auth-cookie-bearing requests', async () => {
 		const handle = createSecurityHeadersHandle();
 		const authRouteResponse = await handle({
-			event: {
+			event: createEvent({
 				request: new Request('https://kaivalo.test/auth/sign-out', {
 					method: 'GET'
-				}),
-				url: new URL('https://kaivalo.test/auth/sign-out')
-			},
+				})
+			}),
 			resolve: async () =>
 				new Response('<!doctype html>', {
 					status: 200,
@@ -690,13 +719,12 @@ describe('Security header handle behavior', () => {
 				})
 		});
 		const cookieResponse = await handle({
-			event: {
+			event: createEvent({
 				request: new Request('https://kaivalo.test/', {
 					method: 'GET',
 					headers: { cookie: 'wos_session=value' }
-				}),
-				url: new URL('https://kaivalo.test/')
-			},
+				})
+			}),
 			resolve: async () =>
 				new Response('<!doctype html>', {
 					status: 200,
@@ -723,13 +751,12 @@ describe('Security header handle behavior', () => {
 	it('does not force no-store caching for non-auth cookie-bearing html responses', async () => {
 		const handle = createSecurityHeadersHandle();
 		const response = await handle({
-			event: {
+			event: createEvent({
 				request: new Request('https://kaivalo.test/', {
 					method: 'GET',
 					headers: { cookie: 'consent=true; analytics_id=abc123' }
-				}),
-				url: new URL('https://kaivalo.test/')
-			},
+				})
+			}),
 			resolve: async () =>
 				new Response('<!doctype html>', {
 					status: 200,
@@ -748,13 +775,12 @@ describe('Security header handle behavior', () => {
 	it('keeps authorization-bearing documents no-store without varying on cookies', async () => {
 		const handle = createSecurityHeadersHandle();
 		const response = await handle({
-			event: {
+			event: createEvent({
 				request: new Request('https://kaivalo.test/private', {
 					method: 'GET',
 					headers: { authorization: 'Bearer fixture-token' }
-				}),
-				url: new URL('https://kaivalo.test/private')
-			},
+				})
+			}),
 			resolve: async () =>
 				new Response('<!doctype html>', {
 					status: 200,
@@ -773,10 +799,9 @@ describe('Security header handle behavior', () => {
 	it('forces no-store for HTML responses that set cookies', async () => {
 		const handle = createSecurityHeadersHandle();
 		const response = await handle({
-			event: {
-				request: new Request('https://kaivalo.test/', { method: 'GET' }),
-				url: new URL('https://kaivalo.test/')
-			},
+			event: createEvent({
+				request: new Request('https://kaivalo.test/', { method: 'GET' })
+			}),
 			resolve: async () =>
 				new Response('<!doctype html>', {
 					status: 200,
@@ -798,10 +823,9 @@ describe('Security header handle behavior', () => {
 	it('does not overwrite explicit cache-control headers', async () => {
 		const handle = createSecurityHeadersHandle();
 		const response = await handle({
-			event: {
-				request: new Request('https://kaivalo.test/', { method: 'GET' }),
-				url: new URL('https://kaivalo.test/')
-			},
+			event: createEvent({
+				request: new Request('https://kaivalo.test/', { method: 'GET' })
+			}),
 			resolve: async () =>
 				new Response('<!doctype html>', {
 					status: 200,
@@ -821,13 +845,12 @@ describe('Security header handle behavior', () => {
 	it('overrides explicit public cache-control for sensitive auth-cookie-bearing document requests', async () => {
 		const handle = createSecurityHeadersHandle();
 		const response = await handle({
-			event: {
+			event: createEvent({
 				request: new Request('https://kaivalo.test/', {
 					method: 'GET',
 					headers: { cookie: 'wos_session=value' }
-				}),
-				url: new URL('https://kaivalo.test/')
-			},
+				})
+			}),
 			resolve: async () =>
 				new Response('<!doctype html>', {
 					status: 200,
@@ -849,13 +872,12 @@ describe('Security header handle behavior', () => {
 	it('overrides explicit public cache-control for sensitive auth-route document requests', async () => {
 		const handle = createSecurityHeadersHandle();
 		const response = await handle({
-			event: {
+			event: createEvent({
 				request: new Request('https://kaivalo.test/auth/callback', {
 					method: 'GET',
 					headers: { authorization: 'Bearer fixture-token' }
-				}),
-				url: new URL('https://kaivalo.test/auth/callback')
-			},
+				})
+			}),
 			resolve: async () =>
 				new Response('<!doctype html>', {
 					status: 200,
@@ -879,10 +901,9 @@ describe('Security header handle behavior', () => {
 	it('does not force no-store caching on non-sensitive non-document responses', async () => {
 		const handle = createSecurityHeadersHandle();
 		const response = await handle({
-			event: {
-				request: new Request('https://kaivalo.test/app.css', { method: 'GET' }),
-				url: new URL('https://kaivalo.test/app.css')
-			},
+			event: createEvent({
+				request: new Request('https://kaivalo.test/app.css', { method: 'GET' })
+			}),
 			resolve: async () =>
 				new Response('body { color: red; }', {
 					status: 200,
@@ -896,12 +917,11 @@ describe('Security header handle behavior', () => {
 	it('does not apply static cache policy to dynamic json from asset-like paths', async () => {
 		const handle = createSecurityHeadersHandle();
 		const response = await handle({
-			event: {
+			event: createEvent({
 				request: new Request('https://kaivalo.test/favicon.svg', {
 					method: 'GET'
-				}),
-				url: new URL('https://kaivalo.test/favicon.svg')
-			},
+				})
+			}),
 			resolve: async () =>
 				new Response('{"ok":true}', {
 					status: 200,
@@ -920,13 +940,12 @@ describe('Security header handle behavior', () => {
 	it('forces no-store caching on authorization-bearing non-document responses', async () => {
 		const handle = createSecurityHeadersHandle();
 		const response = await handle({
-			event: {
+			event: createEvent({
 				request: new Request('https://kaivalo.test/api/private', {
 					method: 'GET',
 					headers: { authorization: 'Bearer fixture-token' }
-				}),
-				url: new URL('https://kaivalo.test/api/private')
-			},
+				})
+			}),
 			resolve: async () =>
 				new Response('{"ok":true}', {
 					status: 200,
@@ -945,13 +964,12 @@ describe('Security header handle behavior', () => {
 	it('forces no-store caching on auth-cookie-bearing non-document responses', async () => {
 		const handle = createSecurityHeadersHandle();
 		const response = await handle({
-			event: {
+			event: createEvent({
 				request: new Request('https://kaivalo.test/api/private', {
 					method: 'GET',
 					headers: { cookie: 'wos_session=value' }
-				}),
-				url: new URL('https://kaivalo.test/api/private')
-			},
+				})
+			}),
 			resolve: async () =>
 				new Response('{"ok":true}', {
 					status: 200,
@@ -970,13 +988,12 @@ describe('Security header handle behavior', () => {
 	it('preserves avatar cache headers for auth-cookie-bearing avatar responses', async () => {
 		const handle = createSecurityHeadersHandle();
 		const response = await handle({
-			event: {
+			event: createEvent({
 				request: new Request('https://kaivalo.test/avatar?u=signed', {
 					method: 'GET',
 					headers: { cookie: '__Host-wos_session=value' }
-				}),
-				url: new URL('https://kaivalo.test/avatar?u=signed')
-			},
+				})
+			}),
 			resolve: async () =>
 				new Response('avatar-binary', {
 					status: 200,
@@ -1001,12 +1018,11 @@ describe('Security header handle behavior', () => {
 	it('forces no-store caching on non-document auth-route responses', async () => {
 		const handle = createSecurityHeadersHandle();
 		const response = await handle({
-			event: {
+			event: createEvent({
 				request: new Request('https://kaivalo.test/auth/callback', {
 					method: 'GET'
-				}),
-				url: new URL('https://kaivalo.test/auth/callback')
-			},
+				})
+			}),
 			resolve: async () =>
 				new Response('moved', {
 					status: 303,
@@ -1030,12 +1046,11 @@ describe('Security header handle behavior', () => {
 	it('forces no-store caching on non-document responses that set cookies', async () => {
 		const handle = createSecurityHeadersHandle();
 		const response = await handle({
-			event: {
+			event: createEvent({
 				request: new Request('https://kaivalo.test/api/session', {
 					method: 'POST'
-				}),
-				url: new URL('https://kaivalo.test/api/session')
-			},
+				})
+			}),
 			resolve: async () =>
 				new Response('created', {
 					status: 201,
@@ -1056,7 +1071,7 @@ describe('Security header handle behavior', () => {
 });
 
 describe('Security headers on preview responses', () => {
-	let preview;
+	let preview: PreviewHandle | undefined;
 
 	before(async () => {
 		preview = await startHubPreview();
@@ -1067,7 +1082,7 @@ describe('Security headers on preview responses', () => {
 	});
 
 	it('serves hook-managed security and caching headers on real responses', async () => {
-		const homepage = await httpGet(preview.baseUrl);
+		const homepage = await httpGet(requirePreview(preview).baseUrl);
 
 		assert.strictEqual(homepage.statusCode, 200);
 		assert.strictEqual(
@@ -1089,7 +1104,7 @@ describe('Security headers on preview responses', () => {
 	});
 
 	it('keeps unrelated-cookie homepage responses publicly cacheable', async () => {
-		const homepage = await httpGet(preview.baseUrl, {
+		const homepage = await httpGet(requirePreview(preview).baseUrl, {
 			cookie: 'consent=true; analytics_id=abc123'
 		});
 
@@ -1138,7 +1153,7 @@ describe('Security headers on preview responses', () => {
 	});
 
 	it('serves framework-managed content security policy on real responses', async () => {
-		const homepage = await httpGet(preview.baseUrl);
+		const homepage = await httpGet(requirePreview(preview).baseUrl);
 		const contentSecurityPolicy =
 			homepage.headers['content-security-policy'] ?? '';
 
@@ -1164,7 +1179,9 @@ describe('Security headers on preview responses', () => {
 	});
 
 	it('keeps anonymous services redirects out of shared caches', async () => {
-		const response = await httpGet(`${preview.baseUrl}/services`);
+		const response = await httpGet(
+			`${requirePreview(preview).baseUrl}/services`
+		);
 
 		assert.strictEqual(response.statusCode, 303);
 		assert.strictEqual(response.headers.location, '/auth/sign-in');
@@ -1174,7 +1191,7 @@ describe('Security headers on preview responses', () => {
 
 	it('keeps security and no-store headers on framework-generated 500 pages', async () => {
 		const failureResponse = await httpGet(
-			`${preview.baseUrl}/__tests__/unexpected-error`,
+			`${requirePreview(preview).baseUrl}/__tests__/unexpected-error`,
 			{
 				'x-kaivalo-test-unhandled-error': '1'
 			}

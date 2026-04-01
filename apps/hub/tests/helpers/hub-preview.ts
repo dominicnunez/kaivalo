@@ -27,6 +27,23 @@ type HttpRequestOptions = {
 	cookieJar?: CookieJar;
 	sameSiteContext?: SameSiteContext;
 };
+type HubPreviewOptions = {
+	env?: Record<string, string | undefined>;
+	imports?: string[];
+	shared?: boolean;
+};
+export type HubPreviewHandle = {
+	baseUrl: string;
+	stop: () => Promise<void>;
+};
+type ReservedPort = {
+	port: number;
+	release: () => Promise<void>;
+};
+type PreviewExitResult = {
+	code: number | null;
+	signal: NodeJS.Signals | null;
+};
 
 export type PreviewHttpResponse = {
 	statusCode: number | undefined;
@@ -35,16 +52,15 @@ export type PreviewHttpResponse = {
 	headers: http.IncomingHttpHeaders;
 };
 
-function delay(ms) {
+function delay(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * @param {number} previewPort
- * @param {Record<string, string | undefined>} [envOverrides]
- * @param {string[]} [imports]
- */
-function createPreviewEnv(previewPort, envOverrides = {}, imports = []) {
+function createPreviewEnv(
+	previewPort: number,
+	envOverrides: Record<string, string | undefined> = {},
+	imports: string[] = []
+): NodeJS.ProcessEnv {
 	return createHubPreviewEnv({
 		port: previewPort,
 		envOverrides,
@@ -52,20 +68,28 @@ function createPreviewEnv(previewPort, envOverrides = {}, imports = []) {
 	});
 }
 
-function shouldUseSharedPreview(options = {}) {
+function shouldUseSharedPreview(options: HubPreviewOptions = {}): boolean {
 	const hasCustomEnv = Object.keys(options.env ?? {}).length > 0;
 	const hasCustomImports = (options.imports?.length ?? 0) > 0;
 	return options.shared !== false && !hasCustomEnv && !hasCustomImports;
 }
 
+function isHttpRequestOptions(
+	headersOrOptions: RequestHeaders | HttpRequestOptions
+): headersOrOptions is HttpRequestOptions {
+	return (
+		'cookieJar' in headersOrOptions ||
+		'sameSiteContext' in headersOrOptions ||
+		('headers' in headersOrOptions &&
+			typeof headersOrOptions.headers === 'object' &&
+			headersOrOptions.headers !== null)
+	);
+}
+
 function normalizeRequestOptions(
 	headersOrOptions: RequestHeaders | HttpRequestOptions = {}
 ): HttpRequestOptions {
-	if (
-		'headers' in headersOrOptions ||
-		'cookieJar' in headersOrOptions ||
-		'sameSiteContext' in headersOrOptions
-	) {
+	if (isHttpRequestOptions(headersOrOptions)) {
 		return headersOrOptions;
 	}
 
@@ -140,7 +164,7 @@ export function httpRequest(
 					headers
 				},
 				(res) => {
-					const chunks = [];
+					const chunks: Buffer[] = [];
 					let totalBytes = 0;
 					res.on('data', (chunk) => {
 						const chunkBuffer = Buffer.isBuffer(chunk)
@@ -201,7 +225,10 @@ export function httpPost(
 	return httpRequest(url, 'POST', normalizeRequestOptions(headersOrOptions));
 }
 
-function decodeTextBody(body, contentTypeHeader) {
+function decodeTextBody(
+	body: Buffer,
+	contentTypeHeader: string | string[] | undefined
+): string {
 	const contentType = String(contentTypeHeader ?? '').toLowerCase();
 	const isTextResponse =
 		contentType.startsWith('text/') ||
@@ -218,7 +245,9 @@ function decodeTextBody(body, contentTypeHeader) {
 	return body.toString('utf8');
 }
 
-export async function startHubPreview(options = {}) {
+export async function startHubPreview(
+	options: HubPreviewOptions = {}
+): Promise<HubPreviewHandle> {
 	if (!shouldUseSharedPreview(options)) {
 		return createHubPreview(options);
 	}
@@ -226,14 +255,16 @@ export async function startHubPreview(options = {}) {
 	return acquireSharedHubPreview();
 }
 
-let sharedPreviewPromise = null;
-let sharedPreview = null;
+let sharedPreviewPromise: Promise<HubPreviewHandle> | null = null;
+let sharedPreview: HubPreviewHandle | null = null;
 let activeLeases = 0;
 let cleanupRegistered = false;
-let shutdownTimer = null;
+let shutdownTimer: NodeJS.Timeout | null = null;
 const SHARED_PREVIEW_IDLE_SHUTDOWN_MS = 15000;
 
-async function acquireSharedHubPreview(retryOnStale = true) {
+async function acquireSharedHubPreview(
+	retryOnStale = true
+): Promise<HubPreviewHandle> {
 	if (!sharedPreviewPromise) {
 		sharedPreviewPromise = createHubPreview()
 			.then((preview) => {
@@ -252,7 +283,7 @@ async function acquireSharedHubPreview(retryOnStale = true) {
 	}
 	activeLeases += 1;
 
-	let preview;
+	let preview: HubPreviewHandle;
 	try {
 		preview = await sharedPreviewPromise;
 	} catch (error) {
@@ -314,14 +345,24 @@ async function acquireSharedHubPreview(retryOnStale = true) {
 	};
 }
 
-async function createHubPreview(options = {}) {
+function getErrorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
+function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
+	return error instanceof Error;
+}
+
+async function createHubPreview(
+	options: HubPreviewOptions = {}
+): Promise<HubPreviewHandle> {
 	ensureHubBuild();
 
 	const hubDir = path.resolve(import.meta.dirname, '..', '..');
-	let lastError = null;
+	let lastError: unknown = null;
 
 	for (let attempt = 0; attempt < PREVIEW_PORT_RETRY_COUNT; attempt += 1) {
-		const reservedPort = await reserveLocalPort();
+		const reservedPort = (await reserveLocalPort()) as ReservedPort;
 
 		try {
 			return await startPreviewProcess(
@@ -334,9 +375,7 @@ async function createHubPreview(options = {}) {
 			lastError = error;
 
 			// Only retry on startup failures likely related to port binding.
-			if (
-				!/address already in use|EADDRINUSE/i.test(String(error?.message ?? ''))
-			) {
+			if (!/address already in use|EADDRINUSE/i.test(getErrorMessage(error))) {
 				throw error;
 			}
 		}
@@ -349,14 +388,14 @@ async function createHubPreview(options = {}) {
 }
 
 async function startPreviewProcess(
-	hubDir,
-	previewPort,
-	releasePortReservation,
-	options = {}
-) {
+	hubDir: string,
+	previewPort: number,
+	releasePortReservation: ReservedPort['release'],
+	options: HubPreviewOptions = {}
+): Promise<HubPreviewHandle> {
 	const baseUrl = `http://127.0.0.1:${previewPort}`;
-	const output = [];
-	const appendOutput = (chunk) => {
+	const output: string[] = [];
+	const appendOutput = (chunk: Buffer | string | null | undefined): void => {
 		if (!chunk) {
 			return;
 		}
@@ -376,12 +415,12 @@ async function startPreviewProcess(
 	server.stderr?.on('data', appendOutput);
 
 	let stopped = false;
-	let exitSignal = null;
-	let exitCode = null;
-	let spawnError = null;
+	let exitSignal: NodeJS.Signals | null = null;
+	let exitCode: number | null = null;
+	let spawnError: Error | null = null;
 	let didExit = false;
-	let resolveExit;
-	const exitPromise = new Promise((resolve) => {
+	let resolveExit: ((result: PreviewExitResult) => void) | null = null;
+	const exitPromise = new Promise<PreviewExitResult>((resolve) => {
 		resolveExit = resolve;
 	});
 
@@ -389,7 +428,7 @@ async function startPreviewProcess(
 		exitCode = code;
 		exitSignal = signal;
 		didExit = true;
-		resolveExit({ code, signal });
+		resolveExit?.({ code, signal });
 	});
 	server.once('error', (error) => {
 		spawnError = error;
@@ -397,7 +436,7 @@ async function startPreviewProcess(
 
 	await releasePortReservation();
 
-	const waitForExit = async (timeoutMs) => {
+	const waitForExit = async (timeoutMs: number): Promise<boolean> => {
 		if (didExit) {
 			return true;
 		}
@@ -426,7 +465,7 @@ async function startPreviewProcess(
 		try {
 			process.kill(-processGroupId, 'SIGTERM');
 		} catch (error) {
-			if (error.code !== 'ESRCH') {
+			if (!isErrnoException(error) || error.code !== 'ESRCH') {
 				throw error;
 			}
 			return;
@@ -439,7 +478,7 @@ async function startPreviewProcess(
 		try {
 			process.kill(-processGroupId, 'SIGKILL');
 		} catch (error) {
-			if (error.code !== 'ESRCH') {
+			if (!isErrnoException(error) || error.code !== 'ESRCH') {
 				throw error;
 			}
 			return;
@@ -450,10 +489,11 @@ async function startPreviewProcess(
 
 	const startupDeadline = Date.now() + PREVIEW_STARTUP_TIMEOUT_MS;
 	while (Date.now() < startupDeadline) {
-		if (spawnError) {
+		const currentSpawnError = spawnError;
+		if (currentSpawnError) {
 			await stopServer();
 			throw new Error(
-				`Unable to start hub preview server: ${spawnError.message}`
+				`Unable to start hub preview server: ${getErrorMessage(currentSpawnError)}`
 			);
 		}
 

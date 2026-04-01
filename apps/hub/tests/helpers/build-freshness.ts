@@ -1,13 +1,9 @@
 import { existsSync, lstatSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
-const newestMtimeCache = new Map();
+const newestMtimeCache = new Map<string, number>();
 
-/**
- * @param {import('node:fs').Stats} stats
- * @returns {string}
- */
-function getDirectoryKey(stats) {
+function getDirectoryKey(stats: import('node:fs').Stats): string {
 	return `${stats.dev}:${stats.ino}`;
 }
 
@@ -18,15 +14,13 @@ export function clearNewestMtimeCache() {
 	newestMtimeCache.clear();
 }
 
-/**
- * @param {string} targetPath
- * @param {Set<string>} [visitedDirectories]
- * @returns {number}
- */
-export function getNewestMtimeMs(targetPath, visitedDirectories = new Set()) {
+export function getNewestMtimeMs(
+	targetPath: string,
+	visitedDirectories = new Set<string>()
+): number {
 	const isTopLevelCall = visitedDirectories.size === 0;
 	if (isTopLevelCall && newestMtimeCache.has(targetPath)) {
-		return newestMtimeCache.get(targetPath);
+		return newestMtimeCache.get(targetPath) ?? 0;
 	}
 
 	let newestMtimeMs = 0;

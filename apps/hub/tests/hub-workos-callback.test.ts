@@ -17,6 +17,7 @@ import {
 } from '../src/lib/auth/auth-notice-query.ts';
 import { isHttpError, isRedirect } from '@sveltejs/kit';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
+import { createRequestEvent } from './helpers/request-event.ts';
 import {
 	beginWorkosAuthFlow,
 	completeWorkosCodeExchange,
@@ -33,6 +34,9 @@ const expectedOrigin = 'https://kaivalo.test';
 type CallbackHandlerOptions = Parameters<
 	typeof createAuthCallbackGetHandler
 >[0];
+type CallbackLogEntry = Parameters<
+	NonNullable<CallbackHandlerOptions['logError']>
+>;
 
 function createHandler(
 	options: Omit<CallbackHandlerOptions, 'expectedOrigin'>
@@ -47,26 +51,25 @@ function createEvent(
 	headers: HeadersInit = {},
 	requestUrl = 'https://kaivalo.test/auth/callback'
 ) {
-	return {
-		locals: {},
-		request: new Request(requestUrl, {
-			method: 'GET',
-			headers
-		}),
-		url: new URL(requestUrl)
-	};
+	return createRequestEvent({
+		requestUrl,
+		method: 'GET',
+		headers
+	});
 }
 
-/**
- * @param {import('node:http').IncomingHttpHeaders} headers
- * @returns {string[]}
- */
-function getSetCookieHeaders(headers) {
+function getSetCookieHeaders(
+	headers: import('node:http').IncomingHttpHeaders
+): string[] {
 	const values = headers['set-cookie'];
 	if (!values) {
 		return [];
 	}
 	return Array.isArray(values) ? values : [values];
+}
+
+function createLogEntries(): CallbackLogEntry[] {
+	return [];
 }
 
 describe('WorkOS Auth Callback Route', () => {
@@ -149,7 +152,7 @@ describe('WorkOS Auth Callback Route', () => {
 		});
 
 		it('rejects redirects that target the poisoned request host instead of the configured origin', async () => {
-			const logs = [];
+			const logs = createLogEntries();
 			const handler = createHandler({
 				handleCallback: () => async () =>
 					Response.redirect('https://evil.test/phish', 303),
@@ -178,7 +181,7 @@ describe('WorkOS Auth Callback Route', () => {
 		});
 
 		it('rejects callback responses with external redirect locations', async () => {
-			const logs = [];
+			const logs = createLogEntries();
 			const handler = createHandler({
 				handleCallback: () => async () =>
 					Response.redirect('https://evil.test/phish', 303),
@@ -201,7 +204,7 @@ describe('WorkOS Auth Callback Route', () => {
 		});
 
 		it('rejects callback responses with encoded same-origin separator payloads', async () => {
-			const logs = [];
+			const logs = createLogEntries();
 			const handler = createHandler({
 				handleCallback: () => async () =>
 					Response.redirect('https://kaivalo.test/%2F%2Fevil.test/phish', 303),
@@ -224,7 +227,7 @@ describe('WorkOS Auth Callback Route', () => {
 		});
 
 		it('rejects redirect responses that omit the location header', async () => {
-			const logs = [];
+			const logs = createLogEntries();
 			const handler = createHandler({
 				handleCallback: () => async () =>
 					new Response(null, {
@@ -297,7 +300,7 @@ describe('WorkOS Auth Callback Route', () => {
 		});
 
 		it('treats non-redirect status objects as unexpected callback failures', async () => {
-			const logs = [];
+			const logs = createLogEntries();
 			const handler = createHandler({
 				handleCallback: () => async () => {
 					throw {
@@ -330,7 +333,7 @@ describe('WorkOS Auth Callback Route', () => {
 		});
 
 		it('translates vendor auth error redirects into the signed landing-page error flow', async () => {
-			const logs = [];
+			const logs = createLogEntries();
 			const redirectErr = {
 				status: 302,
 				location: 'https://kaivalo.test/auth/error?code=AUTH_FAILED'
@@ -385,7 +388,7 @@ describe('WorkOS Auth Callback Route', () => {
 		});
 
 		it('preserves sanitized provider callback error codes in failure logs', async () => {
-			const logs = [];
+			const logs = createLogEntries();
 			const callbackState = buildWorkosCallbackState('/services');
 			const handler = createHandler({
 				handleCallback: () =>
@@ -423,7 +426,7 @@ describe('WorkOS Auth Callback Route', () => {
 		});
 
 		it('rejects forged provider errors that do not present callback state', async () => {
-			const logs = [];
+			const logs = createLogEntries();
 			const callbackState = buildWorkosCallbackState('/services');
 			const handler = createHandler({
 				handleCallback: () =>
@@ -497,7 +500,7 @@ describe('WorkOS Auth Callback Route', () => {
 		});
 
 		it('rejects redirect throws with external locations', async () => {
-			const logs = [];
+			const logs = createLogEntries();
 			const redirectErr = {
 				status: 302,
 				location: 'https://evil.test/phish'
@@ -543,7 +546,7 @@ describe('WorkOS Auth Callback Route', () => {
 		});
 
 		it('logs stable callback failure context and redirects with incident reference for browser requests', async () => {
-			const logs = [];
+			const logs = createLogEntries();
 			const handler = createHandler({
 				handleCallback: () => async () => {
 					throw new Error('upstream failure with token-like-value');
@@ -622,13 +625,15 @@ describe('WorkOS Auth Callback Route', () => {
 		});
 
 		it('logs sanitized upstream and cause codes when callback failure includes causal details', async () => {
-			const logs = [];
+			const logs = createLogEntries();
 			const handler = createHandler({
 				handleCallback: () => async () => {
-					const cause = new Error('upstream unavailable');
-					cause.code = 'ETIMEDOUT';
-					const callbackError = new Error('callback failed');
-					callbackError.code = 'WORKOS_UPSTREAM_FAILURE';
+					const cause = Object.assign(new Error('upstream unavailable'), {
+						code: 'ETIMEDOUT'
+					});
+					const callbackError = Object.assign(new Error('callback failed'), {
+						code: 'WORKOS_UPSTREAM_FAILURE'
+					});
 					callbackError.cause = cause;
 					throw callbackError;
 				},
@@ -653,7 +658,7 @@ describe('WorkOS Auth Callback Route', () => {
 		});
 
 		it('returns a 503 error with incident reference for non-browser requests', async () => {
-			const logs = [];
+			const logs = createLogEntries();
 			const handler = createHandler({
 				handleCallback: () => async () => {
 					throw new Error('upstream failure with token-like-value');
@@ -742,7 +747,7 @@ describe('WorkOS Auth Callback Route', () => {
 		});
 
 		it('handles failures while creating the callback handler factory', async () => {
-			const logs = [];
+			const logs = createLogEntries();
 			const handler = createHandler({
 				handleCallback: () => {
 					throw Object.assign(new Error('factory failed'), {
@@ -773,7 +778,7 @@ describe('WorkOS Auth Callback Route', () => {
 		});
 
 		it('normalizes untrusted request id values before logging', async () => {
-			const logs = [];
+			const logs = createLogEntries();
 			const handler = createHandler({
 				handleCallback: () => async () => {
 					throw new Error('upstream failure');
