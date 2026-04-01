@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { ensureHubBuild } from './helpers/hub-build.ts';
 import { httpGet } from './helpers/hub-preview.ts';
 import { reserveLocalPort } from '../../../tests/helpers/network.ts';
@@ -21,11 +22,44 @@ const STARTUP_PROBE_TIMEOUT_MS = 500;
 const STARTUP_HEALTH_PATH = '/healthz';
 const STARTUP_HEALTH_RESPONSE = 'ok';
 
-function delay(ms) {
+type PortReservation = {
+	port: number;
+	release: () => Promise<void>;
+};
+type BuiltServerProcess = ReturnType<typeof spawn>;
+type StartupOutputTracker = {
+	appendOutput: (chunk: Buffer | string | null | undefined) => void;
+	readonly sawReadyLog: boolean;
+	readonly summary: string;
+};
+type BuiltServerHandle = {
+	server: BuiltServerProcess;
+	baseUrl: string;
+};
+type BuiltServerExitResult = {
+	exitCode: number | null;
+	signal: NodeJS.Signals | null;
+	output: string;
+	port: number;
+};
+type StopProcessResult = {
+	forced: boolean;
+};
+type HttpAgentResponse = {
+	statusCode: number;
+	data: string;
+	headers: http.IncomingHttpHeaders;
+};
+
+function delay(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function createFixtureEnv(port, overrides = {}, nodeEnv = 'production') {
+function createFixtureEnv(
+	port: number,
+	overrides: Record<string, string | undefined> = {},
+	nodeEnv = 'production'
+): NodeJS.ProcessEnv {
 	const env = createHubBuiltRuntimeEnv({
 		port,
 		envOverrides: overrides
@@ -34,12 +68,12 @@ function createFixtureEnv(port, overrides = {}, nodeEnv = 'production') {
 	return env;
 }
 
-function createStartupOutputTracker() {
-	const startupOutput = [];
+function createStartupOutputTracker(): StartupOutputTracker {
+	const startupOutput: string[] = [];
 	let sawReadyLog = false;
 
 	return {
-		appendOutput(chunk) {
+		appendOutput(chunk: Buffer | string | null | undefined) {
 			if (!chunk) {
 				return;
 			}
@@ -69,10 +103,22 @@ function createStartupOutputTracker() {
 	};
 }
 
-async function startBuiltServer(envOverrides = {}, nodeEnv = 'production') {
+function getProcessGroupId(server: BuiltServerProcess): number | null {
+	return typeof server.pid === 'number' ? -server.pid : null;
+}
+
+function getAddressInfo(address: string | AddressInfo | null): AddressInfo {
+	assert.ok(address && typeof address !== 'string');
+	return address;
+}
+
+async function startBuiltServer(
+	envOverrides: Record<string, string | undefined> = {},
+	nodeEnv = 'production'
+): Promise<BuiltServerHandle> {
 	ensureHubBuild();
 
-	const reservation = await reserveLocalPort();
+	const reservation = (await reserveLocalPort()) as PortReservation;
 	const port = reservation.port;
 	const baseUrl = `http://127.0.0.1:${port}`;
 	const startupOutput = createStartupOutputTracker();
@@ -86,12 +132,12 @@ async function startBuiltServer(envOverrides = {}, nodeEnv = 'production') {
 	server.stderr?.on('data', startupOutput.appendOutput);
 	await reservation.release();
 
-	let exitCode = null;
-	let exitSignal = null;
-	let spawnError = null;
+	let exitCode: number | null = null;
+	let exitSignal: NodeJS.Signals | null = null;
+	let spawnErrorMessage: string | null = null;
 	let didExit = false;
 	server.once('error', (error) => {
-		spawnError = error;
+		spawnErrorMessage = error.message;
 	});
 	server.once('exit', (code, signal) => {
 		didExit = true;
@@ -100,7 +146,7 @@ async function startBuiltServer(envOverrides = {}, nodeEnv = 'production') {
 	});
 
 	for (let i = 0; i < STARTUP_RETRY_COUNT; i += 1) {
-		if (spawnError) {
+		if (spawnErrorMessage) {
 			break;
 		}
 		if (didExit) {
@@ -116,17 +162,21 @@ async function startBuiltServer(envOverrides = {}, nodeEnv = 'production') {
 		await delay(STARTUP_DELAY_MS);
 	}
 
-	try {
-		process.kill(-server.pid, 'SIGKILL');
-	} catch {
-		// Ignore if already down.
+	const processGroupId = getProcessGroupId(server);
+	if (processGroupId !== null) {
+		try {
+			process.kill(processGroupId, 'SIGKILL');
+		} catch {
+			// Ignore if already down.
+		}
 	}
 
-	const failureReason = spawnError
-		? `spawn failed: ${spawnError.message}`
-		: didExit
-			? `process exited before readiness (code ${exitCode ?? 'null'}, signal ${exitSignal ?? 'null'})`
-			: `server did not become ready within ${STARTUP_TIMEOUT_MS}ms`;
+	let failureReason = `server did not become ready within ${STARTUP_TIMEOUT_MS}ms`;
+	if (spawnErrorMessage) {
+		failureReason = `spawn failed: ${spawnErrorMessage}`;
+	} else if (didExit) {
+		failureReason = `process exited before readiness (code ${exitCode ?? 'null'}, signal ${exitSignal ?? 'null'})`;
+	}
 	const readinessSummary = startupOutput.sawReadyLog
 		? 'saw readiness log but health checks never succeeded'
 		: 'never observed readiness log output';
@@ -141,12 +191,12 @@ async function startBuiltServer(envOverrides = {}, nodeEnv = 'production') {
 }
 
 async function runBuiltServerToExit(
-	envOverrides = {},
+	envOverrides: Record<string, string | undefined> = {},
 	{ keepPortReserved = false } = {}
-) {
+): Promise<BuiltServerExitResult> {
 	ensureHubBuild();
 
-	const reservation = await reserveLocalPort();
+	const reservation = (await reserveLocalPort()) as PortReservation;
 	const port = reservation.port;
 	if (!keepPortReserved) {
 		await reservation.release();
@@ -162,7 +212,10 @@ async function runBuiltServerToExit(
 	server.stderr?.on('data', startupOutput.appendOutput);
 
 	try {
-		const outcome = await new Promise((resolve, reject) => {
+		const outcome = await new Promise<{
+			exitCode: number | null;
+			signal: NodeJS.Signals | null;
+		}>((resolve, reject) => {
 			const timeout = setTimeout(() => {
 				server.kill('SIGKILL');
 				reject(
@@ -199,13 +252,22 @@ async function runBuiltServerToExit(
 	}
 }
 
-function stopProcessGroup(server, signal = 'SIGTERM') {
+function stopProcessGroup(
+	server: BuiltServerProcess,
+	signal: NodeJS.Signals = 'SIGTERM'
+): Promise<StopProcessResult> {
 	return new Promise((resolve) => {
 		let forced = false;
 		const timeout = setTimeout(() => {
+			const processGroupId = getProcessGroupId(server);
+			if (processGroupId === null) {
+				resolve({ forced });
+				return;
+			}
+
 			try {
 				forced = true;
-				process.kill(-server.pid, 'SIGKILL');
+				process.kill(processGroupId, 'SIGKILL');
 			} catch {
 				// Ignore already-stopped process.
 			}
@@ -218,8 +280,15 @@ function stopProcessGroup(server, signal = 'SIGTERM') {
 			resolve({ forced });
 		});
 
+		const processGroupId = getProcessGroupId(server);
+		if (processGroupId === null) {
+			clearTimeout(timeout);
+			resolve({ forced: false });
+			return;
+		}
+
 		try {
-			process.kill(-server.pid, signal);
+			process.kill(processGroupId, signal);
 		} catch {
 			clearTimeout(timeout);
 			resolve({ forced: false });
@@ -227,10 +296,13 @@ function stopProcessGroup(server, signal = 'SIGTERM') {
 	});
 }
 
-function httpGetWithAgent(url, agent) {
+function httpGetWithAgent(
+	url: string | URL,
+	agent: http.Agent
+): Promise<HttpAgentResponse> {
 	return new Promise((resolve, reject) => {
 		const req = http.get(url, { agent }, (res) => {
-			const chunks = [];
+			const chunks: Buffer[] = [];
 			res.on('data', (chunk) =>
 				chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
 			);
@@ -247,10 +319,10 @@ function httpGetWithAgent(url, agent) {
 	});
 }
 
-function probeServerReady(url) {
+function probeServerReady(url: string): Promise<boolean> {
 	return new Promise((resolve) => {
 		const req = http.get(new URL(STARTUP_HEALTH_PATH, url), (res) => {
-			const chunks = [];
+			const chunks: Buffer[] = [];
 			res.on('data', (chunk) =>
 				chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
 			);
@@ -282,14 +354,16 @@ describe('hub production readiness probe', () => {
 			response.writeHead(404);
 			response.end('not found');
 		});
-		await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-		const address = server.address();
+		await new Promise<void>((resolve) =>
+			server.listen(0, '127.0.0.1', () => resolve())
+		);
+		const address = getAddressInfo(server.address());
 		const baseUrl = `http://127.0.0.1:${address.port}`;
 
 		try {
 			assert.strictEqual(await probeServerReady(baseUrl), true);
 		} finally {
-			await new Promise((resolve, reject) =>
+			await new Promise<void>((resolve, reject) =>
 				server.close((error) => (error ? reject(error) : resolve()))
 			);
 		}
@@ -306,14 +380,16 @@ describe('hub production readiness probe', () => {
 			response.writeHead(404);
 			response.end('not found');
 		});
-		await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-		const address = server.address();
+		await new Promise<void>((resolve) =>
+			server.listen(0, '127.0.0.1', () => resolve())
+		);
+		const address = getAddressInfo(server.address());
 		const baseUrl = `http://127.0.0.1:${address.port}`;
 
 		try {
 			assert.strictEqual(await probeServerReady(baseUrl), false);
 		} finally {
-			await new Promise((resolve, reject) =>
+			await new Promise<void>((resolve, reject) =>
 				server.close((error) => (error ? reject(error) : resolve()))
 			);
 		}
@@ -321,9 +397,12 @@ describe('hub production readiness probe', () => {
 });
 
 describe('hub production adapter runtime', () => {
-	before({ timeout: 60000 }, () => {
-		ensureHubBuild();
-	});
+	before(
+		() => {
+			ensureHubBuild();
+		},
+		{ timeout: 60000 }
+	);
 
 	it(
 		'starts the built node server and serves the landing page',
@@ -464,7 +543,9 @@ describe('hub production adapter runtime', () => {
 				const warmup = await httpGetWithAgent(baseUrl, keepAliveAgent);
 				assert.strictEqual(warmup.statusCode, 200);
 
-				process.kill(-server.pid, 'SIGTERM');
+				const processGroupId = getProcessGroupId(server);
+				assert.ok(processGroupId !== null);
+				process.kill(processGroupId, 'SIGTERM');
 				let shutdownOutcome = null;
 				for (let i = 0; i < 10; i += 1) {
 					try {

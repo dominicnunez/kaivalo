@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import { createSignOutPostHandler } from '../src/lib/auth/sign-out-handler.ts';
 import { isHttpError, isRedirect } from '@sveltejs/kit';
 import { httpGet, httpPost, startHubPreview } from './helpers/hub-preview.ts';
+import { createRequestEvent } from './helpers/request-event.ts';
 import { signInThroughWorkosCallback } from './helpers/workos-auth-flow.ts';
 import {
 	assertClearedSessionCookieContract,
@@ -15,6 +16,72 @@ const previewFixtureImport = new URL(
 	'./helpers/hub-preview-fixtures.mts',
 	import.meta.url
 ).href;
+type SignOutHandler = ReturnType<typeof createSignOutPostHandler>;
+type SignOutHandlerOptions = Parameters<typeof createSignOutPostHandler>[0];
+type SignOutLogEntry = Parameters<
+	NonNullable<SignOutHandlerOptions['logError']>
+>;
+type PreviewHandle = Awaited<ReturnType<typeof startHubPreview>>;
+type SignOutRequestOptions = {
+	headers?: HeadersInit;
+	requestUrl?: string;
+	method?: string;
+};
+
+function createEvent(
+	headers: HeadersInit = {},
+	requestUrl = 'https://kaivalo.test/auth/sign-out',
+	method = 'POST'
+) {
+	return createRequestEvent({
+		requestUrl,
+		method,
+		headers
+	});
+}
+
+function invokePostHandler(
+	postHandler: SignOutHandler,
+	{ headers = {}, requestUrl, method }: SignOutRequestOptions = {}
+) {
+	return postHandler(createEvent(headers, requestUrl, method));
+}
+
+function createLogEntries(): SignOutLogEntry[] {
+	return [];
+}
+
+function requirePreview(preview: PreviewHandle | undefined): PreviewHandle {
+	assert.ok(preview);
+	return preview;
+}
+
+function expectHttpErrorStatus(caught: unknown, status: number): boolean {
+	assert.ok(isHttpError(caught));
+	if (!isHttpError(caught)) {
+		return false;
+	}
+
+	assert.strictEqual(caught.status, status);
+	return true;
+}
+
+function expectRedirectStatus(
+	caught: unknown,
+	status: number,
+	location?: string
+): boolean {
+	assert.ok(isRedirect(caught));
+	if (!isRedirect(caught)) {
+		return false;
+	}
+
+	assert.strictEqual(caught.status, status);
+	if (location !== undefined) {
+		assert.strictEqual(caught.location, location);
+	}
+	return true;
+}
 
 describe('sign-out handler unit behavior', () => {
 	it('allows same-origin requests', async () => {
@@ -24,12 +91,8 @@ describe('sign-out handler unit behavior', () => {
 			expectedOrigin: 'https://kaivalo.com'
 		});
 
-		const result = await postHandler({
-			request: new Request('https://kaivalo.test/auth/sign-out', {
-				method: 'POST',
-				headers: { origin: 'https://kaivalo.com' }
-			}),
-			url: new URL('https://kaivalo.test/auth/sign-out')
+		const result = await invokePostHandler(postHandler, {
+			headers: { origin: 'https://kaivalo.com' }
 		});
 
 		assert.strictEqual(result, expected);
@@ -43,17 +106,10 @@ describe('sign-out handler unit behavior', () => {
 
 		await assert.rejects(
 			() =>
-				postHandler({
-					request: new Request('https://kaivalo.test/auth/sign-out', {
-						method: 'POST',
-						headers: { origin: 'https://evil.test' }
-					}),
-					url: new URL('https://kaivalo.test/auth/sign-out')
+				invokePostHandler(postHandler, {
+					headers: { origin: 'https://evil.test' }
 				}),
-			(caught) => {
-				assert.strictEqual(caught.status, 403);
-				return true;
-			}
+			(caught: unknown) => expectHttpErrorStatus(caught, 403)
 		);
 	});
 
@@ -64,12 +120,8 @@ describe('sign-out handler unit behavior', () => {
 			expectedOrigin: 'https://kaivalo.com/'
 		});
 
-		const result = await postHandler({
-			request: new Request('https://kaivalo.test/auth/sign-out', {
-				method: 'POST',
-				headers: { origin: 'https://kaivalo.com' }
-			}),
-			url: new URL('https://kaivalo.test/auth/sign-out')
+		const result = await invokePostHandler(postHandler, {
+			headers: { origin: 'https://kaivalo.com' }
 		});
 
 		assert.strictEqual(result, expected);
@@ -93,12 +145,8 @@ describe('sign-out handler unit behavior', () => {
 			expectedOrigin: 'https://kaivalo.com'
 		});
 
-		const result = await postHandler({
-			request: new Request('https://kaivalo.test/auth/sign-out', {
-				method: 'POST',
-				headers: { referer: 'https://kaivalo.com/account' }
-			}),
-			url: new URL('https://kaivalo.test/auth/sign-out')
+		const result = await invokePostHandler(postHandler, {
+			headers: { referer: 'https://kaivalo.com/account' }
 		});
 
 		assert.strictEqual(result, expected);
@@ -111,17 +159,8 @@ describe('sign-out handler unit behavior', () => {
 		});
 
 		await assert.rejects(
-			() =>
-				postHandler({
-					request: new Request('https://kaivalo.test/auth/sign-out', {
-						method: 'POST'
-					}),
-					url: new URL('https://kaivalo.test/auth/sign-out')
-				}),
-			(caught) => {
-				assert.strictEqual(caught.status, 403);
-				return true;
-			}
+			() => invokePostHandler(postHandler),
+			(caught: unknown) => expectHttpErrorStatus(caught, 403)
 		);
 	});
 
@@ -133,17 +172,10 @@ describe('sign-out handler unit behavior', () => {
 
 		await assert.rejects(
 			() =>
-				postHandler({
-					request: new Request('https://kaivalo.test/auth/sign-out', {
-						method: 'POST',
-						headers: { referer: 'https://evil.test/path' }
-					}),
-					url: new URL('https://kaivalo.test/auth/sign-out')
+				invokePostHandler(postHandler, {
+					headers: { referer: 'https://evil.test/path' }
 				}),
-			(caught) => {
-				assert.strictEqual(caught.status, 403);
-				return true;
-			}
+			(caught: unknown) => expectHttpErrorStatus(caught, 403)
 		);
 	});
 
@@ -155,18 +187,8 @@ describe('sign-out handler unit behavior', () => {
 
 		for (const referer of ['https://', 'not a url', 'https://exa mple.test']) {
 			await assert.rejects(
-				() =>
-					postHandler({
-						request: new Request('https://kaivalo.test/auth/sign-out', {
-							method: 'POST',
-							headers: { referer }
-						}),
-						url: new URL('https://kaivalo.test/auth/sign-out')
-					}),
-				(caught) => {
-					assert.strictEqual(caught.status, 403);
-					return true;
-				}
+				() => invokePostHandler(postHandler, { headers: { referer } }),
+				(caught: unknown) => expectHttpErrorStatus(caught, 403)
 			);
 		}
 	});
@@ -178,18 +200,8 @@ describe('sign-out handler unit behavior', () => {
 		});
 
 		await assert.rejects(
-			() =>
-				postHandler({
-					request: new Request('https://kaivalo.test/auth/sign-out', {
-						method: 'POST',
-						headers: { referer: 'null' }
-					}),
-					url: new URL('https://kaivalo.test/auth/sign-out')
-				}),
-			(caught) => {
-				assert.strictEqual(caught.status, 403);
-				return true;
-			}
+			() => invokePostHandler(postHandler, { headers: { referer: 'null' } }),
+			(caught: unknown) => expectHttpErrorStatus(caught, 403)
 		);
 	});
 
@@ -201,17 +213,11 @@ describe('sign-out handler unit behavior', () => {
 
 		await assert.rejects(
 			() =>
-				postHandler({
-					request: new Request('https://kaivalo.test/auth/sign-out', {
-						method: 'GET',
-						headers: { origin: 'https://kaivalo.com' }
-					}),
-					url: new URL('https://kaivalo.test/auth/sign-out')
+				invokePostHandler(postHandler, {
+					method: 'GET',
+					headers: { origin: 'https://kaivalo.com' }
 				}),
-			(caught) => {
-				assert.strictEqual(caught.status, 405);
-				return true;
-			}
+			(caught: unknown) => expectHttpErrorStatus(caught, 405)
 		);
 	});
 
@@ -222,20 +228,8 @@ describe('sign-out handler unit behavior', () => {
 		});
 
 		await assert.rejects(
-			() =>
-				postHandler({
-					request: new Request('https://kaivalo.test/auth/sign-out', {
-						method: 'POST',
-						headers: {
-							origin: 'https://'
-						}
-					}),
-					url: new URL('https://kaivalo.test/auth/sign-out')
-				}),
-			(caught) => {
-				assert.strictEqual(caught.status, 403);
-				return true;
-			}
+			() => invokePostHandler(postHandler, { headers: { origin: 'https://' } }),
+			(caught: unknown) => expectHttpErrorStatus(caught, 403)
 		);
 	});
 
@@ -251,18 +245,8 @@ describe('sign-out handler unit behavior', () => {
 			'https://user@kaivalo.com/path'
 		]) {
 			await assert.rejects(
-				() =>
-					postHandler({
-						request: new Request('https://kaivalo.test/auth/sign-out', {
-							method: 'POST',
-							headers: { origin }
-						}),
-						url: new URL('https://kaivalo.test/auth/sign-out')
-					}),
-				(caught) => {
-					assert.strictEqual(caught.status, 403);
-					return true;
-				}
+				() => invokePostHandler(postHandler, { headers: { origin } }),
+				(caught: unknown) => expectHttpErrorStatus(caught, 403)
 			);
 		}
 	});
@@ -274,20 +258,8 @@ describe('sign-out handler unit behavior', () => {
 		});
 
 		await assert.rejects(
-			() =>
-				postHandler({
-					request: new Request('https://kaivalo.test/auth/sign-out', {
-						method: 'POST',
-						headers: {
-							origin: 'null'
-						}
-					}),
-					url: new URL('https://kaivalo.test/auth/sign-out')
-				}),
-			(caught) => {
-				assert.strictEqual(caught.status, 403);
-				return true;
-			}
+			() => invokePostHandler(postHandler, { headers: { origin: 'null' } }),
+			(caught: unknown) => expectHttpErrorStatus(caught, 403)
 		);
 	});
 
@@ -302,18 +274,8 @@ describe('sign-out handler unit behavior', () => {
 			'https://user:pass@kaivalo.com/account'
 		]) {
 			await assert.rejects(
-				() =>
-					postHandler({
-						request: new Request('https://kaivalo.test/auth/sign-out', {
-							method: 'POST',
-							headers: { referer }
-						}),
-						url: new URL('https://kaivalo.test/auth/sign-out')
-					}),
-				(caught) => {
-					assert.strictEqual(caught.status, 403);
-					return true;
-				}
+				() => invokePostHandler(postHandler, { headers: { referer } }),
+				(caught: unknown) => expectHttpErrorStatus(caught, 403)
 			);
 		}
 	});
@@ -326,20 +288,13 @@ describe('sign-out handler unit behavior', () => {
 
 		await assert.rejects(
 			() =>
-				postHandler({
-					request: new Request('https://kaivalo.test/auth/sign-out', {
-						method: 'POST',
-						headers: {
-							origin: 'https://kaivalo.com',
-							referer: 'https://evil.test/account'
-						}
-					}),
-					url: new URL('https://kaivalo.test/auth/sign-out')
+				invokePostHandler(postHandler, {
+					headers: {
+						origin: 'https://kaivalo.com',
+						referer: 'https://evil.test/account'
+					}
 				}),
-			(caught) => {
-				assert.strictEqual(caught.status, 403);
-				return true;
-			}
+			(caught: unknown) => expectHttpErrorStatus(caught, 403)
 		);
 	});
 
@@ -350,29 +305,17 @@ describe('sign-out handler unit behavior', () => {
 			expectedOrigin: 'https://kaivalo.com'
 		});
 
-		const result = await postHandler({
-			request: new Request('https://kaivalo.test/auth/sign-out', {
-				method: 'POST',
-				headers: {
-					origin: 'https://kaivalo.com:443'
-				}
-			}),
-			url: new URL('https://kaivalo.test/auth/sign-out')
+		const result = await invokePostHandler(postHandler, {
+			headers: {
+				origin: 'https://kaivalo.com:443'
+			}
 		});
 
 		assert.strictEqual(result, expected);
 	});
 
 	it('returns a sanitized 503 with incident reference when upstream signOut fails', async () => {
-		/** @type {Array<[string, {
-		 * requestId: string
-		 * method: string
-		 * pathname: string
-		 * incidentId: string
-		 * errorName: string
-		 * errorCode: string
-		 * }]>} */
-		const logs = [];
+		const logs = createLogEntries();
 		const postHandler = createSignOutPostHandler({
 			signOut: async () => {
 				throw new Error('token expired: secret should not leak');
@@ -385,18 +328,18 @@ describe('sign-out handler unit behavior', () => {
 
 		await assert.rejects(
 			() =>
-				postHandler({
-					request: new Request('https://kaivalo.test/auth/sign-out', {
-						method: 'POST',
-						headers: {
-							origin: 'https://kaivalo.com',
-							'x-request-id': 'request-123'
-						}
-					}),
-					url: new URL('https://kaivalo.test/auth/sign-out')
+				invokePostHandler(postHandler, {
+					headers: {
+						origin: 'https://kaivalo.com',
+						'x-request-id': 'request-123'
+					}
 				}),
-			(caught) => {
+			(caught: unknown) => {
 				assert.ok(isHttpError(caught));
+				if (!isHttpError(caught)) {
+					return false;
+				}
+
 				assert.strictEqual(caught.status, 503);
 				assert.match(
 					caught.body.message,
@@ -433,7 +376,7 @@ describe('sign-out handler unit behavior', () => {
 	});
 
 	it('logs upstream and cause codes for unexpected sign-out failures', async () => {
-		const logs = [];
+		const logs = createLogEntries();
 		const postHandler = createSignOutPostHandler({
 			signOut: async () => {
 				const cause = Object.assign(new Error('upstream detail'), {
@@ -451,18 +394,18 @@ describe('sign-out handler unit behavior', () => {
 
 		await assert.rejects(
 			() =>
-				postHandler({
-					request: new Request('https://kaivalo.test/auth/sign-out', {
-						method: 'POST',
-						headers: {
-							origin: 'https://kaivalo.com',
-							'x-request-id': 'bad request + trace'
-						}
-					}),
-					url: new URL('https://kaivalo.test/auth/sign-out')
+				invokePostHandler(postHandler, {
+					headers: {
+						origin: 'https://kaivalo.com',
+						'x-request-id': 'bad request + trace'
+					}
 				}),
-			(caught) => {
+			(caught: unknown) => {
 				assert.ok(isHttpError(caught));
+				if (!isHttpError(caught)) {
+					return false;
+				}
+
 				assert.strictEqual(caught.status, 503);
 				assert.match(
 					caught.body.message,
@@ -498,12 +441,9 @@ describe('sign-out handler unit behavior', () => {
 			expectedOrigin: 'https://kaivalo.com'
 		});
 
-		const result = await postHandler({
-			request: new Request('https://kaivalo.com/auth/sign-out', {
-				method: 'POST',
-				headers: { origin: 'https://kaivalo.com' }
-			}),
-			url: new URL('https://kaivalo.com/auth/sign-out')
+		const result = await invokePostHandler(postHandler, {
+			requestUrl: 'https://kaivalo.com/auth/sign-out',
+			headers: { origin: 'https://kaivalo.com' }
 		});
 
 		assert.strictEqual(result.status, 302);
@@ -527,24 +467,17 @@ describe('sign-out handler unit behavior', () => {
 
 		await assert.rejects(
 			() =>
-				postHandler({
-					request: new Request('https://kaivalo.com/auth/sign-out', {
-						method: 'POST',
-						headers: { origin: 'https://kaivalo.com' }
-					}),
-					url: new URL('https://kaivalo.com/auth/sign-out')
+				invokePostHandler(postHandler, {
+					requestUrl: 'https://kaivalo.com/auth/sign-out',
+					headers: { origin: 'https://kaivalo.com' }
 				}),
-			(caught) => {
-				assert.ok(isRedirect(caught));
-				assert.strictEqual(caught.status, 302);
-				assert.strictEqual(caught.location, '/account?from=sign-out#done');
-				return true;
-			}
+			(caught: unknown) =>
+				expectRedirectStatus(caught, 302, '/account?from=sign-out#done')
 		);
 	});
 
 	it('treats non-redirect status objects as unexpected sign-out failures', async () => {
-		const logs = [];
+		const logs = createLogEntries();
 		const postHandler = createSignOutPostHandler({
 			signOut: async () => {
 				throw {
@@ -558,18 +491,18 @@ describe('sign-out handler unit behavior', () => {
 
 		await assert.rejects(
 			() =>
-				postHandler({
-					request: new Request('https://kaivalo.test/auth/sign-out', {
-						method: 'POST',
-						headers: {
-							origin: 'https://kaivalo.com',
-							accept: 'application/json'
-						}
-					}),
-					url: new URL('https://kaivalo.test/auth/sign-out')
+				invokePostHandler(postHandler, {
+					headers: {
+						origin: 'https://kaivalo.com',
+						accept: 'application/json'
+					}
 				}),
-			(caught) => {
+			(caught: unknown) => {
 				assert.ok(isHttpError(caught));
+				if (!isHttpError(caught)) {
+					return false;
+				}
+
 				assert.strictEqual(caught.status, 503);
 				assert.match(
 					caught.body.message,
@@ -594,12 +527,9 @@ describe('sign-out handler unit behavior', () => {
 			expectedOrigin: 'https://kaivalo.com'
 		});
 
-		const result = await postHandler({
-			request: new Request('https://attacker.test/auth/sign-out', {
-				method: 'POST',
-				headers: { origin: 'https://kaivalo.com' }
-			}),
-			url: new URL('https://attacker.test/auth/sign-out')
+		const result = await invokePostHandler(postHandler, {
+			requestUrl: 'https://attacker.test/auth/sign-out',
+			headers: { origin: 'https://kaivalo.com' }
 		});
 
 		assert.strictEqual(result.status, 302);
@@ -623,22 +553,16 @@ describe('sign-out handler unit behavior', () => {
 
 		await assert.rejects(
 			() =>
-				postHandler({
-					request: new Request('https://attacker.test/auth/sign-out', {
-						method: 'POST',
-						headers: { origin: 'https://kaivalo.com' }
-					}),
-					url: new URL('https://attacker.test/auth/sign-out')
+				invokePostHandler(postHandler, {
+					requestUrl: 'https://attacker.test/auth/sign-out',
+					headers: { origin: 'https://kaivalo.com' }
 				}),
-			(caught) => {
-				assert.ok(isRedirect(caught));
-				assert.strictEqual(caught.status, 302);
-				assert.strictEqual(
-					caught.location,
+			(caught: unknown) =>
+				expectRedirectStatus(
+					caught,
+					302,
 					'https://kaivalo.com/account?from=sign-out#done'
-				);
-				return true;
-			}
+				)
 		);
 	});
 
@@ -658,19 +582,12 @@ describe('sign-out handler unit behavior', () => {
 
 		await assert.rejects(
 			() =>
-				postHandler({
-					request: new Request('https://attacker.test/auth/sign-out', {
-						method: 'POST',
-						headers: { origin: 'https://kaivalo.com' }
-					}),
-					url: new URL('https://attacker.test/auth/sign-out')
+				invokePostHandler(postHandler, {
+					requestUrl: 'https://attacker.test/auth/sign-out',
+					headers: { origin: 'https://kaivalo.com' }
 				}),
-			(caught) => {
-				assert.ok(isRedirect(caught));
-				assert.strictEqual(caught.status, 302);
-				assert.strictEqual(caught.location, redirectLike.location);
-				return true;
-			}
+			(caught: unknown) =>
+				expectRedirectStatus(caught, 302, redirectLike.location)
 		);
 	});
 
@@ -679,7 +596,7 @@ describe('sign-out handler unit behavior', () => {
 			status: 302,
 			location: 'https://evil.test/phish'
 		};
-		const logs = [];
+		const logs = createLogEntries();
 		const postHandler = createSignOutPostHandler({
 			signOut: async () => {
 				throw redirectLike;
@@ -691,18 +608,10 @@ describe('sign-out handler unit behavior', () => {
 
 		await assert.rejects(
 			() =>
-				postHandler({
-					request: new Request('https://kaivalo.test/auth/sign-out', {
-						method: 'POST',
-						headers: { origin: 'https://kaivalo.com' }
-					}),
-					url: new URL('https://kaivalo.test/auth/sign-out')
+				invokePostHandler(postHandler, {
+					headers: { origin: 'https://kaivalo.com' }
 				}),
-			(caught) => {
-				assert.ok(isHttpError(caught));
-				assert.strictEqual(caught.status, 503);
-				return true;
-			}
+			(caught: unknown) => expectHttpErrorStatus(caught, 503)
 		);
 		assert.strictEqual(logs.length, 1);
 		assert.strictEqual(
@@ -712,7 +621,7 @@ describe('sign-out handler unit behavior', () => {
 	});
 
 	it('rejects redirect responses that omit the location header', async () => {
-		const logs = [];
+		const logs = createLogEntries();
 		const postHandler = createSignOutPostHandler({
 			signOut: async () =>
 				new Response(null, {
@@ -725,21 +634,13 @@ describe('sign-out handler unit behavior', () => {
 
 		await assert.rejects(
 			() =>
-				postHandler({
-					request: new Request('https://kaivalo.test/auth/sign-out', {
-						method: 'POST',
-						headers: {
-							origin: 'https://kaivalo.com',
-							accept: 'application/json'
-						}
-					}),
-					url: new URL('https://kaivalo.test/auth/sign-out')
+				invokePostHandler(postHandler, {
+					headers: {
+						origin: 'https://kaivalo.com',
+						accept: 'application/json'
+					}
 				}),
-			(caught) => {
-				assert.ok(isHttpError(caught));
-				assert.strictEqual(caught.status, 503);
-				return true;
-			}
+			(caught: unknown) => expectHttpErrorStatus(caught, 503)
 		);
 		assert.strictEqual(logs.length, 1);
 		assert.strictEqual(
@@ -749,7 +650,7 @@ describe('sign-out handler unit behavior', () => {
 	});
 
 	it('rejects encoded same-origin separator payloads from signOut handlers', async () => {
-		const logs = [];
+		const logs = createLogEntries();
 		const postHandler = createSignOutPostHandler({
 			signOut: async () =>
 				Response.redirect('https://kaivalo.com/%2F%2Fevil.test/phish', 303),
@@ -759,21 +660,13 @@ describe('sign-out handler unit behavior', () => {
 
 		await assert.rejects(
 			() =>
-				postHandler({
-					request: new Request('https://kaivalo.test/auth/sign-out', {
-						method: 'POST',
-						headers: {
-							origin: 'https://kaivalo.com',
-							accept: 'application/json'
-						}
-					}),
-					url: new URL('https://kaivalo.test/auth/sign-out')
+				invokePostHandler(postHandler, {
+					headers: {
+						origin: 'https://kaivalo.com',
+						accept: 'application/json'
+					}
 				}),
-			(caught) => {
-				assert.ok(isHttpError(caught));
-				assert.strictEqual(caught.status, 503);
-				return true;
-			}
+			(caught: unknown) => expectHttpErrorStatus(caught, 503)
 		);
 		assert.strictEqual(logs.length, 1);
 		assert.strictEqual(logs[0][0], 'Sign-out failed');
@@ -781,7 +674,7 @@ describe('sign-out handler unit behavior', () => {
 });
 
 describe('sign-out route integration behavior', () => {
-	let preview;
+	let preview: PreviewHandle | undefined;
 
 	before(async () => {
 		preview = await startHubPreview();
@@ -792,18 +685,22 @@ describe('sign-out route integration behavior', () => {
 	});
 
 	it('rejects cross-site POST requests', async () => {
-		const response = await httpPost(`${preview.baseUrl}/auth/sign-out`, {
-			origin: 'https://evil.example',
-			'sec-fetch-site': 'cross-site',
-			cookie: 'wos_session=test-fixture'
-		});
+		const response = await httpPost(
+			`${requirePreview(preview).baseUrl}/auth/sign-out`,
+			{
+				origin: 'https://evil.example',
+				'sec-fetch-site': 'cross-site',
+				cookie: 'wos_session=test-fixture'
+			}
+		);
 
 		assert.strictEqual(response.statusCode, 403);
 	});
 
 	it('accepts same-origin POST requests at route level', async () => {
-		const response = await httpPost(`${preview.baseUrl}/auth/sign-out`, {
-			origin: preview.baseUrl,
+		const readyPreview = requirePreview(preview);
+		const response = await httpPost(`${readyPreview.baseUrl}/auth/sign-out`, {
+			origin: readyPreview.baseUrl,
 			'sec-fetch-site': 'same-origin'
 		});
 
@@ -829,8 +726,9 @@ describe('sign-out route integration behavior', () => {
 	});
 
 	it('accepts route-level POST requests without origin when same-origin referer is present', async () => {
-		const response = await httpPost(`${preview.baseUrl}/auth/sign-out`, {
-			referer: `${preview.baseUrl}/`,
+		const readyPreview = requirePreview(preview);
+		const response = await httpPost(`${readyPreview.baseUrl}/auth/sign-out`, {
+			referer: `${readyPreview.baseUrl}/`,
 			'sec-fetch-site': 'same-origin'
 		});
 
@@ -856,18 +754,22 @@ describe('sign-out route integration behavior', () => {
 	});
 
 	it('rejects route-level POST requests with an opaque null origin', async () => {
-		const response = await httpPost(`${preview.baseUrl}/auth/sign-out`, {
-			origin: 'null',
-			'sec-fetch-site': 'same-origin',
-			cookie: 'wos_session=test-fixture'
-		});
+		const response = await httpPost(
+			`${requirePreview(preview).baseUrl}/auth/sign-out`,
+			{
+				origin: 'null',
+				'sec-fetch-site': 'same-origin',
+				cookie: 'wos_session=test-fixture'
+			}
+		);
 
 		assert.strictEqual(response.statusCode, 403);
 	});
 
 	it('rejects route-level POST requests with malformed referer fallback values', async () => {
+		const readyPreview = requirePreview(preview);
 		for (const referer of ['https://', 'not a url']) {
-			const response = await httpPost(`${preview.baseUrl}/auth/sign-out`, {
+			const response = await httpPost(`${readyPreview.baseUrl}/auth/sign-out`, {
 				referer,
 				'sec-fetch-site': 'same-origin'
 			});
@@ -877,20 +779,24 @@ describe('sign-out route integration behavior', () => {
 	});
 
 	it('rejects route-level POST requests with opaque null referer fallback values', async () => {
-		const response = await httpPost(`${preview.baseUrl}/auth/sign-out`, {
-			referer: 'null',
-			'sec-fetch-site': 'same-origin'
-		});
+		const response = await httpPost(
+			`${requirePreview(preview).baseUrl}/auth/sign-out`,
+			{
+				referer: 'null',
+				'sec-fetch-site': 'same-origin'
+			}
+		);
 
 		assert.strictEqual(response.statusCode, 403);
 	});
 
 	it('rejects route-level POST requests with origin header credentials or a path', async () => {
+		const readyPreview = requirePreview(preview);
 		for (const origin of [
-			`${preview.baseUrl}/account`,
-			preview.baseUrl.replace('://', '://user@')
+			`${readyPreview.baseUrl}/account`,
+			readyPreview.baseUrl.replace('://', '://user@')
 		]) {
-			const response = await httpPost(`${preview.baseUrl}/auth/sign-out`, {
+			const response = await httpPost(`${readyPreview.baseUrl}/auth/sign-out`, {
 				origin,
 				'sec-fetch-site': 'same-origin'
 			});
@@ -900,8 +806,9 @@ describe('sign-out route integration behavior', () => {
 	});
 
 	it('rejects route-level POST requests with credentialed referer fallback values', async () => {
-		const response = await httpPost(`${preview.baseUrl}/auth/sign-out`, {
-			referer: `${preview.baseUrl.replace('://', '://user:pass@')}/account`,
+		const readyPreview = requirePreview(preview);
+		const response = await httpPost(`${readyPreview.baseUrl}/auth/sign-out`, {
+			referer: `${readyPreview.baseUrl.replace('://', '://user:pass@')}/account`,
 			'sec-fetch-site': 'same-origin'
 		});
 
@@ -909,8 +816,9 @@ describe('sign-out route integration behavior', () => {
 	});
 
 	it('rejects route-level POST requests when origin and referer disagree', async () => {
-		const response = await httpPost(`${preview.baseUrl}/auth/sign-out`, {
-			origin: preview.baseUrl,
+		const readyPreview = requirePreview(preview);
+		const response = await httpPost(`${readyPreview.baseUrl}/auth/sign-out`, {
+			origin: readyPreview.baseUrl,
 			referer: 'https://evil.example/account',
 			'sec-fetch-site': 'same-origin'
 		});
