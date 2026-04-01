@@ -1,6 +1,6 @@
 import { configureAuthKit } from '@workos/authkit-sveltekit';
 import { sequence } from '@sveltejs/kit/hooks';
-import type { HandleServerError } from '@sveltejs/kit';
+import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { randomUUID } from 'node:crypto';
 import {
@@ -36,7 +36,7 @@ const configuredHandle = sequence(
 	})
 );
 
-export const handle = ({ event, resolve }) =>
+export const handle: Handle = ({ event, resolve }) =>
 	configuredHandle({ event, resolve });
 
 export const handleError: HandleServerError = ({ error, event, status }) => {
