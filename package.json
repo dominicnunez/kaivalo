@@ -35,19 +35,20 @@
 	"license": "MIT",
 	"pnpm": {
 		"overrides": {
-			"flatted": "3.4.2"
+			"flatted": "3.4.2",
+			"picomatch": "4.0.4"
 		}
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
-		"eslint": "^10.0.3",
-		"eslint-plugin-svelte": "^3.15.0",
+		"eslint": "^10.1.0",
+		"eslint-plugin-svelte": "^3.16.0",
 		"globals": "^17.4.0",
 		"husky": "^9.1.7",
 		"prettier": "^3.8.1",
 		"prettier-plugin-svelte": "^3.5.1",
 		"tough-cookie": "^6.0.1",
-		"typescript-eslint": "^8.56.1",
-		"yaml": "^2.8.2"
+		"typescript-eslint": "^8.58.0",
+		"yaml": "^2.8.3"
 	}
 }
