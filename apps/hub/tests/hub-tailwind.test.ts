@@ -2,14 +2,21 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 
-function getStylesheetHref(html) {
+type PreviewHandle = Awaited<ReturnType<typeof startHubPreview>>;
+type PreviewResponse = Awaited<ReturnType<typeof httpGet>>;
+
+function isNonNullString(value: string | null): value is string {
+	return value !== null;
+}
+
+function getStylesheetHref(html: string): string | null {
 	const linkTags = [...html.matchAll(/<link\b[^>]*>/gi)].map(
 		(match) => match[0]
 	);
 	const hrefs = linkTags
 		.filter((tag) => /rel="stylesheet"/i.test(tag))
 		.map((tag) => tag.match(/href="([^"]+)"/i)?.[1] ?? null)
-		.filter(Boolean);
+		.filter(isNonNullString);
 	return (
 		hrefs.find(
 			(href) => href.startsWith('./_app/') || href.startsWith('/_app/')
@@ -17,9 +24,9 @@ function getStylesheetHref(html) {
 	);
 }
 
-function getStylesheetAssetUrls(css, stylesheetUrl) {
+function getStylesheetAssetUrls(css: string, stylesheetUrl: string): string[] {
 	const baseUrl = new URL(stylesheetUrl);
-	const assetUrls = new Set();
+	const assetUrls = new Set<string>();
 
 	for (const match of css.matchAll(/url\(([^)]+)\)/gi)) {
 		const rawValue = match[1]?.trim().replace(/^['"]|['"]$/g, '') ?? '';
@@ -34,10 +41,10 @@ function getStylesheetAssetUrls(css, stylesheetUrl) {
 }
 
 describe('hub styling behavior', () => {
-	let preview;
-	let homepage;
-	let stylesheet;
-	let stylesheetUrl;
+	let preview: PreviewHandle | undefined;
+	let homepage: PreviewResponse | undefined;
+	let stylesheet: PreviewResponse | undefined;
+	let stylesheetUrl: string | undefined;
 
 	before(async () => {
 		preview = await startHubPreview();
@@ -53,6 +60,9 @@ describe('hub styling behavior', () => {
 	});
 
 	it('serves a generated stylesheet for the rendered landing experience', () => {
+		assert.ok(homepage);
+		assert.ok(stylesheet);
+		assert.ok(stylesheetUrl);
 		assert.strictEqual(homepage.statusCode, 200);
 		assert.strictEqual(stylesheet.statusCode, 200);
 		assert.ok(
@@ -62,6 +72,9 @@ describe('hub styling behavior', () => {
 	});
 
 	it('uses local styling assets and safe link protocols', async () => {
+		assert.ok(homepage);
+		assert.ok(stylesheet);
+		assert.ok(stylesheetUrl);
 		assert.ok(!homepage.data.includes('api.fontshare.com'));
 		assert.ok(!homepage.data.includes('cdn.fontshare.com'));
 		const hrefMatches = [...homepage.data.matchAll(/\bhref="([^"]+)"/gi)].map(

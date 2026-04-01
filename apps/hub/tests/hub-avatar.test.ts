@@ -14,8 +14,12 @@ const AVATAR_SOURCE =
 const AVATAR_PROXY_SECRET = 'ef'.repeat(32);
 const PEER_ADDRESS_OVERRIDE_HEADER = 'x-kaivalo-preview-peer-address';
 const PRIVATE_NO_STORE_CACHE_CONTROL = 'private, no-store';
+type PreviewHandle = Awaited<ReturnType<typeof startHubPreview>>;
+type PreviewResponse = Awaited<ReturnType<typeof httpGet>>;
+type PreviewRequestHeaders = Parameters<typeof httpGet>[1];
+type AvatarFailureCase = readonly [string, string, number, string];
 
-function getAvatarUrl(baseUrl) {
+function getAvatarUrl(baseUrl: string): string {
 	const avatarPath = toAvatarProxyUrl(AVATAR_SOURCE, {
 		secret: AVATAR_PROXY_SECRET,
 		now: Date.now()
@@ -24,7 +28,7 @@ function getAvatarUrl(baseUrl) {
 	return new URL(avatarPath, baseUrl).toString();
 }
 
-function assertAvatarSecurityHeaders(response) {
+function assertAvatarSecurityHeaders(response: PreviewResponse): void {
 	assert.strictEqual(response.headers['x-frame-options'], 'DENY');
 	assert.strictEqual(response.headers['x-content-type-options'], 'nosniff');
 	assert.strictEqual(
@@ -37,11 +41,14 @@ function assertAvatarSecurityHeaders(response) {
 	);
 }
 
-async function hitAvatar(preview, headers = {}) {
+async function hitAvatar(
+	preview: PreviewHandle,
+	headers: PreviewRequestHeaders = {}
+): Promise<PreviewResponse> {
 	return httpGet(getAvatarUrl(preview.baseUrl), headers);
 }
 
-async function createSignedInSession(preview) {
+async function createSignedInSession(preview: PreviewHandle) {
 	const { callbackResponse, cookieJar } = await signInThroughWorkosCallback(
 		preview.baseUrl
 	);
@@ -50,7 +57,11 @@ async function createSignedInSession(preview) {
 	return cookieJar;
 }
 
-async function consumeAvatarQuota(preview, requestCount, headers = {}) {
+async function consumeAvatarQuota(
+	preview: PreviewHandle,
+	requestCount: number,
+	headers: PreviewRequestHeaders = {}
+): Promise<void> {
 	for (let index = 0; index < requestCount; index += 1) {
 		const response = await hitAvatar(preview, headers);
 		assert.strictEqual(
@@ -61,7 +72,10 @@ async function consumeAvatarQuota(preview, requestCount, headers = {}) {
 	}
 }
 
-function startAvatarPreview(avatarFixtureMode, env = {}) {
+function startAvatarPreview(
+	avatarFixtureMode: string,
+	env: Record<string, string> = {}
+) {
 	return startHubPreview({
 		shared: false,
 		env: {
@@ -73,10 +87,10 @@ function startAvatarPreview(avatarFixtureMode, env = {}) {
 }
 
 async function assertAvatarFailureResponse(
-	avatarFixtureMode,
-	expectedStatus,
-	expectedBody
-) {
+	avatarFixtureMode: string,
+	expectedStatus: number,
+	expectedBody: string
+): Promise<void> {
 	const preview = await startAvatarPreview(avatarFixtureMode);
 
 	try {
@@ -253,7 +267,7 @@ describe('avatar proxy preview behavior', () => {
 			502,
 			'Bad gateway'
 		]
-	]) {
+	] as const satisfies readonly AvatarFailureCase[]) {
 		it(name, async () => {
 			await assertAvatarFailureResponse(
 				fixtureMode,

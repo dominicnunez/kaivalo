@@ -2,7 +2,10 @@ import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 
-function assertStaticAssetHeaders(response) {
+type PreviewHandle = Awaited<ReturnType<typeof startHubPreview>>;
+type PreviewResponse = Awaited<ReturnType<typeof httpGet>>;
+
+function assertStaticAssetHeaders(response: PreviewResponse): void {
 	const contentLength = Number(response.headers['content-length'] ?? 0);
 	assert.ok(
 		contentLength > 0,
@@ -14,7 +17,7 @@ function assertStaticAssetHeaders(response) {
 	);
 }
 
-function assertStaticSecurityHeaders(response) {
+function assertStaticSecurityHeaders(response: PreviewResponse): void {
 	assert.strictEqual(response.headers['x-frame-options'], 'DENY');
 	assert.strictEqual(response.headers['x-content-type-options'], 'nosniff');
 	assert.strictEqual(
@@ -27,8 +30,9 @@ function assertStaticSecurityHeaders(response) {
 	);
 }
 
-function assertCacheControl(response, expected) {
-	const normalize = (value) => String(value ?? '').replace(/\s+/g, '');
+function assertCacheControl(response: PreviewResponse, expected: string): void {
+	const normalize = (value: string | string[] | undefined) =>
+		String(value ?? '').replace(/\s+/g, '');
 	assert.strictEqual(
 		normalize(response.headers['cache-control']),
 		normalize(expected)
@@ -36,8 +40,8 @@ function assertCacheControl(response, expected) {
 }
 
 describe('hub favicon delivery', () => {
-	let preview;
-	let homepage;
+	let preview: PreviewHandle | undefined;
+	let homepage: PreviewResponse | undefined;
 
 	before(async () => {
 		preview = await startHubPreview();
@@ -49,12 +53,14 @@ describe('hub favicon delivery', () => {
 	});
 
 	it('references favicon assets from the rendered document', () => {
+		assert.ok(homepage);
 		assert.strictEqual(homepage.statusCode, 200);
 		assert.ok(homepage.data.includes('favicon.svg'));
 		assert.ok(homepage.data.includes('favicon.ico'));
 	});
 
 	it('serves favicon.ico as a static asset', async () => {
+		assert.ok(preview);
 		const response = await httpGet(`${preview.baseUrl}/favicon.ico`);
 		assert.strictEqual(response.statusCode, 200);
 		assertStaticAssetHeaders(response);
@@ -66,6 +72,7 @@ describe('hub favicon delivery', () => {
 	});
 
 	it('serves favicon.svg with an svg content type', async () => {
+		assert.ok(preview);
 		const response = await httpGet(`${preview.baseUrl}/favicon.svg`);
 		assert.strictEqual(response.statusCode, 200);
 		assert.match(
@@ -81,6 +88,7 @@ describe('hub favicon delivery', () => {
 	});
 
 	it('serves web app icons as png images', async () => {
+		assert.ok(preview);
 		const icon192 = await httpGet(`${preview.baseUrl}/favicon-192.png`);
 		const icon512 = await httpGet(`${preview.baseUrl}/favicon-512.png`);
 
@@ -104,6 +112,7 @@ describe('hub favicon delivery', () => {
 	});
 
 	it('serves og-image with static hardening and bounded caching', async () => {
+		assert.ok(preview);
 		const response = await httpGet(`${preview.baseUrl}/og-image.png`);
 		assert.strictEqual(response.statusCode, 200);
 		assert.match(String(response.headers['content-type'] ?? ''), /^image\/png/);
@@ -116,6 +125,8 @@ describe('hub favicon delivery', () => {
 	});
 
 	it('serves immutable app assets with immutable cache policy and hardening', async () => {
+		assert.ok(homepage);
+		assert.ok(preview);
 		const match = homepage.data.match(/\/_app\/immutable\/[^"'<>\s)]+/);
 		assert.ok(
 			match,
@@ -130,6 +141,7 @@ describe('hub favicon delivery', () => {
 	});
 
 	it('serves font assets with static hardening and reusable caching', async () => {
+		assert.ok(preview);
 		const response = await httpGet(
 			`${preview.baseUrl}/fonts/clash-display-400.woff2`
 		);
