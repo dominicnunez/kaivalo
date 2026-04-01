@@ -4,6 +4,12 @@ import http from 'node:http';
 import { createHubServer } from '../apps/hub/src/lib/server/node-server.ts';
 import { canListenOnLoopback } from './helpers/runtime-capabilities.ts';
 
+type StaticAssetResponse = {
+	statusCode: number;
+	headers: http.IncomingHttpHeaders;
+	body: string;
+};
+
 const baseEnv = {
 	NODE_ENV: 'test',
 	WORKOS_CLIENT_ID: 'client_fixture',
@@ -15,12 +21,8 @@ const baseEnv = {
 	ORIGIN: 'http://127.0.0.1:3100'
 };
 
-/**
- * @param {http.Server} server
- * @returns {Promise<number>}
- */
-function listenOnEphemeralPort(server) {
-	return new Promise((resolve, reject) => {
+function listenOnEphemeralPort(server: http.Server): Promise<number> {
+	return new Promise<number>((resolve, reject) => {
 		server.listen(0, '127.0.0.1', () => {
 			const address = server.address();
 			if (!address || typeof address === 'string') {
@@ -33,13 +35,8 @@ function listenOnEphemeralPort(server) {
 	});
 }
 
-/**
- * @param {number} port
- * @param {string} path
- * @returns {Promise<{statusCode: number; headers: http.IncomingHttpHeaders; body: string}>}
- */
-function httpGet(port, path) {
-	return new Promise((resolve, reject) => {
+function httpGet(port: number, path: string): Promise<StaticAssetResponse> {
+	return new Promise<StaticAssetResponse>((resolve, reject) => {
 		const req = http.get(
 			{
 				hostname: '127.0.0.1',
@@ -47,7 +44,7 @@ function httpGet(port, path) {
 				path
 			},
 			(res) => {
-				const chunks = [];
+				const chunks: Buffer[] = [];
 				res.on('data', (chunk) =>
 					chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
 				);
@@ -66,10 +63,10 @@ function httpGet(port, path) {
 }
 
 const LOOPBACK_LISTEN_SUPPORTED = await canListenOnLoopback();
-const servers = [];
+const servers: http.Server[] = [];
 afterEach(async () => {
 	for (const server of servers.splice(0)) {
-		await new Promise((resolve) => server.close(() => resolve()));
+		await new Promise<void>((resolve) => server.close(() => resolve()));
 	}
 });
 

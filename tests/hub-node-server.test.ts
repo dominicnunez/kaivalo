@@ -16,6 +16,55 @@ import {
 import { reserveLocalPort } from './helpers/network.ts';
 import { canListenOnLoopback } from './helpers/runtime-capabilities.ts';
 
+type ReservedPort = {
+	port: number;
+	release: () => Promise<void>;
+};
+type NodeServerResponse = {
+	statusCode: number;
+	body: string;
+	headers: http.IncomingHttpHeaders;
+};
+type AbortObservedResponse = NodeServerResponse & {
+	aborted: boolean;
+};
+type SocketCloseResult = {
+	data: string;
+	error: Error | null;
+	hadError: boolean;
+};
+type TimeoutOverrides = {
+	headersTimeout?: number;
+	keepAliveTimeout?: number;
+	requestTimeout?: number;
+};
+type FatalEvent = {
+	exitCode: number;
+	reason: 'startup-error' | 'shutdown-error' | 'shutdown-timeout';
+	activeRequests?: number;
+	shutdownTimeoutMs?: number;
+	error?: {
+		type: string;
+		code?: string;
+	};
+};
+type LogEntry = {
+	message: string;
+	context: Record<string, unknown>;
+};
+type MutableSocket = net.Socket & {
+	encrypted?: boolean;
+};
+type ShutdownRaceResult =
+	| {
+			timedOut: false;
+			exitCode: number;
+	  }
+	| {
+			timedOut: true;
+			exitCode: number;
+	  };
+
 const baseEnv = {
 	NODE_ENV: 'test',
 	WORKOS_CLIENT_ID: 'client_fixture',
@@ -41,12 +90,47 @@ const KEEP_ALIVE_REQUEST =
 const REDACTED_NETWORK_IDENTIFIER_PATTERN = /^(?:ipv4|ipv6)_[a-f0-9]{16}$/;
 const LOOPBACK_LISTEN_SUPPORTED = await canListenOnLoopback();
 
-/**
- * @param {http.Server} server
- * @returns {Promise<number>}
- */
-function listenOnEphemeralPort(server) {
-	return new Promise((resolve, reject) => {
+function createSocketStub(
+	remoteAddress?: string,
+	encrypted?: boolean
+): MutableSocket {
+	const socket = new net.Socket() as MutableSocket;
+	if (remoteAddress !== undefined) {
+		Object.defineProperty(socket, 'remoteAddress', {
+			value: remoteAddress,
+			configurable: true
+		});
+	}
+	if (encrypted !== undefined) {
+		Object.defineProperty(socket, 'encrypted', {
+			value: encrypted,
+			configurable: true
+		});
+	}
+	return socket;
+}
+
+function createIncomingMessageStub({
+	method,
+	url,
+	headers = {},
+	socket = createSocketStub()
+}: {
+	method?: string;
+	url?: string;
+	headers?: http.IncomingHttpHeaders;
+	socket?: MutableSocket;
+}): http.IncomingMessage {
+	return Object.assign(new http.IncomingMessage(socket), {
+		method,
+		url,
+		headers,
+		socket
+	});
+}
+
+function listenOnEphemeralPort(server: http.Server): Promise<number> {
+	return new Promise<number>((resolve, reject) => {
 		server.listen(0, '127.0.0.1', () => {
 			const address = server.address();
 			if (!address || typeof address === 'string') {
@@ -59,13 +143,12 @@ function listenOnEphemeralPort(server) {
 	});
 }
 
-/**
- * @param {number} port
- * @param {Record<string, string>} [headers]
- * @param {string} [path]
- */
-function httpGet(port, headers = {}, path = '/favicon.svg') {
-	return new Promise((resolve, reject) => {
+function httpGet(
+	port: number,
+	headers: Record<string, string> = {},
+	path = '/favicon.svg'
+): Promise<NodeServerResponse> {
+	return new Promise<NodeServerResponse>((resolve, reject) => {
 		const req = http.get(
 			{
 				hostname: '127.0.0.1',
@@ -74,7 +157,7 @@ function httpGet(port, headers = {}, path = '/favicon.svg') {
 				headers
 			},
 			(res) => {
-				const chunks = [];
+				const chunks: Buffer[] = [];
 				res.on('data', (chunk) =>
 					chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
 				);
@@ -92,17 +175,12 @@ function httpGet(port, headers = {}, path = '/favicon.svg') {
 	});
 }
 
-/**
- * @param {number} port
- * @param {Record<string, string>} [headers]
- * @param {string} [path]
- */
 function httpGetWithAbortObservation(
-	port,
-	headers = {},
+	port: number,
+	headers: Record<string, string> = {},
 	path = '/favicon.svg'
-) {
-	return new Promise((resolve, reject) => {
+): Promise<AbortObservedResponse> {
+	return new Promise<AbortObservedResponse>((resolve, reject) => {
 		const req = http.get(
 			{
 				hostname: '127.0.0.1',
@@ -111,9 +189,9 @@ function httpGetWithAbortObservation(
 				headers
 			},
 			(res) => {
-				const chunks = [];
+				const chunks: Buffer[] = [];
 				let settled = false;
-				const complete = (aborted) => {
+				const complete = (aborted: boolean) => {
 					if (settled) {
 						return;
 					}
@@ -139,14 +217,10 @@ function httpGetWithAbortObservation(
 	});
 }
 
-/**
- * @param {number} port
- * @returns {Promise<net.Socket>}
- */
-function connectRawSocket(port) {
-	return new Promise((resolve, reject) => {
+function connectRawSocket(port: number): Promise<net.Socket> {
+	return new Promise<net.Socket>((resolve, reject) => {
 		const socket = net.connect({ host: '127.0.0.1', port });
-		const handleError = (error) => {
+		const handleError = (error: Error) => {
 			socket.off('connect', handleConnect);
 			reject(error);
 		};
@@ -160,15 +234,13 @@ function connectRawSocket(port) {
 	});
 }
 
-/**
- * @param {net.Socket} socket
- * @param {number} [timeoutMs]
- * @returns {Promise<{ data: string; error: Error | null; hadError: boolean }>}
- */
-function waitForSocketClose(socket, timeoutMs = SOCKET_CLOSE_TIMEOUT_MS) {
-	return new Promise((resolve, reject) => {
-		const chunks = [];
-		let socketError = null;
+function waitForSocketClose(
+	socket: net.Socket,
+	timeoutMs = SOCKET_CLOSE_TIMEOUT_MS
+): Promise<SocketCloseResult> {
+	return new Promise<SocketCloseResult>((resolve, reject) => {
+		const chunks: Buffer[] = [];
+		let socketError: Error | null = null;
 		const timeout = setTimeout(() => {
 			reject(new Error('expected socket to close before timeout'));
 		}, timeoutMs);
@@ -191,35 +263,36 @@ function waitForSocketClose(socket, timeoutMs = SOCKET_CLOSE_TIMEOUT_MS) {
 	});
 }
 
-/**
- * @param {http.Server} server
- * @param {{
- *   headersTimeout?: number;
- *   keepAliveTimeout?: number;
- *   requestTimeout?: number;
- * }} [overrides]
- */
-function applyShortConnectionTimeouts(server, overrides = {}) {
+function applyShortConnectionTimeouts(
+	server: http.Server,
+	overrides: TimeoutOverrides = {}
+): void {
+	const tunableServer = server as http.Server & {
+		keepAliveTimeoutBuffer: number;
+		connectionsCheckingInterval: number;
+	};
 	server.headersTimeout = overrides.headersTimeout ?? SHORT_HEADERS_TIMEOUT_MS;
 	server.requestTimeout = overrides.requestTimeout ?? SHORT_REQUEST_TIMEOUT_MS;
 	server.keepAliveTimeout =
 		overrides.keepAliveTimeout ?? SHORT_KEEP_ALIVE_TIMEOUT_MS;
-	server.keepAliveTimeoutBuffer = SHORT_KEEP_ALIVE_TIMEOUT_BUFFER_MS;
-	server.connectionsCheckingInterval = SHORT_CONNECTIONS_CHECK_INTERVAL_MS;
+	tunableServer.keepAliveTimeoutBuffer = SHORT_KEEP_ALIVE_TIMEOUT_BUFFER_MS;
+	tunableServer.connectionsCheckingInterval =
+		SHORT_CONNECTIONS_CHECK_INTERVAL_MS;
 }
 
-const servers = [];
+const servers: http.Server[] = [];
 afterEach(async () => {
 	for (const server of servers.splice(0)) {
-		await new Promise((resolve) => server.close(() => resolve()));
+		await new Promise<void>((resolve) => server.close(() => resolve()));
 	}
 });
 
 describe('node server diagnostics', () => {
 	it('omits sensitive diagnostics in production-mode error logs', () => {
 		const cause = new Error('oauth code=secret-token');
-		const err = new Error('failed for token=abc123', { cause });
-		err.code = 'AUTH_FAILURE';
+		const err = Object.assign(new Error('failed for token=abc123', { cause }), {
+			code: 'AUTH_FAILURE'
+		});
 		const diagnostics = getErrorDiagnostics(err, {
 			includeSensitiveDetails: false
 		});
@@ -231,10 +304,10 @@ describe('node server diagnostics', () => {
 	});
 
 	it('keeps production request failure logs redacted even when legacy debug env toggle is set', () => {
-		const req = {
+		const req = createIncomingMessageStub({
 			method: 'GET',
 			url: '/auth/callback?access_token=topsecret'
-		};
+		});
 		const logRecord = buildRequestFailureLog(
 			req,
 			new Error('failed for token=abc123'),
@@ -307,16 +380,14 @@ describe('node server diagnostics', () => {
 	});
 
 	it('builds request failure logs with a sanitized pathname and incident id', () => {
-		const req = {
+		const req = createIncomingMessageStub({
 			method: 'GET',
 			url: '/auth/callback?code=supersecret&state=sensitive',
 			headers: {
 				'x-request-id': 'bad request id + trace'
 			},
-			socket: {
-				remoteAddress: '::ffff:203.0.113.10'
-			}
-		};
+			socket: createSocketStub('::ffff:203.0.113.10')
+		});
 		const logRecord = buildRequestFailureLog(req, new Error('boom'), {
 			...baseEnv,
 			NODE_ENV: 'production'
@@ -337,14 +408,12 @@ describe('node server diagnostics', () => {
 	});
 
 	it('falls back to an unknown remote address when the socket address is missing', () => {
-		const req = {
+		const req = createIncomingMessageStub({
 			method: 'GET',
 			url: '/auth/callback?code=supersecret',
 			headers: {},
-			socket: {
-				remoteAddress: 'not-an-ip-address'
-			}
-		};
+			socket: createSocketStub('not-an-ip-address')
+		});
 
 		const logRecord = buildRequestFailureLog(req, new Error('boom'), {
 			...baseEnv,
@@ -357,16 +426,14 @@ describe('node server diagnostics', () => {
 	});
 
 	it('logs the trusted forwarded client address while retaining the proxy peer address', () => {
-		const req = {
+		const req = createIncomingMessageStub({
 			method: 'GET',
 			url: '/auth/callback?code=supersecret&state=sensitive',
 			headers: {
 				'x-forwarded-for': '198.51.100.10, 203.0.113.10'
 			},
-			socket: {
-				remoteAddress: '203.0.113.11'
-			}
-		};
+			socket: createSocketStub('203.0.113.11')
+		});
 
 		const logRecord = buildRequestFailureLog(req, new Error('boom'), {
 			...baseEnv,
@@ -388,10 +455,10 @@ describe(
 	{ skip: !LOOPBACK_LISTEN_SUPPORTED },
 	() => {
 		it('warns once when x-forwarded-proto comes from untrusted proxy hops', async () => {
-			const warnings = [];
+			const warnings: LogEntry[] = [];
 			const logger = {
 				log: () => {},
-				warn: /** @param {string} message */ (message, context) =>
+				warn: (message: string, context: Record<string, unknown>) =>
 					warnings.push({ message, context }),
 				error: () => {}
 			};
@@ -419,7 +486,7 @@ describe(
 				'Ignoring x-forwarded-proto from untrusted proxy address'
 			);
 			assert.match(
-				warnings[0].context.remoteAddress,
+				String(warnings[0].context.remoteAddress),
 				REDACTED_NETWORK_IDENTIFIER_PATTERN
 			);
 			assert.strictEqual(warnings[0].context.forwardedProto, 'https');
@@ -427,11 +494,12 @@ describe(
 		});
 
 		it('returns a 500 response when async request handlers reject', async () => {
-			const errors = [];
+			const errors: Array<[string, Record<string, unknown>]> = [];
 			const logger = {
 				log: () => {},
 				warn: () => {},
-				error: (message, context) => errors.push([message, context])
+				error: (message: string, context: Record<string, unknown>) =>
+					errors.push([message, context])
 			};
 			const { server } = createHubServer({
 				handler: async () => {
@@ -476,15 +544,15 @@ describe(
 				response.headers['x-incident-id'],
 				errors[0][1].incidentId
 			);
-			assert.ok(response.body.endsWith(errors[0][1].incidentId));
+			assert.ok(response.body.endsWith(String(errors[0][1].incidentId)));
 		});
 
 		it('aborts partially-written responses without appending an error body', async () => {
-			const errors = [];
+			const errors: string[] = [];
 			const logger = {
 				log: () => {},
 				warn: () => {},
-				error: /** @param {string} message */ (message) => errors.push(message)
+				error: (message: string) => errors.push(message)
 			};
 			const { server } = createHubServer({
 				handler: async (_req, res) => {
@@ -528,18 +596,18 @@ describe(
 
 		it('accepts trusted proxy x-forwarded-proto values', () => {
 			const trusted = evaluateSecureRequest(
-				{
+				createIncomingMessageStub({
 					headers: { 'x-forwarded-proto': 'https' },
-					socket: { remoteAddress: '::ffff:127.0.0.1', encrypted: undefined }
-				},
+					socket: createSocketStub('::ffff:127.0.0.1')
+				}),
 				true,
 				new Set(['127.0.0.1'])
 			);
 			const untrusted = evaluateSecureRequest(
-				{
+				createIncomingMessageStub({
 					headers: { 'x-forwarded-proto': 'https' },
-					socket: { remoteAddress: '198.51.100.20', encrypted: undefined }
-				},
+					socket: createSocketStub('198.51.100.20')
+				}),
 				true,
 				new Set(['127.0.0.1'])
 			);
@@ -552,18 +620,18 @@ describe(
 
 		it('uses the proxy-controlled proto nearest the app for comma-separated values', () => {
 			const trustedHttpsHop = evaluateSecureRequest(
-				{
+				createIncomingMessageStub({
 					headers: { 'x-forwarded-proto': 'http, https' },
-					socket: { remoteAddress: '::ffff:127.0.0.1', encrypted: undefined }
-				},
+					socket: createSocketStub('::ffff:127.0.0.1')
+				}),
 				true,
 				new Set(['127.0.0.1'])
 			);
 			const trustedHttpHop = evaluateSecureRequest(
-				{
+				createIncomingMessageStub({
 					headers: { 'x-forwarded-proto': 'https, http' },
-					socket: { remoteAddress: '::ffff:127.0.0.1', encrypted: undefined }
-				},
+					socket: createSocketStub('::ffff:127.0.0.1')
+				}),
 				true,
 				new Set(['127.0.0.1'])
 			);
@@ -704,25 +772,19 @@ describe('node server lifecycle', { skip: !LOOPBACK_LISTEN_SUPPORTED }, () => {
 	});
 
 	it('returns non-zero shutdown status when in-flight requests exceed shutdown timeout', async () => {
-		/** @type {Array<{
-		 *   exitCode: number;
-		 *   reason: 'startup-error' | 'shutdown-error' | 'shutdown-timeout';
-		 *   activeRequests?: number;
-		 *   shutdownTimeoutMs?: number;
-		 * }>} */
-		const fatalEvents = [];
-		let releaseRequest;
-		const requestStarted = new Promise((resolve) => {
+		const fatalEvents: FatalEvent[] = [];
+		let releaseRequest: (() => void) | undefined;
+		const requestStarted = new Promise<void>((resolve) => {
 			releaseRequest = resolve;
 		});
-		let unblockHandler;
-		const handlerBlocked = new Promise((resolve) => {
+		let unblockHandler: (() => void) | undefined;
+		const handlerBlocked = new Promise<void>((resolve) => {
 			unblockHandler = resolve;
 		});
 
 		const { server, beginShutdown } = createHubServer({
 			handler: async (_req, res) => {
-				releaseRequest();
+				releaseRequest?.();
 				await handlerBlocked;
 				res.end('ok');
 			},
@@ -752,7 +814,7 @@ describe('node server lifecycle', { skip: !LOOPBACK_LISTEN_SUPPORTED }, () => {
 		assert.strictEqual(fatalEvents[0].activeRequests, 1);
 		assert.strictEqual(fatalEvents[0].shutdownTimeoutMs, 25);
 
-		unblockHandler();
+		unblockHandler?.();
 		await requestResult;
 	});
 
@@ -772,17 +834,7 @@ describe('node server lifecycle', { skip: !LOOPBACK_LISTEN_SUPPORTED }, () => {
 	});
 
 	it('returns non-zero shutdown status when the server was never listening', async () => {
-		/** @type {Array<{
-		 *   exitCode: number;
-		 *   reason: 'startup-error' | 'shutdown-error' | 'shutdown-timeout';
-		 *   activeRequests?: number;
-		 *   shutdownTimeoutMs?: number;
-		 *   error?: {
-		 *     type: string;
-		 *     code?: string;
-		 *   };
-		 * }>} */
-		const fatalEvents = [];
+		const fatalEvents: FatalEvent[] = [];
 		const { server, beginShutdown } = createHubServer({
 			handler: (_req, res) => res.end('ok'),
 			env: baseEnv,
@@ -802,13 +854,7 @@ describe('node server lifecycle', { skip: !LOOPBACK_LISTEN_SUPPORTED }, () => {
 	});
 
 	it('forces timeout shutdown for half-open sockets without active requests', async () => {
-		/** @type {Array<{
-		 *   exitCode: number;
-		 *   reason: 'startup-error' | 'shutdown-error' | 'shutdown-timeout';
-		 *   activeRequests?: number;
-		 *   shutdownTimeoutMs?: number;
-		 * }>} */
-		const fatalEvents = [];
+		const fatalEvents: FatalEvent[] = [];
 		const { server, beginShutdown } = createHubServer({
 			handler: (_req, res) => res.end('ok'),
 			env: {
@@ -822,18 +868,18 @@ describe('node server lifecycle', { skip: !LOOPBACK_LISTEN_SUPPORTED }, () => {
 
 		const socket = net.connect({ host: '127.0.0.1', port });
 		socket.on('error', () => {});
-		await new Promise((resolve, reject) => {
+		await new Promise<void>((resolve, reject) => {
 			socket.once('connect', resolve);
 			socket.once('error', reject);
 		});
 		socket.write('GET /favicon.svg HTTP/1.1\r\nHost: 127.0.0.1\r\n');
-		const socketClosed = new Promise((resolve) => {
+		const socketClosed = new Promise<void>((resolve) => {
 			socket.once('close', () => resolve(undefined));
 		});
 
-		const shutdownResult = await Promise.race([
+		const shutdownResult: ShutdownRaceResult = await Promise.race([
 			beginShutdown().then((exitCode) => ({ timedOut: false, exitCode })),
-			new Promise((resolve) =>
+			new Promise<ShutdownRaceResult>((resolve) =>
 				setTimeout(() => resolve({ timedOut: true, exitCode: -1 }), 250)
 			)
 		]);
@@ -857,22 +903,23 @@ describe('node server lifecycle', { skip: !LOOPBACK_LISTEN_SUPPORTED }, () => {
 		assert.strictEqual(typeof requestListener, 'function');
 		void beginShutdown();
 
-		/** @type {Record<string, string>} */
-		const headers = {};
-		const res = {
+		const headers: Record<string, string> = {};
+		const res: http.ServerResponse<http.IncomingMessage> & { body: string } = {
 			statusCode: 0,
 			setHeader: (name, value) => {
 				headers[String(name).toLowerCase()] = String(value);
+				return res;
 			},
 			end: (body) => {
 				res.body = String(body);
+				return res;
 			},
 			body: ''
-		};
-		const req = {
+		} as http.ServerResponse<http.IncomingMessage> & { body: string };
+		const req = createIncomingMessageStub({
 			headers: {},
-			socket: { remoteAddress: '127.0.0.1', encrypted: false }
-		};
+			socket: createSocketStub('127.0.0.1', false)
+		});
 
 		requestListener(req, res);
 
@@ -896,7 +943,7 @@ describe('node server lifecycle', { skip: !LOOPBACK_LISTEN_SUPPORTED }, () => {
 		const initialSigIntListeners = process.listenerCount('SIGINT');
 		const initialSigTermListeners = process.listenerCount('SIGTERM');
 
-		const firstReservation = await reserveLocalPort();
+		const firstReservation = (await reserveLocalPort()) as ReservedPort;
 		await firstReservation.release();
 		const firstServer = await startHubServer({
 			handler: (_req, res) => res.end('ok'),
@@ -918,14 +965,14 @@ describe('node server lifecycle', { skip: !LOOPBACK_LISTEN_SUPPORTED }, () => {
 			process.listenerCount('SIGTERM'),
 			initialSigTermListeners + 1
 		);
-		await new Promise((resolve) => firstServer.close(() => resolve()));
+		await new Promise<void>((resolve) => firstServer.close(() => resolve()));
 		assert.strictEqual(process.listenerCount('SIGINT'), initialSigIntListeners);
 		assert.strictEqual(
 			process.listenerCount('SIGTERM'),
 			initialSigTermListeners
 		);
 
-		const secondReservation = await reserveLocalPort();
+		const secondReservation = (await reserveLocalPort()) as ReservedPort;
 		await secondReservation.release();
 		const secondServer = await startHubServer({
 			handler: (_req, res) => res.end('ok'),
@@ -947,7 +994,7 @@ describe('node server lifecycle', { skip: !LOOPBACK_LISTEN_SUPPORTED }, () => {
 			process.listenerCount('SIGTERM'),
 			initialSigTermListeners + 1
 		);
-		await new Promise((resolve) => secondServer.close(() => resolve()));
+		await new Promise<void>((resolve) => secondServer.close(() => resolve()));
 		assert.strictEqual(process.listenerCount('SIGINT'), initialSigIntListeners);
 		assert.strictEqual(
 			process.listenerCount('SIGTERM'),
@@ -958,13 +1005,13 @@ describe('node server lifecycle', { skip: !LOOPBACK_LISTEN_SUPPORTED }, () => {
 	it('handles listen failures with controlled exit and listener cleanup', async () => {
 		const initialSigIntListeners = process.listenerCount('SIGINT');
 		const initialSigTermListeners = process.listenerCount('SIGTERM');
-		const reservation = await reserveLocalPort();
-		const logs = [];
-		const fatalEvents = [];
+		const reservation = (await reserveLocalPort()) as ReservedPort;
+		const logs: string[] = [];
+		const fatalEvents: FatalEvent[] = [];
 		const logger = {
 			log: () => {},
 			warn: () => {},
-			error: /** @param {string} message */ (message) => logs.push(message)
+			error: (message: string) => logs.push(message)
 		};
 
 		try {
@@ -994,9 +1041,9 @@ describe('node server lifecycle', { skip: !LOOPBACK_LISTEN_SUPPORTED }, () => {
 	});
 
 	it('logs both internal bind and public origin for proxied https deployments', async () => {
-		const reservation = await reserveLocalPort();
+		const reservation = (await reserveLocalPort()) as ReservedPort;
 		await reservation.release();
-		const logs = [];
+		const logs: string[] = [];
 		const server = await startHubServer({
 			handler: (_req, res) => res.end('ok'),
 			env: {
@@ -1009,7 +1056,7 @@ describe('node server lifecycle', { skip: !LOOPBACK_LISTEN_SUPPORTED }, () => {
 				TRUSTED_PROXY_IPS: '127.0.0.1'
 			},
 			logger: {
-				log: /** @param {string} message */ (message) => logs.push(message),
+				log: (message: string) => logs.push(message),
 				warn: () => {},
 				error: () => {}
 			}
@@ -1024,20 +1071,24 @@ describe('node server lifecycle', { skip: !LOOPBACK_LISTEN_SUPPORTED }, () => {
 	});
 
 	it('uses port 3100 when PORT is unset', async () => {
-		const logs = [];
+		const logs: string[] = [];
 		const originalListen = http.Server.prototype.listen;
 		let server = null;
-		let capturedPort;
-		let capturedHost;
+		let capturedPort: number | undefined;
+		let capturedHost: string | undefined;
 
-		http.Server.prototype.listen = function listen(port, host) {
+		http.Server.prototype.listen = function listen(
+			this: http.Server,
+			port: number,
+			host?: string
+		) {
 			capturedPort = port;
 			capturedHost = host;
 			process.nextTick(() => {
 				this.emit('listening');
 			});
 			return this;
-		};
+		} as typeof http.Server.prototype.listen;
 
 		try {
 			server = await startHubServer({
@@ -1048,7 +1099,7 @@ describe('node server lifecycle', { skip: !LOOPBACK_LISTEN_SUPPORTED }, () => {
 					PORT: undefined
 				},
 				logger: {
-					log: /** @param {string} message */ (message) => logs.push(message),
+					log: (message: string) => logs.push(message),
 					warn: () => {},
 					error: () => {}
 				}
@@ -1065,18 +1116,22 @@ describe('node server lifecycle', { skip: !LOOPBACK_LISTEN_SUPPORTED }, () => {
 	});
 
 	it('formats IPv6 bind origins correctly in startup logs', async () => {
-		const logs = [];
+		const logs: string[] = [];
 		const originalListen = http.Server.prototype.listen;
 		let server = null;
 
-		http.Server.prototype.listen = function listen(port, host) {
+		http.Server.prototype.listen = function listen(
+			this: http.Server,
+			port: number,
+			host?: string
+		) {
 			void port;
 			void host;
 			process.nextTick(() => {
 				this.emit('listening');
 			});
 			return this;
-		};
+		} as typeof http.Server.prototype.listen;
 
 		try {
 			server = await startHubServer({
@@ -1089,7 +1144,7 @@ describe('node server lifecycle', { skip: !LOOPBACK_LISTEN_SUPPORTED }, () => {
 					WORKOS_REDIRECT_URI: 'http://[::1]:3100/auth/callback'
 				},
 				logger: {
-					log: /** @param {string} message */ (message) => logs.push(message),
+					log: (message: string) => logs.push(message),
 					warn: () => {},
 					error: () => {}
 				}
@@ -1106,16 +1161,20 @@ describe('node server lifecycle', { skip: !LOOPBACK_LISTEN_SUPPORTED }, () => {
 	it('trims HOST before binding the server', async () => {
 		const originalListen = http.Server.prototype.listen;
 		let server = null;
-		let capturedHost;
+		let capturedHost: string | undefined;
 
-		http.Server.prototype.listen = function listen(port, host) {
+		http.Server.prototype.listen = function listen(
+			this: http.Server,
+			port: number,
+			host?: string
+		) {
 			void port;
 			capturedHost = host;
 			process.nextTick(() => {
 				this.emit('listening');
 			});
 			return this;
-		};
+		} as typeof http.Server.prototype.listen;
 
 		try {
 			server = await startHubServer({

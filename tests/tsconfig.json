@@ -16,9 +16,5 @@
 		"types": ["node"],
 		"useUnknownInCatchVariables": false
 	},
-	"include": ["./**/*.ts", "./**/*.mts"],
-	"exclude": [
-		"./hub-node-server.test.ts",
-		"./hub-node-server-static-assets.test.ts"
-	]
+	"include": ["./**/*.ts", "./**/*.mts"]
 }
