@@ -10,14 +10,16 @@ const previewFixtureImport = new URL(
 	'./helpers/hub-preview-fixtures.mts',
 	import.meta.url
 ).href;
+type PreviewHandle = Awaited<ReturnType<typeof startHubPreview>>;
+type PreviewResponse = Awaited<ReturnType<typeof httpGet>>;
 
-let preview;
-let publicHomepage;
-let signedInHomepage;
-let servicesPage;
-let publicDom;
-let signedInDom;
-let servicesDom;
+let preview: PreviewHandle | undefined;
+let publicHomepage: PreviewResponse | undefined;
+let signedInHomepage: PreviewResponse | undefined;
+let servicesPage: PreviewResponse | undefined;
+let publicDom: JSDOM | undefined;
+let signedInDom: JSDOM | undefined;
+let servicesDom: JSDOM | undefined;
 let authCookieJar;
 
 function findLinkByText(
@@ -25,8 +27,8 @@ function findLinkByText(
 	pattern: RegExp
 ): HTMLAnchorElement | null {
 	return (
-		Array.from(container.querySelectorAll('a[href]')).find((link) =>
-			pattern.test(link.textContent ?? '')
+		Array.from(container.querySelectorAll<HTMLAnchorElement>('a[href]')).find(
+			(link) => pattern.test(link.textContent ?? '')
 		) ?? null
 	);
 }
@@ -99,6 +101,8 @@ describe('hub preview service controls', () => {
 	});
 
 	it('renders public landing page service controls from the real preview bundle', () => {
+		assert.ok(publicHomepage);
+		assert.ok(publicDom);
 		assert.strictEqual(publicHomepage.statusCode, 200);
 		const document = publicDom.window.document;
 		const servicesSection = document.getElementById('services');
@@ -122,6 +126,10 @@ describe('hub preview service controls', () => {
 	});
 
 	it('renders authenticated navigation and launcher controls in preview', () => {
+		assert.ok(signedInHomepage);
+		assert.ok(servicesPage);
+		assert.ok(signedInDom);
+		assert.ok(servicesDom);
 		assert.strictEqual(signedInHomepage.statusCode, 200);
 		assert.strictEqual(servicesPage.statusCode, 200);
 

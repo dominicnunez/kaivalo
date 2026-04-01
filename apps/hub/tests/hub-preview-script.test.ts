@@ -54,6 +54,10 @@ const PREVIEW_HELPER_POLLUTION_ENV = {
 type ProcessShutdownResult = {
 	forced: boolean;
 };
+type PortReservation = {
+	port: number;
+	release: () => Promise<void>;
+};
 type PreviewScriptOptions = {
 	envOverrides?: Record<string, string | undefined>;
 	imports?: readonly string[];
@@ -219,7 +223,7 @@ async function startPreviewScript({
 	sanitizeInheritedRuntimeEnv = true
 }: PreviewScriptOptions = {}): Promise<StartedPreviewScript> {
 	assertHubBuildAvailable();
-	const reservation = await reserveLocalPort();
+	const reservation = (await reserveLocalPort()) as PortReservation;
 	const port = reservation.port;
 	const baseUrl = `http://127.0.0.1:${port}`;
 	const output: string[] = [];
