@@ -15,10 +15,12 @@ describe('auth landing page behavior', () => {
 		'./helpers/hub-preview-fixtures.mts',
 		import.meta.url
 	).href;
-	let preview;
-	let homepage;
-	let dom;
-	let document;
+	type PreviewHandle = Awaited<ReturnType<typeof startHubPreview>>;
+	type HomepageResponse = Awaited<ReturnType<typeof httpGet>>;
+	let preview: PreviewHandle | undefined;
+	let homepage: HomepageResponse | undefined;
+	let dom: JSDOM | undefined;
+	let document: Document | undefined;
 
 	before(async () => {
 		preview = await startHubPreview();
@@ -33,12 +35,23 @@ describe('auth landing page behavior', () => {
 	});
 
 	it('renders an interactive sign-in link for unauthenticated users', () => {
+		assert.ok(homepage);
+		assert.ok(document);
+		assert.ok(preview);
+		const pageDocument = document;
+		const readyPreview = preview;
+
 		assert.strictEqual(homepage.statusCode, 200);
-		const signInControl = Array.from(document.querySelectorAll('a[href]')).find(
-			(control) => (control.textContent ?? '').toLowerCase().includes('sign in')
+		const signInControl = Array.from(
+			pageDocument.querySelectorAll<HTMLAnchorElement>('a[href]')
+		).find((control) =>
+			(control.textContent ?? '').toLowerCase().includes('sign in')
 		);
 
 		assert.ok(signInControl, 'Expected an interactive sign-in link');
+		if (!signInControl) {
+			return;
+		}
 
 		const href = signInControl.getAttribute('href') ?? '';
 		assert.ok(href.length > 0, 'Expected a non-empty sign-in target');
@@ -48,7 +61,7 @@ describe('auth landing page behavior', () => {
 				!href.startsWith('//'),
 				'Expected a same-origin relative sign-in path'
 			);
-			const target = new URL(href, preview.baseUrl);
+			const target = new URL(href, readyPreview.baseUrl);
 			assert.ok(
 				trustedPathPrefixes.some(
 					(prefix) =>
@@ -68,7 +81,7 @@ describe('auth landing page behavior', () => {
 		);
 		assert.ok(
 			target.origin === 'https://api.workos.com' ||
-				target.origin === new URL(preview.baseUrl).origin,
+				target.origin === new URL(readyPreview.baseUrl).origin,
 			'Expected sign-in target to use a trusted origin'
 		);
 		assert.ok(
@@ -81,7 +94,9 @@ describe('auth landing page behavior', () => {
 	});
 
 	it('redirects direct sign-in requests through the local route to a trusted auth target', async () => {
-		const response = await httpGet(`${preview.baseUrl}/auth/sign-in`, {
+		assert.ok(preview);
+		const readyPreview = preview;
+		const response = await httpGet(`${readyPreview.baseUrl}/auth/sign-in`, {
 			accept: 'text/html',
 			'sec-fetch-mode': 'navigate'
 		});
@@ -91,7 +106,7 @@ describe('auth landing page behavior', () => {
 
 		const location = new URL(
 			String(response.headers.location),
-			preview.baseUrl
+			readyPreview.baseUrl
 		);
 		assert.strictEqual(location.protocol, 'https:');
 		assert.strictEqual(location.origin, 'https://api.workos.com');

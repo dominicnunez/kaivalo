@@ -4,10 +4,12 @@ import { JSDOM } from 'jsdom';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 
 describe('hub og image', () => {
-	let preview;
-	let homepage;
-	let ogImageResponse;
-	let document;
+	type PreviewHandle = Awaited<ReturnType<typeof startHubPreview>>;
+	type HttpResponse = Awaited<ReturnType<typeof httpGet>>;
+	let preview: PreviewHandle | undefined;
+	let homepage: HttpResponse | undefined;
+	let ogImageResponse: HttpResponse | undefined;
+	let document: Document | undefined;
 
 	before(async () => {
 		preview = await startHubPreview();
@@ -21,6 +23,7 @@ describe('hub og image', () => {
 	});
 
 	it('keeps og-image payload in social-preview size budget', () => {
+		assert.ok(ogImageResponse);
 		const contentLength = Number(
 			ogImageResponse.headers['content-length'] ?? 0
 		);
@@ -31,12 +34,14 @@ describe('hub og image', () => {
 	});
 
 	it('renders metadata that points to the served og image URL', () => {
+		assert.ok(document);
+		const pageDocument = document;
 		const ogImage =
-			document
+			pageDocument
 				.querySelector('meta[property="og:image"]')
 				?.getAttribute('content') ?? '';
 		const twitterImage =
-			document
+			pageDocument
 				.querySelector('meta[name="twitter:image"]')
 				?.getAttribute('content') ?? '';
 

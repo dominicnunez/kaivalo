@@ -3,14 +3,17 @@ import assert from 'node:assert';
 import { JSDOM } from 'jsdom';
 import { httpGet, startHubPreview } from './helpers/hub-preview.ts';
 
-function getAnchors(document) {
-	return Array.from(document.querySelectorAll('a[href]'));
+type PreviewHandle = Awaited<ReturnType<typeof startHubPreview>>;
+type HomepageResponse = Awaited<ReturnType<typeof httpGet>>;
+
+function getAnchors(document: Document): HTMLAnchorElement[] {
+	return Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]'));
 }
 
-let preview;
-let homepage;
-let dom;
-let document;
+let preview: PreviewHandle | undefined;
+let homepage: HomepageResponse | undefined;
+let dom: JSDOM | undefined;
+let document: Document | undefined;
 
 describe('hub links', () => {
 	before(async () => {
@@ -26,8 +29,12 @@ describe('hub links', () => {
 	});
 
 	it('renders actionable navigation from the homepage', () => {
+		assert.ok(homepage);
+		assert.ok(document);
+		const pageDocument = document;
+
 		assert.strictEqual(homepage.statusCode, 200);
-		const hrefs = getAnchors(document).map(
+		const hrefs = getAnchors(pageDocument).map(
 			(anchor) => anchor.getAttribute('href') ?? ''
 		);
 		const actionableLink = hrefs.find(
@@ -45,6 +52,7 @@ describe('hub links', () => {
 	});
 
 	it('does not expose empty or javascript links', () => {
+		assert.ok(document);
 		const hrefs = getAnchors(document).map(
 			(anchor) => anchor.getAttribute('href') ?? ''
 		);
